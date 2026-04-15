@@ -1,0 +1,138 @@
+@import "tailwindcss";
+
+@theme {
+  --color-primary: #4F46E5;
+  --color-background-light: #F8FAFC;
+  --color-background-dark: #101622;
+  --font-display: "Inter", sans-serif;
+  --radius-DEFAULT: 0.5rem;
+  --radius-lg: 0.75rem;
+  --radius-xl: 1rem;
+  --radius-full: 9999px;
+}
+
+@layer base {
+  body {
+    font-family: var(--font-display);
+    @apply antialiased text-slate-900 dark:text-slate-100;
+  }
+  button, [role="button"], input[type="submit"], input[type="button"], input[type="reset"] {
+    cursor: pointer;
+  }
+  button:disabled {
+    cursor: not-allowed;
+  }
+  .material-symbols-outlined {
+    font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;
+    /* CLS fix: reserve icon space; prevent fallback-font text from showing */
+    display: inline-block;
+    overflow: hidden;
+    /* Cloak until Material Symbols font is confirmed loaded */
+    visibility: hidden;
+  }
+  .material-symbols-outlined.fill {
+    font-variation-settings: 'FILL' 1, 'wght' 400, 'GRAD' 0, 'opsz' 24;
+  }
+  /* Reveal all icons the instant the font is ready */
+  .fonts-loaded .material-symbols-outlined {
+    visibility: visible;
+  }
+  /* Lumina-Shield: secondary safety net — force transparent color until app is fully ready */
+  body:not(.app-ready) .material-symbols-outlined {
+    color: transparent !important;
+  }
+}
+
+@layer utilities {
+  aside::-webkit-scrollbar {
+    width: 4px;
+  }
+  aside::-webkit-scrollbar-track {
+    background: transparent;
+  }
+  aside::-webkit-scrollbar-thumb {
+    background-color: #e2e8f0;
+    border-radius: 20px;
+  }
+  .dark aside::-webkit-scrollbar-thumb {
+    background-color: #334155;
+  }
+
+  /* Animatable angle property for the spinning border */
+  @property --spin-angle {
+    syntax: '<angle>';
+    initial-value: 0deg;
+    inherits: false;
+  }
+
+  @keyframes spin-border {
+    to { --spin-angle: 360deg; }
+  }
+
+  /* Ask AI Assistant — spinning conic-gradient arc border (Windsurf-style) */
+  .ai-assistant-btn {
+    position: relative !important;
+    z-index: 0 !important;
+    border: none !important;
+    background: transparent !important;
+    border-radius: 12px !important;
+    color: #4F46E5 !important;
+    transition: opacity 0.2s ease;
+  }
+
+  /* Spinning gradient ring — two short arcs 180° apart (Windsurf-style) */
+  .ai-assistant-btn::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    border-radius: 12px;
+    background: conic-gradient(
+      from var(--spin-angle),
+      /* Segment 1 — fades in, peaks, fades out over ~30° */
+      transparent 0deg,
+      #818CF8 8deg,
+      #4F46E5 15deg,
+      #818CF8 22deg,
+      transparent 30deg,
+      /* Gap */
+      transparent 180deg,
+      /* Segment 2 — identical arc, 180° offset */
+      #818CF8 188deg,
+      #4F46E5 195deg,
+      #818CF8 202deg,
+      transparent 210deg,
+      /* Gap back to start */
+      transparent 360deg
+    );
+    animation: spin-border 4.5s linear infinite;
+    z-index: -2;
+  }
+
+  /* Inner fill — creates the "border gap" by covering the center */
+  .ai-assistant-btn::after {
+    content: '';
+    position: absolute;
+    inset: 1.5px;
+    background: rgba(238, 242, 255, 0.96);
+    border-radius: 10.5px;
+    z-index: -1;
+    transition: background 0.2s ease;
+  }
+
+  /* Dark mode inner fill */
+  .dark .ai-assistant-btn::after {
+    background: rgba(15, 22, 35, 0.97);
+  }
+
+  .ai-assistant-btn:hover {
+    opacity: 0.92;
+  }
+
+  .ai-assistant-btn:hover::after {
+    background: rgba(238, 242, 255, 1);
+  }
+
+  .dark .ai-assistant-btn:hover::after {
+    background: rgba(15, 22, 35, 1);
+  }
+}
