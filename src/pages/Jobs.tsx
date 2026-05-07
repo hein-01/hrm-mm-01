@@ -8,6 +8,31 @@ import { JobPosting } from '../context/AppDataContext';
 export default function Jobs() {
     const { jobPostings, systemSettings, createJobPosting, toggleJobPortalStatus, candidates, alerts } = useAppData();
     
+    if (!systemSettings.recruitmentModuleEnabled) {
+        return (
+            <div className="flex min-h-screen bg-background-light dark:bg-background-dark font-display">
+                <Sidebar activeTab="Jobs" />
+                <main className="flex-1 ml-[280px] flex items-center justify-center">
+                    <div className="text-center p-8 bg-white dark:bg-slate-900 rounded-3xl border border-slate-200 dark:border-slate-800 shadow-xl max-w-md">
+                        <div className="size-20 rounded-2xl bg-indigo-50 dark:bg-indigo-900/20 flex items-center justify-center text-[#4F46E5] mx-auto mb-6">
+                            <span className="material-symbols-outlined text-4xl">construction</span>
+                        </div>
+                        <h2 className="text-2xl font-black text-slate-900 dark:text-white mb-2">Coming Soon</h2>
+                        <p className="text-slate-500 dark:text-slate-400 text-sm font-medium leading-relaxed">
+                            The Recruitment & Applicant Tracking module is currently undergoing maintenance and will be available in a future update.
+                        </p>
+                        <button 
+                            onClick={() => window.location.href = '/home'}
+                            className="mt-8 px-6 py-2.5 bg-[#4F46E5] text-white rounded-xl text-sm font-bold shadow-lg shadow-indigo-200 dark:shadow-none hover:bg-indigo-700 transition-all"
+                        >
+                            Return Home
+                        </button>
+                    </div>
+                </main>
+            </div>
+        );
+    }
+
     const [searchQuery, setSearchQuery] = useState('');
     const [filterDepartment, setFilterDepartment] = useState('All');
     const [isJobModalOpen, setIsJobModalOpen] = useState(false);

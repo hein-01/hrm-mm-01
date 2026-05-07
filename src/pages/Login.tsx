@@ -1,14 +1,59 @@
 import React, { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
+import { supabase } from '../lib/supabase';
 
 export default function Login() {
     const [authMode, setAuthMode] = useState('login');
+    const [email, setEmail] = useState('');
+    const [password, setPassword] = useState('');
+    const [fullName, setFullName] = useState('');
+    const [loading, setLoading] = useState(false);
+    const [error, setError] = useState('');
     const navigate = useNavigate();
 
-    const handleLogin = (e: React.FormEvent) => {
+    const handleLogin = async (e: React.FormEvent) => {
         e.preventDefault();
-        // Redirect to dashboard (Insights Dashboard)
-        navigate('/insights-dashboard');
+        setLoading(true);
+        setError('');
+
+        try {
+            if (authMode === 'login') {
+                const { error } = await supabase.auth.signInWithPassword({
+                    email,
+                    password,
+                });
+                if (error) throw error;
+                navigate('/home');
+            } else {
+                const { error } = await supabase.auth.signUp({
+                    email,
+                    password,
+                    options: {
+                        data: {
+                            full_name: fullName,
+                            role: 'Employee',
+                        },
+                    },
+                });
+                if (error) throw error;
+                // Auto-login after signup
+                const { error: signInError } = await supabase.auth.signInWithPassword({
+                    email,
+                    password,
+                });
+                if (signInError) throw signInError;
+                navigate('/home');
+            }
+        } catch (err: any) {
+            // Handle email confirmation required
+            if (err.message?.includes('Email not confirmed')) {
+                setError('Email verification link has been sent. Please check your inbox and click on it to verify your email.');
+            } else {
+                setError(err.message || 'An error occurred');
+            }
+        } finally {
+            setLoading(false);
+        }
     };
 
     return (
@@ -20,7 +65,7 @@ export default function Login() {
                     <Link to="/" className="p-2 -ml-2 rounded-full hover:bg-gray-200 dark:hover:bg-gray-800 transition-colors">
                         <span className="material-symbols-outlined text-gray-900 dark:text-white">arrow_back</span>
                     </Link>
-                    <button onClick={() => navigate('/insights-dashboard')} className="text-sm font-medium text-[#135bec]">Skip</button>
+                    <button onClick={() => navigate('/home')} className="text-sm font-medium text-[#135bec]">Skip</button>
                 </header>
 
                 {/* Main Content Area */}
@@ -70,7 +115,14 @@ export default function Login() {
                                     <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
                                         <span className="material-symbols-outlined text-gray-400 text-[20px]">person</span>
                                     </div>
-                                    <input className="block w-full pl-11 pr-4 py-3.5 bg-white dark:bg-[#1b2431] border-transparent focus:border-[#135bec] focus:ring-0 rounded-xl text-gray-900 dark:text-white placeholder-gray-400 dark:placeholder-gray-500 text-base shadow-sm focus:shadow-md transition-all outline-none" placeholder="John Doe" type="text" />
+                                    <input 
+                                        className="block w-full pl-11 pr-4 py-3.5 bg-white dark:bg-[#1b2431] border-transparent focus:border-[#135bec] focus:ring-0 rounded-xl text-gray-900 dark:text-white placeholder-gray-400 dark:placeholder-gray-500 text-base shadow-sm focus:shadow-md transition-all outline-none" 
+                                        placeholder="John Doe" 
+                                        type="text" 
+                                        value={fullName}
+                                        onChange={(e) => setFullName(e.target.value)}
+                                        required={authMode === 'signup'}
+                                    />
                                 </div>
                             </div>
                         )}
@@ -81,7 +133,14 @@ export default function Login() {
                                 <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
                                     <span className="material-symbols-outlined text-gray-400 text-[20px]">mail</span>
                                 </div>
-                                <input className="block w-full pl-11 pr-4 py-3.5 bg-white dark:bg-[#1b2431] border-transparent focus:border-[#135bec] focus:ring-0 rounded-xl text-gray-900 dark:text-white placeholder-gray-400 dark:placeholder-gray-500 text-base shadow-sm focus:shadow-md transition-all outline-none" placeholder="name@example.com" type="email" />
+                                <input 
+                                    className="block w-full pl-11 pr-4 py-3.5 bg-white dark:bg-[#1b2431] border-transparent focus:border-[#135bec] focus:ring-0 rounded-xl text-gray-900 dark:text-white placeholder-gray-400 dark:placeholder-gray-500 text-base shadow-sm focus:shadow-md transition-all outline-none" 
+                                    placeholder="name@example.com" 
+                                    type="email" 
+                                    value={email}
+                                    onChange={(e) => setEmail(e.target.value)}
+                                    required 
+                                />
                             </div>
                         </div>
 
@@ -92,7 +151,14 @@ export default function Login() {
                                 <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
                                     <span className="material-symbols-outlined text-gray-400 text-[20px]">lock</span>
                                 </div>
-                                <input className="block w-full pl-11 pr-12 py-3.5 bg-white dark:bg-[#1b2431] border-transparent focus:border-[#135bec] focus:ring-0 rounded-xl text-gray-900 dark:text-white placeholder-gray-400 dark:placeholder-gray-500 text-base shadow-sm focus:shadow-md transition-all outline-none" placeholder="Enter your password" type="password" />
+                                <input 
+                                    className="block w-full pl-11 pr-12 py-3.5 bg-white dark:bg-[#1b2431] border-transparent focus:border-[#135bec] focus:ring-0 rounded-xl text-gray-900 dark:text-white placeholder-gray-400 dark:placeholder-gray-500 text-base shadow-sm focus:shadow-md transition-all outline-none" 
+                                    placeholder="Enter your password" 
+                                    type="password" 
+                                    value={password}
+                                    onChange={(e) => setPassword(e.target.value)}
+                                    required 
+                                />
                                 <button className="absolute inset-y-0 right-0 pr-4 flex items-center text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 transition-colors" type="button">
                                     <span className="material-symbols-outlined text-[20px]">visibility_off</span>
                                 </button>
@@ -106,10 +172,30 @@ export default function Login() {
                             </div>
                         )}
 
+                        {/* Error Message */}
+                        {error && (
+                            <div className="p-3 bg-blue-50 border border-blue-200 rounded-lg text-sm text-blue-700">
+                                {error}
+                            </div>
+                        )}
+
                         {/* Primary Action Button */}
-                        <button className="mt-4 w-full bg-[#135bec] hover:bg-blue-600 text-white font-bold py-3.5 rounded-xl shadow-lg shadow-blue-500/30 transition-all active:scale-[0.98] flex justify-center items-center gap-2" type="submit">
-                            <span>{authMode === 'login' ? 'Log In' : 'Sign Up'}</span>
-                            <span className="material-symbols-outlined text-[20px]">arrow_forward</span>
+                        <button 
+                            className="mt-4 w-full bg-[#135bec] hover:bg-blue-600 text-white font-bold py-3.5 rounded-xl shadow-lg shadow-blue-500/30 transition-all active:scale-[0.98] flex justify-center items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed" 
+                            type="submit"
+                            disabled={loading}
+                        >
+                            {loading ? (
+                                <>
+                                    <span className="animate-spin material-symbols-outlined text-[20px]">sync</span>
+                                    <span>Please wait...</span>
+                                </>
+                            ) : (
+                                <>
+                                    <span>{authMode === 'login' ? 'Log In' : 'Sign Up'}</span>
+                                    <span className="material-symbols-outlined text-[20px]">arrow_forward</span>
+                                </>
+                            )}
                         </button>
                     </form>
 

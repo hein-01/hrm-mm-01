@@ -4,6 +4,7 @@ import { Link } from 'react-router-dom';
 import Sidebar from '../components/Sidebar';
 import Header from '../components/Header';
 import { useAppData } from '../context/AppDataContext';
+import { useNotifications } from '../context/NotificationProvider';
 
 // ─── Toast ────────────────────────────────────────────────────────────────────
 interface Toast { id: string; message: string; type: 'success' | 'error' | 'warning'; }
@@ -32,6 +33,7 @@ function ToastContainer({ toasts, onDismiss }: { toasts: Toast[]; onDismiss: (id
 export default function BankDisbursements() {
     const { employees, payrollRecords, systemSettings, generateDisbursementBatch, disbursePayroll, lastPayrollStatus,
             payrollGroups, activePayrollGroupId, payrunId, lastPayrollTotal, setAlerts } = useAppData();
+    const { pushNotification } = useNotifications();
     const [selectedBank, setSelectedBank] = useState('All');
     const [searchQuery, setSearchQuery] = useState('');
     const [showApprovalModal, setShowApprovalModal] = useState(false);
@@ -222,6 +224,7 @@ export default function BankDisbursements() {
             ? disbursementData.filter(item => selectedRows.has(item.empId) && item.status === 'Disbursed')
             : disbursementData.filter(item => item.status === 'Disbursed');
         if (notifyScope.length === 0) { addToast('No disbursed employees to notify.', 'warning'); return; }
+        // Legacy alerts (inbox)
         (setAlerts as any)((prev: any[]) => [
             ...notifyScope.map(rec => ({
                 id: `PAID-${rec.empId}-${Date.now()}`,
@@ -232,6 +235,31 @@ export default function BankDisbursements() {
             })),
             ...prev
         ]);
+        // Push notification engine — one per employee (capped at 5, then a summary)
+        if (notifyScope.length <= 5) {
+            notifyScope.forEach(rec => {
+                pushNotification({
+                    title: `Payslip Ready — ${period}`,
+                    body: `${rec.name}'s salary of ${Math.round(rec.netPay).toLocaleString()} MMK has been disbursed to ${(rec as any).bankName ?? 'cash'}.`,
+                    category: 'Financial', priority: 'high',
+                    icon: 'payments',
+                    iconBg: 'bg-emerald-100 dark:bg-emerald-900/30', iconColor: 'text-emerald-600 dark:text-emerald-400',
+                    actionRoute: '/bank-disbursements', actionLabel: 'View Payslip',
+                    badge: 'Paid', badgeColor: 'emerald', empId: rec.empId,
+                });
+            });
+        } else {
+            const total = notifyScope.reduce((s, r) => s + Math.round(r.netPay), 0);
+            pushNotification({
+                title: `Payroll Disbursed — ${period}`,
+                body: `${notifyScope.length} employees notified. Total disbursed: ${total.toLocaleString()} MMK across all payment channels.`,
+                category: 'Financial', priority: 'high',
+                icon: 'payments',
+                iconBg: 'bg-emerald-100 dark:bg-emerald-900/30', iconColor: 'text-emerald-600 dark:text-emerald-400',
+                actionRoute: '/bank-disbursements', actionLabel: 'View Disbursement',
+                badge: `${notifyScope.length} Paid`, badgeColor: 'emerald',
+            });
+        }
         addToast(`✓ Payment notifications sent to ${notifyScope.length} employees.`, 'success');
     };
 
@@ -240,11 +268,23 @@ export default function BankDisbursements() {
             addToast('An Approver ID is required for dual-approval authorization.', 'error');
             return;
         }
+        const period  = activeGroup?.period ?? 'this month';
+        const empCount = payrollRecords.length;
+        const totalAmt = payrollRecords.reduce((s, r) => s + Math.round(r.netPay), 0);
         const result = disbursePayroll(approverId);
         if (result.success) {
             setShowApprovalModal(false);
             setApproverId('');
             addToast(result.message, 'success');
+            pushNotification({
+                title: `🎉 Payroll Disbursed — ${period}`,
+                body: `${empCount} employee${empCount !== 1 ? 's' : ''} paid. Total: ${totalAmt.toLocaleString()} MMK released via bank transfer & digital wallets.`,
+                category: 'Financial', priority: 'urgent',
+                icon: 'account_balance',
+                iconBg: 'bg-emerald-100 dark:bg-emerald-900/30', iconColor: 'text-emerald-600 dark:text-emerald-400',
+                actionRoute: '/bank-disbursements', actionLabel: 'View Disbursement',
+                badge: 'Disbursed', badgeColor: 'emerald',
+            });
         } else {
             addToast(result.message, 'error', 5000);
         }

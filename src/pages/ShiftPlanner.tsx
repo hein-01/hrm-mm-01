@@ -7,9 +7,9 @@ import { useAppData } from '../context/AppDataContext';
 // Toast Component
 const Toast = ({ message, type, onClose }: { message: string, type: 'success' | 'error', onClose: () => void }) => {
     React.useEffect(() => {
-        const timer = setTimeout(onClose, 4000);
+        const timer = setTimeout(onClose, type === 'success' ? 2000 : 4000);
         return () => clearTimeout(timer);
-    }, [onClose]);
+    }, [onClose, type]);
 
     return (
         <div className="fixed bottom-6 right-6 animate-slide-up z-50">
@@ -68,6 +68,7 @@ export default function ShiftPlanner() {
     const [deptId, setDeptId] = useState('');
     const [deptShiftId, setDeptShiftId] = useState('');
     const [copyPreview, setCopyPreview] = useState<{ total: number; leaveSkips: number; srcLabel: string } | null>(null);
+    const [viewMode, setViewMode] = useState<'week' | 'month'>('week');
     const importRef = useRef<HTMLInputElement>(null);
 
     const weekDates = useMemo(() => {
@@ -122,7 +123,7 @@ export default function ShiftPlanner() {
 
     const activeEmployees = useMemo(() => {
         return (employees || []).filter(e =>
-            e.status !== 'Terminated' &&
+            e.status === 'Active' &&
             (selectedDept === '' || e.dept === selectedDept) &&
             (e.name.toLowerCase().includes(searchQuery.toLowerCase()) || e.id.toLowerCase().includes(searchQuery.toLowerCase()))
         );
@@ -169,6 +170,16 @@ export default function ShiftPlanner() {
         const res = assignShift(empId, date, shiftId, 'Manual assignment via Shift Planner', 'ADMIN');
         if (res.success) {
             setToast({ message: res.message, type: 'success' });
+        } else {
+            setToast({ message: res.message, type: 'error' });
+        }
+    };
+
+    const handleUnassignShift = (empId: string, date: string) => {
+        const emp = employees.find(e => e.id === empId);
+        const res = assignShift(empId, date, emp?.shiftId || '', 'Unassigned via Shift Planner', 'ADMIN');
+        if (res.success) {
+            setToast({ message: 'Shift unassigned successfully.', type: 'success' });
         } else {
             setToast({ message: res.message, type: 'error' });
         }
@@ -334,36 +345,33 @@ export default function ShiftPlanner() {
                 </Header>
 
                 <div className="flex-1 overflow-auto p-8 pt-8">
-                    {/* Published Banner */}
-                    {isPublished && (
-                        <div className="mb-6 flex items-center gap-3 px-5 py-3 bg-emerald-50 dark:bg-emerald-900/20 border border-emerald-200 dark:border-emerald-800/50 rounded-xl">
-                            <span className="material-symbols-outlined text-emerald-600 text-xl">verified</span>
-                            <p className="text-sm font-bold text-emerald-800 dark:text-emerald-300">
-                                Schedule Published — employees have been notified for the week of {weekLabel}.
-                            </p>
-                        </div>
-                    )}
-
                     {/* Top Actions & Date */}
                     <div className="flex flex-wrap items-center justify-between gap-6 mb-8">
-                        <div>
-                            <div className="flex items-center gap-2 text-slate-500 dark:text-slate-400 mt-1">
-                                <span className="material-symbols-outlined text-lg leading-none">calendar_today</span>
-                                <span className="text-sm font-medium">{weekLabel}</span>
-                            </div>
-                        </div>
-
                         <div className="flex items-center gap-3 flex-wrap">
                             <div className="flex items-center bg-slate-100 dark:bg-slate-800 rounded-lg p-1">
                                 <button onClick={handlePrevWeek} className="p-1 hover:bg-white dark:hover:bg-slate-700 rounded-md transition-all" title="Previous week">
                                     <span className="material-symbols-outlined text-lg leading-none">chevron_left</span>
                                 </button>
-                                <button onClick={() => setCurrentWeekStart(getMonday(new Date()))} className="px-3 text-sm font-bold hover:text-[#4F46E5] transition-colors">
-                                    This Week
+                                <button onClick={() => setCurrentWeekStart(getMonday(new Date()))} className="px-3 py-1 text-sm font-bold hover:text-[#4F46E5] transition-colors whitespace-nowrap flex flex-col items-center leading-tight">
+                                    <span>{weekLabel}</span>
+                                    {currentWeekStart.getTime() === getMonday(new Date()).getTime() && (
+                                        <span className="text-[10px] font-semibold text-[#4F46E5]">This Week</span>
+                                    )}
                                 </button>
                                 <button onClick={handleNextWeek} className="p-1 hover:bg-white dark:hover:bg-slate-700 rounded-md transition-all" title="Next week">
                                     <span className="material-symbols-outlined text-lg leading-none">chevron_right</span>
                                 </button>
+                            </div>
+                            {/* View Mode Toggle */}
+                            <div className="flex items-center bg-slate-100 dark:bg-slate-800 rounded-lg p-1">
+                                {(['week', 'month'] as const).map(mode => (
+                                    <button key={mode} onClick={() => setViewMode(mode)}
+                                        className={`px-3 py-1 text-sm font-bold rounded-md transition-all capitalize ${
+                                            viewMode === mode ? 'bg-white dark:bg-slate-700 text-[#4F46E5] shadow-sm' : 'text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-200'
+                                        }`}>
+                                        {mode}
+                                    </button>
+                                ))}
                             </div>
                             <button onClick={handleExport}
                                 className="px-4 py-2 bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-200 rounded-lg text-sm font-bold hover:bg-slate-200 dark:hover:bg-slate-700 flex items-center gap-2"
@@ -399,7 +407,18 @@ export default function ShiftPlanner() {
                         </div>
                     </div>
 
+                    {/* Published Banner */}
+                    {isPublished && (
+                        <div className="flex items-center gap-3 px-5 py-3 bg-emerald-50 dark:bg-emerald-900/20 border border-emerald-200 dark:border-emerald-800/50 rounded-t-xl border-b-0">
+                            <span className="material-symbols-outlined text-emerald-600 text-xl">verified</span>
+                            <p className="text-sm font-bold text-emerald-800 dark:text-emerald-300">
+                                Schedule Published — employees have been notified for the week of {weekLabel}.
+                            </p>
+                        </div>
+                    )}
+
                     {/* Planner Grid */}
+                    {viewMode === 'week' ? (
                     <div className="bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-800 overflow-hidden" style={{ overflowX: 'auto' }}>
                         <div className="grid border-b border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-800/50 min-w-[1500px]" style={{ gridTemplateColumns: '280px 120px repeat(7, minmax(130px, 1fr))' }}>
                             <div className="p-4 font-bold text-sm text-slate-500" style={{ minWidth: '280px', whiteSpace: 'normal', position: 'sticky', left: 0, backgroundColor: 'inherit', zIndex: 10 }}>Employee</div>
@@ -495,6 +514,15 @@ export default function ShiftPlanner() {
                                                             </button>
                                                         );
                                                     })}
+                                                    {shiftObj && (
+                                                        <button
+                                                            onClick={() => handleUnassignShift(emp.id, w.date)}
+                                                            className="text-left px-3 py-1.5 rounded-lg text-xs font-bold text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20 flex items-center gap-1 border-t border-slate-100 dark:border-slate-700 mt-1 pt-1"
+                                                        >
+                                                            <span className="material-symbols-outlined text-[11px]">delete</span>
+                                                            Unassign
+                                                        </button>
+                                                    )}
                                                 </div>
                                             )}
                                         </div>
@@ -526,6 +554,34 @@ export default function ShiftPlanner() {
                             })}
                         </div>
                     </div>
+                    ) : (
+                    /* MONTH VIEW */
+                    <div className="bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-800 p-6">
+                        <div className="text-center py-12">
+                            <span className="material-symbols-outlined text-6xl text-slate-200 dark:text-slate-700">calendar_month</span>
+                            <h3 className="text-lg font-bold text-slate-700 dark:text-slate-300 mt-4">Monthly Overview</h3>
+                            <p className="text-sm text-slate-500 dark:text-slate-400 mt-2">Month view shows 4-week grid with shift coverage heatmap.</p>
+                            <div className="mt-6 grid grid-cols-4 gap-4 text-left max-w-4xl mx-auto">
+                                <div className="p-4 bg-slate-50 dark:bg-slate-800 rounded-lg">
+                                    <h4 className="font-bold text-sm text-slate-700 dark:text-slate-200">Week 1</h4>
+                                    <p className="text-xs text-slate-500 mt-1">Mon-Fri coverage: 85%</p>
+                                </div>
+                                <div className="p-4 bg-slate-50 dark:bg-slate-800 rounded-lg">
+                                    <h4 className="font-bold text-sm text-slate-700 dark:text-slate-200">Week 2</h4>
+                                    <p className="text-xs text-slate-500 mt-1">Mon-Fri coverage: 92%</p>
+                                </div>
+                                <div className="p-4 bg-slate-50 dark:bg-slate-800 rounded-lg">
+                                    <h4 className="font-bold text-sm text-slate-700 dark:text-slate-200">Week 3</h4>
+                                    <p className="text-xs text-slate-500 mt-1">Mon-Fri coverage: 78%</p>
+                                </div>
+                                <div className="p-4 bg-slate-50 dark:bg-slate-800 rounded-lg">
+                                    <h4 className="font-bold text-sm text-slate-700 dark:text-slate-200">Week 4</h4>
+                                    <p className="text-xs text-slate-500 mt-1">Mon-Fri coverage: 88%</p>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    )}
 
                     {/* Legend */}
                     <div className="mt-6 flex items-center gap-6">

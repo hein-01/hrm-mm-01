@@ -4,6 +4,7 @@ import Sidebar from '../components/Sidebar';
 import Header from '../components/Header';
 import { useAppData, JobActivityChange, AttendanceLog } from '../context/AppDataContext';
 import { useSystemCalendar } from '../context/SystemCalendarContext';
+import { useUserAccess } from '../context/UserAccessProvider';
 
 export default function Employee() {
     const { id } = useParams();
@@ -13,8 +14,9 @@ export default function Employee() {
         addJobActivityChange, jobActivityChanges, attendanceLogs, 
         shiftAssignments, shifts, assignShift, addManualPunch, 
         holidays, toggleAutoAttendance, updateEmployee, systemSettings,
-        verifyLocalAuth, addSecurityLog
+        verifyLocalAuth, addSecurityLog, loans, disciplinaryActions, expenses
     } = useAppData();
+    const { currentUser } = useUserAccess();
     const employee = employees.find(e => e.id === id) || employees[0];
     const assignedAssets = assets.filter(a => a.assigneeId === employee.id);
 
@@ -25,6 +27,7 @@ export default function Employee() {
     const [adjustmentReason, setAdjustmentReason] = useState<string>('');
     const [activeModal, setActiveModal] = useState<string | null>(null);
     const [terminationError, setTerminationError] = useState<string | null>(null);
+    const [separationReason, setSeparationReason] = useState<'Resignation' | 'Termination' | 'Left/Absconded' | 'Retirement'>('Termination');
     const [searchParams] = useSearchParams();
 
     // Salary Update State
@@ -75,6 +78,7 @@ export default function Employee() {
     const [editRole, setEditRole] = useState(employee.role);
     const [editDept, setEditDept] = useState(employee.dept);
     const [editLocation, setEditLocation] = useState((employee as any).officeLocation || '');
+    const [docPreviewUrl, setDocPreviewUrl] = useState<string | null>(null);
 
     useEffect(() => {
         if (activeModal === 'edit_profile') {
@@ -121,7 +125,7 @@ export default function Employee() {
                     <div className="max-w-7xl mx-auto space-y-6">
 
 
-                        <div className="bg-white dark:bg-[#182130] rounded-xl border border-slate-200 dark:border-slate-800 shadow-sm overflow-hidden relative group">
+                        <div className="bg-white dark:bg-[#182130] rounded-xl border border-slate-200 dark:border-slate-800 shadow-sm relative group">
                             <div className="bg-gradient-to-r from-indigo-500 to-purple-600 relative px-8 py-8">
                                 <div className="absolute inset-0 bg-black/5"></div>
                                 <div className="absolute right-0 top-0 h-full w-48 bg-white/10 skew-x-12 translate-x-20"></div>
@@ -166,9 +170,9 @@ export default function Employee() {
                                                 <span className="material-symbols-outlined text-[18px]">expand_more</span>
                                             </button>
                                             {isActionsMenuOpen && (
-                                                <div className="absolute right-0 mt-2 w-48 bg-white rounded-xl shadow-lg border border-slate-100 overflow-hidden z-20 animate-fade-in text-left">
-                                                    <button onClick={() => { setIsActionsMenuOpen(false); setActiveModal('download_pdf'); }} className="w-full text-left px-4 py-3 text-sm text-slate-700 hover:bg-slate-50 hover:text-[#4F46E5] transition-colors border-b border-slate-50 flex items-center gap-2">
-                                                        <span className="material-symbols-outlined text-[18px]">download</span> Download PDF Profile
+                                                <div className="absolute right-0 mt-2 w-48 bg-white rounded-xl shadow-lg border border-slate-100 overflow-hidden z-[100] animate-fade-in text-left">
+                                                    <button onClick={() => { setIsActionsMenuOpen(false); window.print(); }} className="w-full text-left px-4 py-3 text-sm text-slate-700 hover:bg-slate-50 hover:text-[#4F46E5] transition-colors border-b border-slate-50 flex items-center gap-2">
+                                                        <span className="material-symbols-outlined text-[18px]">print</span> Print Profile
                                                     </button>
                                                     <button onClick={() => { setIsActionsMenuOpen(false); setActiveModal('reset_password'); }} className="w-full text-left px-4 py-3 text-sm text-slate-700 hover:bg-slate-50 hover:text-[#4F46E5] transition-colors border-b border-slate-50 flex items-center gap-2">
                                                         <span className="material-symbols-outlined text-[18px]">lock_reset</span> Reset Password
@@ -184,7 +188,7 @@ export default function Employee() {
                             </div>
                             <div className="bg-white dark:bg-[#182130] px-8 border-t border-slate-200 dark:border-slate-800">
                                 <nav aria-label="Tabs" className="flex gap-8 overflow-x-auto no-scrollbar">
-                                    {['Overview', 'Personal & Family', 'Job & Pay', 'Movement', 'Attendance', 'Leave', 'Documents', 'Assets', 'History'].map((tab) => (
+                                    {['Overview', 'Personal & Family', 'Job & Pay', 'Movement', 'Attendance', 'Leave', 'Documents', 'Assets', 'Loans', 'Disciplinary', 'Expenses', 'Learning', 'History'].map((tab) => (
                                         <button
                                             key={tab}
                                             onClick={() => setActiveTab(tab)}
@@ -202,11 +206,100 @@ export default function Employee() {
                                             {tab === 'Assets' && assignedAssets.length > 0 && (
                                                 <span className="bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-400 text-[10px] px-1.5 py-0.5 rounded-full">{assignedAssets.length}</span>
                                             )}
+                                            {tab === 'Expenses' && (() => { const cnt = (expenses || []).filter(e => e.employeeId === employee.id).length; return cnt > 0 ? <span className="bg-violet-100 text-violet-700 text-[10px] px-1.5 py-0.5 rounded-full font-bold">{cnt}</span> : null; })()}
                                         </button>
                                     ))}
                                 </nav>
                             </div>
                         </div>
+
+                        {activeTab === 'Learning' && (
+                            <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 items-start animate-fade-in">
+                                <div className="lg:col-span-2 space-y-6">
+                                    <div className="bg-white dark:bg-[#182130] rounded-xl border border-slate-200 dark:border-slate-800 shadow-sm flex flex-col">
+                                        <div className="p-6 border-b border-slate-100 dark:border-slate-800 flex justify-between items-center bg-slate-50/50 dark:bg-slate-800/30">
+                                            <div className="flex items-center gap-3">
+                                                <div className="flex items-center justify-center size-9 rounded-lg bg-indigo-50 dark:bg-indigo-900/20 text-[#4F46E5] border border-indigo-100 dark:border-indigo-800">
+                                                    <span className="material-symbols-outlined text-[20px]">school</span>
+                                                </div>
+                                                <div>
+                                                    <h3 className="text-base font-bold text-slate-900 dark:text-white">Training & Certification History</h3>
+                                                    <p className="text-xs text-slate-500">Official log of educational progress and lifecycle</p>
+                                                </div>
+                                            </div>
+                                        </div>
+                                        <div className="p-0 overflow-hidden">
+                                            <table className="w-full text-left text-sm">
+                                                <thead>
+                                                    <tr className="bg-slate-50/80 dark:bg-[#182130] text-slate-500 uppercase font-bold text-[10px] tracking-wider">
+                                                        <th className="px-6 py-4">Course ID</th>
+                                                        <th className="px-6 py-4">Enrollment Date</th>
+                                                        <th className="px-6 py-4">Status</th>
+                                                        <th className="px-6 py-4">Grade / Score</th>
+                                                        <th className="px-6 py-4 text-right">Expiry Date</th>
+                                                    </tr>
+                                                </thead>
+                                                <tbody className="divide-y divide-slate-100 dark:divide-slate-800/50">
+                                                    {(employee.enrolledCourses || []).map((course, idx) => (
+                                                        <tr key={idx} className="hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-colors">
+                                                            <td className="px-6 py-4 font-bold text-slate-900 dark:text-white">{course.courseId}</td>
+                                                            <td className="px-6 py-4 text-slate-500 font-medium">{course.enrollmentDate}</td>
+                                                            <td className="px-6 py-4 text-slate-500">
+                                                                <span className={`inline-flex items-center px-2 py-1 rounded-md text-[10px] uppercase tracking-widest font-bold border ${course.status === 'Completed' ? 'bg-emerald-50 border-emerald-200 text-emerald-700' : 'bg-amber-50 border-amber-200 text-amber-700'}`}>
+                                                                    {course.status}
+                                                                </span>
+                                                            </td>
+                                                            <td className="px-6 py-4 text-slate-500 font-mono text-xs">{course.grade || '-'}</td>
+                                                            <td className="px-6 py-4 text-right text-slate-500">
+                                                                {course.expiryDate ? (
+                                                                    <span className="bg-red-50 text-red-600 px-2.5 py-1 rounded-md text-[11px] font-bold border border-red-100 inline-flex items-center gap-1">
+                                                                        <span className="material-symbols-outlined text-[14px]">warning</span> {course.expiryDate}
+                                                                    </span>
+                                                                ) : 'N/A'}
+                                                            </td>
+                                                        </tr>
+                                                    ))}
+                                                    {(!employee.enrolledCourses || employee.enrolledCourses.length === 0) && (
+                                                        <tr>
+                                                            <td colSpan={5} className="px-6 py-8 text-center bg-slate-50/50">
+                                                                <span className="material-symbols-outlined text-[32px] text-slate-300 mb-2">menu_book</span>
+                                                                <p className="text-sm text-slate-500 font-medium">No training records found for this employee.</p>
+                                                            </td>
+                                                        </tr>
+                                                    )}
+                                                </tbody>
+                                            </table>
+                                        </div>
+                                    </div>
+                                </div>
+                                <div className="space-y-6">
+                                    <div className="bg-white dark:bg-[#182130] rounded-xl border border-slate-200 dark:border-slate-800 shadow-sm flex flex-col p-6 sticky top-6 hover:border-emerald-300/50 transition-colors">
+                                        <div className="flex items-center gap-3 mb-6">
+                                            <div className="size-8 rounded bg-emerald-50 flex items-center justify-center border border-emerald-100 text-emerald-600">
+                                                <span className="material-symbols-outlined text-[18px]">verified</span>
+                                            </div>
+                                            <div>
+                                                <h3 className="font-bold text-slate-900 dark:text-white text-sm uppercase tracking-wider">Validated Skills</h3>
+                                                <p className="text-[10px] text-slate-500 leading-tight">Capabilities verified by completed L&T modules</p>
+                                            </div>
+                                        </div>
+                                        <div className="flex flex-wrap gap-2.5">
+                                            {(employee.skills || []).length > 0 ? (employee.skills || []).map((skill, i) => (
+                                                <span key={i} className="px-3 py-1.5 bg-slate-50 dark:bg-slate-800 text-slate-700 dark:text-slate-300 rounded-lg text-xs font-bold shadow-sm border border-slate-200 dark:border-slate-700 flex items-center gap-1.5 hover:-translate-y-0.5 transition-transform">
+                                                    <span className="size-1.5 bg-[#4F46E5] rounded-full"></span>
+                                                    {skill}
+                                                </span>
+                                            )) : (
+                                                <div className="flex flex-col items-center justify-center p-6 bg-slate-50 dark:bg-slate-800/50 rounded-xl border border-slate-100 dark:border-slate-700/50 w-full">
+                                                    <span className="material-symbols-outlined text-slate-300 text-[24px] mb-2">auto_awesome</span>
+                                                    <p className="text-xs text-slate-400 font-medium text-center">No validated skills yet.<br/>Enroll in courses to build your matrix.</p>
+                                                </div>
+                                            )}
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        )}
 
                         {activeTab === 'Overview' && (
 
@@ -492,7 +585,7 @@ export default function Employee() {
                                         </div>
                                         <div className="mt-auto flex justify-between items-center bg-slate-50/50 dark:bg-slate-800/30 -mx-5 -mb-5 p-3 px-5 border-t border-slate-100 dark:border-slate-800">
                                             <span className="text-[10px] font-medium text-slate-400 italic">By: {(doc as any).uploadedBy || 'System'}</span>
-                                            <button className="text-xs font-bold text-[#4F46E5] flex items-center gap-1 hover:underline">
+                                            <button onClick={(e) => { e.stopPropagation(); setDocPreviewUrl(doc.url || '#'); setActiveModal('doc_preview'); }} className="text-xs font-bold text-[#4F46E5] flex items-center gap-1 hover:underline">
                                                 Preview <span className="material-symbols-outlined text-[16px]">visibility</span>
                                             </button>
                                         </div>
@@ -871,7 +964,7 @@ export default function Employee() {
                                                                         <span className="material-symbols-outlined text-[12px]">verified_user</span>
                                                                         Approved By: 
                                                                         <Link 
-                                                                            to={`/insights-dashboard?tab=inbox&search=${item.sourceId}`}
+                                                                            to={`/home?tab=inbox&search=${item.sourceId}`}
                                                                             className="text-[#4F46E5] hover:underline"
                                                                         >
                                                                             Admin {item.approvedBy}
@@ -1112,7 +1205,261 @@ export default function Employee() {
                             </div>
                         )}
 
-                        {activeTab !== 'Overview' && activeTab !== 'Documents' && activeTab !== 'Assets' && activeTab !== 'Job & Pay' && activeTab !== 'Movement' && activeTab !== 'Leave' && (
+                        {activeTab === 'Loans' && (
+                            <div className="bg-white dark:bg-[#182130] rounded-xl border border-slate-200 dark:border-slate-800 shadow-sm overflow-hidden animate-fade-in">
+                                <div className="p-6 border-b border-slate-100 dark:border-slate-800 flex justify-between items-center bg-slate-50 dark:bg-slate-800/50">
+                                    <div className="flex items-center gap-3">
+                                        <div className="flex items-center justify-center size-9 rounded-lg bg-amber-50 dark:bg-amber-900/20 text-amber-600">
+                                            <span className="material-symbols-outlined text-[20px]">account_balance</span>
+                                        </div>
+                                        <div>
+                                            <h3 className="text-base font-bold text-slate-900 dark:text-white">Loans & Advances</h3>
+                                            <p className="text-xs text-slate-500 font-medium">Financial obligations linked to {employee.name}</p>
+                                        </div>
+                                    </div>
+                                </div>
+                                {(() => {
+                                    const empLoans = (loans || []).filter((l: any) => l.empId === employee.id);
+                                    if (empLoans.length === 0) {
+                                        return (
+                                            <div className="p-12 text-center">
+                                                <span className="material-symbols-outlined text-4xl text-slate-300 mb-2">savings</span>
+                                                <p className="text-sm text-slate-500 font-medium">No active loans or advances for this employee.</p>
+                                            </div>
+                                        );
+                                    }
+                                    return (
+                                        <div className="overflow-x-auto">
+                                            <table className="w-full text-left border-collapse min-w-[700px]">
+                                                <thead>
+                                                    <tr className="text-[10px] uppercase font-bold text-slate-400 tracking-wider bg-slate-50/50 dark:bg-slate-800/50">
+                                                        <th className="px-6 py-3 border-b border-slate-200 dark:border-slate-800">Loan ID</th>
+                                                        <th className="px-6 py-3 border-b border-slate-200 dark:border-slate-800">Type</th>
+                                                        <th className="px-6 py-3 border-b border-slate-200 dark:border-slate-800 text-right">Principal</th>
+                                                        <th className="px-6 py-3 border-b border-slate-200 dark:border-slate-800 text-right">Outstanding</th>
+                                                        <th className="px-6 py-3 border-b border-slate-200 dark:border-slate-800 text-center">Status</th>
+                                                        <th className="px-6 py-3 border-b border-slate-200 dark:border-slate-800">Start Date</th>
+                                                    </tr>
+                                                </thead>
+                                                <tbody className="divide-y divide-slate-50 dark:divide-slate-800">
+                                                    {empLoans.map((loan: any) => (
+                                                        <tr key={loan.id} className="hover:bg-slate-50/50 dark:hover:bg-slate-800/20 transition-colors">
+                                                            <td className="px-6 py-4 text-xs font-mono font-bold text-slate-700 dark:text-slate-300">{loan.id}</td>
+                                                            <td className="px-6 py-4 text-xs font-semibold text-slate-600 dark:text-slate-400">{loan.type || 'Standard'}</td>
+                                                            <td className="px-6 py-4 text-xs font-bold text-slate-900 dark:text-white text-right">{(loan.principal || loan.amount || 0).toLocaleString()} MMK</td>
+                                                            <td className="px-6 py-4 text-xs font-bold text-right">
+                                                                <span className={(loan.outstanding || loan.remainingBalance || 0) > 0 ? 'text-red-600' : 'text-emerald-600'}>
+                                                                    {(loan.outstanding || loan.remainingBalance || 0).toLocaleString()} MMK
+                                                                </span>
+                                                            </td>
+                                                            <td className="px-6 py-4 text-center">
+                                                                <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold ${
+                                                                    loan.status === 'Active' || loan.status === 'Disbursed' ? 'bg-blue-50 text-blue-700 border border-blue-100' :
+                                                                    loan.status === 'Completed' || loan.status === 'Repaid' ? 'bg-emerald-50 text-emerald-700 border border-emerald-100' :
+                                                                    loan.status === 'Paused' ? 'bg-amber-50 text-amber-700 border border-amber-100' :
+                                                                    'bg-slate-50 text-slate-600 border border-slate-200'
+                                                                }`}>
+                                                                    {loan.status}
+                                                                </span>
+                                                            </td>
+                                                            <td className="px-6 py-4 text-xs text-slate-500 font-medium">{loan.startDate || loan.requestDate || '—'}</td>
+                                                        </tr>
+                                                    ))}
+                                                </tbody>
+                                            </table>
+                                        </div>
+                                    );
+                                })()}
+                            </div>
+                        )}
+
+                        {activeTab === 'Disciplinary' && (() => {
+                            const isAuthorized = currentUser?.role === 'Admin';
+
+                            if (!isAuthorized) {
+                                return (
+                                    <div className="w-full h-48 bg-slate-50 dark:bg-slate-800/30 rounded-xl border-2 border-dashed border-slate-200 dark:border-slate-700 flex flex-col items-center justify-center animate-fade-in">
+                                        <span className="material-symbols-outlined text-4xl text-slate-300 mb-3" style={{ fontVariationSettings: "'FILL' 1" }}>lock</span>
+                                        <p className="text-slate-500 dark:text-slate-400 font-bold text-sm">Sensitive HR records are restricted to authorized personnel.</p>
+                                        <p className="text-[10px] text-slate-400 font-medium mt-1">Contact your HR Admin for access.</p>
+                                    </div>
+                                );
+                            }
+
+                            const empActions = disciplinaryActions.filter(a => a.empId === employee.id);
+                            const activeWarnings = empActions.filter(a => a.status === 'Active');
+                            const hasFinalWarning = activeWarnings.some(a => a.type === 'Final Warning');
+                            const isHighRisk = activeWarnings.length > 2 || hasFinalWarning;
+
+                            return (
+                                <div className="space-y-6 animate-fade-in">
+                                    {isHighRisk && (
+                                        <div className="p-4 bg-red-50 dark:bg-red-900/20 border-2 border-red-200 dark:border-red-800 rounded-2xl flex items-start gap-4">
+                                            <span className="material-symbols-outlined text-red-600 text-[28px] mt-0.5" style={{ fontVariationSettings: "'FILL' 1" }}>warning</span>
+                                            <div>
+                                                <h4 className="text-sm font-black text-red-700 dark:text-red-400 uppercase tracking-widest">⚠️ High Risk: Termination Review Recommended</h4>
+                                                <p className="text-xs text-red-600 dark:text-red-400 font-medium mt-1">
+                                                    {hasFinalWarning
+                                                        ? `This employee has an active Final Warning. Under Myanmar labor law, the next infraction may warrant termination proceedings.`
+                                                        : `This employee has ${activeWarnings.length} active warnings. Progressive discipline threshold exceeded.`
+                                                    }
+                                                </p>
+                                            </div>
+                                        </div>
+                                    )}
+
+                                    <div className="flex items-center justify-between">
+                                        <h3 className="text-lg font-black text-slate-900 dark:text-white uppercase tracking-tighter">Disciplinary History</h3>
+                                        <div className="flex items-center gap-2">
+                                            <span className="px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-widest bg-rose-50 text-rose-600 border border-rose-100">{activeWarnings.length} Active</span>
+                                            <span className="px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-widest bg-slate-100 text-slate-500 border border-slate-200">{empActions.length} Total</span>
+                                        </div>
+                                    </div>
+
+                                    {empActions.length === 0 ? (
+                                        <div className="w-full h-40 bg-emerald-50 dark:bg-emerald-900/10 rounded-xl border-2 border-dashed border-emerald-200 dark:border-emerald-800 flex flex-col items-center justify-center">
+                                            <span className="material-symbols-outlined text-3xl text-emerald-300 mb-2">verified_user</span>
+                                            <p className="text-emerald-600 dark:text-emerald-400 font-bold text-sm">Clean Record — No Disciplinary Actions</p>
+                                        </div>
+                                    ) : (
+                                        <div className="bg-white dark:bg-slate-800 rounded-2xl border border-slate-200 dark:border-slate-700 overflow-hidden">
+                                            <table className="w-full text-left">
+                                                <thead>
+                                                    <tr className="bg-slate-50 dark:bg-slate-900/40 border-b border-slate-200 dark:border-slate-700">
+                                                        <th className="px-5 py-3 text-[10px] font-black text-slate-400 uppercase tracking-widest">Severity</th>
+                                                        <th className="px-5 py-3 text-[10px] font-black text-slate-400 uppercase tracking-widest">Category</th>
+                                                        <th className="px-5 py-3 text-[10px] font-black text-slate-400 uppercase tracking-widest">Date</th>
+                                                        <th className="px-5 py-3 text-[10px] font-black text-slate-400 uppercase tracking-widest">Reason</th>
+                                                        <th className="px-5 py-3 text-[10px] font-black text-slate-400 uppercase tracking-widest">Status</th>
+                                                    </tr>
+                                                </thead>
+                                                <tbody className="divide-y divide-slate-100 dark:divide-slate-700 text-sm">
+                                                    {empActions.map(action => (
+                                                        <tr key={action.id} className="hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-colors">
+                                                            <td className="px-5 py-3">
+                                                                <span className={`px-2 py-0.5 rounded-full text-[9px] font-black border uppercase tracking-widest ${
+                                                                    action.type === 'Verbal Warning' ? 'bg-amber-50 text-amber-700 border-amber-100' :
+                                                                    action.type === 'Written Warning' ? 'bg-orange-50 text-orange-700 border-orange-100' :
+                                                                    action.type === 'Final Warning' ? 'bg-rose-50 text-rose-700 border-rose-100' :
+                                                                    'bg-slate-900 text-white border-slate-900'
+                                                                }`}>{action.type}</span>
+                                                            </td>
+                                                            <td className="px-5 py-3 text-xs font-bold text-slate-600 dark:text-slate-300">{action.category}</td>
+                                                            <td className="px-5 py-3 text-xs font-bold text-slate-500">{action.issueDate}</td>
+                                                            <td className="px-5 py-3 text-xs font-medium text-slate-600 dark:text-slate-300 max-w-[200px] line-clamp-1">{action.reason}</td>
+                                                            <td className="px-5 py-3">
+                                                                <span className={`px-2 py-0.5 rounded-full text-[9px] font-black border uppercase tracking-widest ${
+                                                                    action.status === 'Active' ? 'bg-rose-50 text-rose-700 border-rose-200' :
+                                                                    action.status === 'Resolved' ? 'bg-emerald-50 text-emerald-600 border-emerald-100' :
+                                                                    'bg-slate-100 text-slate-500 border-slate-200'
+                                                                }`}>{action.status}</span>
+                                                            </td>
+                                                        </tr>
+                                                    ))}
+                                                </tbody>
+                                            </table>
+                                        </div>
+                                    )}
+                                </div>
+                            );
+                        })()}
+
+                        {activeTab === 'Expenses' && (() => {
+                            const empExpenses = (expenses || []).filter(e => e.employeeId === employee.id);
+                            const totalReimbursed = empExpenses.filter(e => e.status === 'Approved').reduce((s, e) => s + e.amount, 0);
+                            const pendingCount = empExpenses.filter(e => e.status === 'Pending').length;
+                            const rejectedCount = empExpenses.filter(e => e.status === 'Rejected').length;
+                            return (
+                                <div className="space-y-6 animate-fade-in">
+                                    {/* Summary KPIs */}
+                                    <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                                        {[
+                                            { label: 'Total Claimed', value: empExpenses.length, icon: 'receipt_long', color: 'bg-indigo-50 text-indigo-600' },
+                                            { label: 'Approved & Paid', value: `${(totalReimbursed / 1000).toFixed(1)}K MMK`, icon: 'check_circle', color: 'bg-emerald-50 text-emerald-600' },
+                                            { label: 'Pending Review', value: pendingCount, icon: 'hourglass_empty', color: 'bg-amber-50 text-amber-600' },
+                                            { label: 'Rejected', value: rejectedCount, icon: 'cancel', color: 'bg-red-50 text-red-600' },
+                                        ].map(k => (
+                                            <div key={k.label} className="bg-white dark:bg-[#182130] rounded-xl border border-slate-200 dark:border-slate-800 p-5 shadow-sm">
+                                                <div className="flex items-center justify-between mb-2">
+                                                    <span className="text-xs text-slate-500 font-medium">{k.label}</span>
+                                                    <span className={`material-symbols-outlined text-[20px] p-1.5 rounded-lg ${k.color}`}>{k.icon}</span>
+                                                </div>
+                                                <p className="text-2xl font-bold text-slate-900 dark:text-white">{k.value}</p>
+                                            </div>
+                                        ))}
+                                    </div>
+                                    {/* Claim Table */}
+                                    <div className="bg-white dark:bg-[#182130] rounded-xl border border-slate-200 dark:border-slate-800 shadow-sm overflow-hidden">
+                                        <div className="px-6 py-4 border-b border-slate-100 dark:border-slate-800 flex items-center justify-between">
+                                            <div className="flex items-center gap-3">
+                                                <div className="size-9 rounded-lg bg-violet-50 text-violet-600 flex items-center justify-center">
+                                                    <span className="material-symbols-outlined text-[20px]">receipt_long</span>
+                                                </div>
+                                                <div>
+                                                    <h3 className="text-sm font-bold text-slate-900 dark:text-white">Expense Claim History</h3>
+                                                    <p className="text-xs text-slate-400">{empExpenses.length} total claims</p>
+                                                </div>
+                                            </div>
+                                            <Link to="/expenses" className="text-xs font-bold text-violet-600 hover:text-violet-800 flex items-center gap-1 hover:underline">
+                                                <span className="material-symbols-outlined text-[14px]">open_in_new</span> View in Expenses
+                                            </Link>
+                                        </div>
+                                        {empExpenses.length > 0 ? (
+                                            <div className="overflow-x-auto">
+                                                <table className="w-full text-left text-sm">
+                                                    <thead>
+                                                        <tr className="bg-slate-50 dark:bg-slate-800/50 text-[10px] font-black text-slate-500 uppercase tracking-wider">
+                                                            <th className="px-6 py-3">Category</th>
+                                                            <th className="px-6 py-3">Description</th>
+                                                            <th className="px-6 py-3">Date</th>
+                                                            <th className="px-6 py-3 text-right">Amount</th>
+                                                            <th className="px-6 py-3 text-center">Status</th>
+                                                        </tr>
+                                                    </thead>
+                                                    <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
+                                                        {empExpenses.map(exp => {
+                                                            const cat = systemSettings.expenseCategories?.find(c => c.id === exp.categoryId);
+                                                            return (
+                                                                <tr key={exp.id} className="hover:bg-slate-50/80 dark:hover:bg-slate-800/30 transition-colors">
+                                                                    <td className="px-6 py-4">
+                                                                        <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-violet-50 dark:bg-violet-900/20 border border-violet-100 dark:border-violet-800 text-violet-700 dark:text-violet-300 text-xs font-bold">
+                                                                            <span className="material-symbols-outlined text-[14px]">receipt_long</span>
+                                                                            {cat?.name || exp.categoryId}
+                                                                        </span>
+                                                                    </td>
+                                                                    <td className="px-6 py-4 text-slate-500 max-w-[200px] truncate" title={exp.description}>{exp.description}</td>
+                                                                    <td className="px-6 py-4 text-slate-500 font-mono text-xs">{exp.date}</td>
+                                                                    <td className="px-6 py-4 text-right font-bold text-emerald-600 tabular-nums">+{exp.amount.toLocaleString()} {exp.currency}</td>
+                                                                    <td className="px-6 py-4 text-center">
+                                                                        <span className={`px-2.5 py-1 rounded-md text-[10px] font-bold uppercase tracking-tight ${
+                                                                            exp.status === 'Approved' ? 'bg-emerald-100 text-emerald-700' :
+                                                                            exp.status === 'Rejected' ? 'bg-red-100 text-red-700' :
+                                                                            exp.status === 'Processed' ? 'bg-indigo-100 text-indigo-700' :
+                                                                            'bg-amber-100 text-amber-700'
+                                                                        }`}>{exp.status}</span>
+                                                                        {exp.status === 'Rejected' && exp.rejectionReason && (
+                                                                            <p className="text-[9px] text-red-500 mt-1 max-w-[120px] mx-auto truncate" title={exp.rejectionReason}>{exp.rejectionReason}</p>
+                                                                        )}
+                                                                    </td>
+                                                                </tr>
+                                                            );
+                                                        })}
+                                                    </tbody>
+                                                </table>
+                                            </div>
+                                        ) : (
+                                            <div className="py-16 flex flex-col items-center justify-center text-center">
+                                                <span className="material-symbols-outlined text-4xl text-slate-300 mb-3">receipt_long</span>
+                                                <p className="text-slate-500 font-medium">No expense claims submitted yet.</p>
+                                                <p className="text-xs text-slate-400 mt-1">Claims submitted via the Expenses module will appear here.</p>
+                                            </div>
+                                        )}
+                                    </div>
+                                </div>
+                            );
+                        })()}
+
+                        {activeTab !== 'Overview' && activeTab !== 'Documents' && activeTab !== 'Assets' && activeTab !== 'Job & Pay' && activeTab !== 'Movement' && activeTab !== 'Leave' && activeTab !== 'Attendance' && activeTab !== 'Personal & Family' && activeTab !== 'Loans' && activeTab !== 'Disciplinary' && activeTab !== 'Expenses' && (
                             <div className="w-full h-64 bg-slate-50 dark:bg-slate-800/30 rounded-xl border-2 border-dashed border-slate-200 dark:border-slate-700 flex flex-col items-center justify-center animate-fade-in">
                                 <span className="material-symbols-outlined text-4xl text-slate-300 mb-2">construction</span>
                                 <p className="text-slate-500 font-medium">The {activeTab} view is currently under construction.</p>
@@ -1126,7 +1473,7 @@ export default function Employee() {
             {/* Simulated Generic User Action Modal */}
             {
                 activeModal && (
-                    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm animate-fade-in px-4">
+                    <div className="fixed inset-0 z-[1200] flex items-center justify-center bg-black/40 backdrop-blur-sm animate-fade-in px-4">
                         <div className="bg-white dark:bg-slate-900 w-full max-w-md rounded-2xl shadow-2xl overflow-hidden border border-slate-200 dark:border-slate-700 relative">
                             {activeModal === 'deactivate' && (
                                 <>
@@ -1147,27 +1494,57 @@ export default function Employee() {
                                             </button>
                                         </div>
                                     )}
-                                    <div className="p-10 text-center">
-                                        <span className="material-symbols-outlined text-red-500 text-6xl mb-4 bg-red-50 dark:bg-red-900/20 rounded-full p-6">warning</span>
-                                        <h3 className="text-xl font-bold text-slate-900 dark:text-white mt-2">Terminate {employee.name}?</h3>
-                                        <p className="text-sm text-slate-500 dark:text-slate-400 mt-4 leading-relaxed">
-                                            This action is immediate. All system access, biometric syncs, and payroll cycles will be suspended for <strong>{employee.id}</strong>.
-                                        </p>
+                                    <div className="p-6 space-y-4">
+                                        <div className="text-center">
+                                            <span className="material-symbols-outlined text-red-500 text-6xl mb-4 bg-red-50 dark:bg-red-900/20 rounded-full p-6">warning</span>
+                                            <h3 className="text-xl font-bold text-slate-900 dark:text-white mt-2">Separate {employee.name}?</h3>
+                                            <p className="text-sm text-slate-500 dark:text-slate-400 mt-2 leading-relaxed">
+                                                This action is immediate. Select a separation reason for <strong>{employee.id}</strong>.
+                                            </p>
+                                        </div>
+                                        <div>
+                                            <label className="text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider block mb-1.5">Separation Reason <span className="text-red-500">*</span></label>
+                                            <select
+                                                value={separationReason}
+                                                onChange={e => setSeparationReason(e.target.value as any)}
+                                                className="w-full text-sm p-2.5 border border-slate-300 dark:border-slate-700 rounded-lg focus:ring-[#4F46E5] focus:border-[#4F46E5] bg-white dark:bg-slate-800"
+                                            >
+                                                <option value="Resignation">Resignation</option>
+                                                <option value="Termination">Termination</option>
+                                                <option value="Left/Absconded">Left / Absconded</option>
+                                                <option value="Retirement">Retirement</option>
+                                            </select>
+                                        </div>
+                                        <div className="p-3 rounded-lg border text-xs font-semibold flex items-center gap-2 bg-slate-50 dark:bg-slate-800/50 border-slate-200 dark:border-slate-700">
+                                            <span className="material-symbols-outlined text-[16px] text-slate-500">badge</span>
+                                            <span className="text-slate-600 dark:text-slate-400">Re-hire Eligible:</span>
+                                            {(separationReason === 'Resignation' || separationReason === 'Retirement') ? (
+                                                <span className="text-emerald-600 flex items-center gap-1"><span className="material-symbols-outlined text-[14px]">check_circle</span> Yes</span>
+                                            ) : (
+                                                <span className="text-red-600 flex items-center gap-1"><span className="material-symbols-outlined text-[14px]">cancel</span> No</span>
+                                            )}
+                                        </div>
+                                        {separationReason === 'Left/Absconded' && (
+                                            <div className="p-2.5 bg-amber-50 dark:bg-amber-900/20 border border-amber-100 dark:border-amber-800 rounded-lg flex gap-2 items-start">
+                                                <span className="material-symbols-outlined text-amber-600 text-[16px] mt-0.5">warning</span>
+                                                <p className="text-[10px] text-amber-700 dark:text-amber-400 font-medium">Asset and financial gates will be bypassed. A <strong>High Priority</strong> asset recovery alert will be dispatched.</p>
+                                            </div>
+                                        )}
                                     </div>
                                     <div className="flex bg-slate-50 dark:bg-slate-800/50 text-sm font-semibold border-t border-slate-100 dark:border-slate-800">
-                                        <button onClick={closeModal} className="flex-1 py-5 hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-600 dark:text-slate-400 border-r border-slate-100 dark:border-slate-800 transition-colors">
+                                        <button onClick={() => { setSeparationReason('Termination'); closeModal(); }} className="flex-1 py-5 hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-600 dark:text-slate-400 border-r border-slate-100 dark:border-slate-800 transition-colors">
                                             Cancel
                                         </button>
                                         <button 
-                                            onClick={() => {
-                                                const res = terminateEmployee(employee.id, 'ADM-001');
-                                                if (res.success) closeModal();
+                                            onClick={async () => {
+                                                const res = await terminateEmployee(employee.id, currentUser?.id || 'EMP-001', separationReason);
+                                                if (res.success) { setSeparationReason('Termination'); closeModal(); }
                                                 else setTerminationError(res.message);
                                             }}
                                             className="flex-1 py-5 hover:bg-red-50 dark:hover:bg-red-900/20 text-red-600 dark:text-red-400 transition-colors flex items-center justify-center gap-2"
                                         >
                                             <span className="material-symbols-outlined text-[18px]">person_off</span>
-                                            Yes, Terminate
+                                            Confirm Separation
                                         </button>
                                     </div>
                                 </>
@@ -1190,7 +1567,7 @@ export default function Employee() {
                                                     onChange={(e) => setAdjustmentType(e.target.value)}
                                                     className="w-full text-sm p-3 border border-slate-200 rounded-lg bg-slate-50 dark:bg-slate-800 dark:border-slate-700"
                                                 >
-                                                    {Object.keys(employee.leaveBalances || {}).map(type => (
+                                                    {[...Object.keys(employee.leaveBalances || {}), 'Annual', 'Casual', 'Medical', 'Earned'].filter((v, i, a) => a.indexOf(v) === i).map(type => (
                                                         <option key={type} value={type}>{type}</option>
                                                     ))}
                                                 </select>
@@ -1223,7 +1600,7 @@ export default function Employee() {
                                         </button>
                                         <button 
                                             onClick={() => {
-                                                const res = adjustLeaveBalance(employee.id, adjustmentType, adjustmentAmount, adjustmentReason, 'ADM-001');
+                                                const res = adjustLeaveBalance(employee.id, adjustmentType, adjustmentAmount, adjustmentReason, currentUser?.id || 'EMP-001');
                                                 if (res.success) {
                                                     setAdjustmentAmount(0);
                                                     setAdjustmentReason('');
@@ -1675,7 +2052,37 @@ export default function Employee() {
                                 </>
                             )}
                             
-                            {activeModal && !['deactivate', 'adjust_balance', 'edit_schedule', 'add_hours', 'salary_update', 'edit_profile'].includes(activeModal) && (
+                            {activeModal === 'doc_preview' && docPreviewUrl && (
+                                <>
+                                    <div className="p-5 border-b border-slate-100 dark:border-slate-800 flex justify-between items-center">
+                                        <h3 className="font-bold text-slate-900 dark:text-white flex items-center gap-2">
+                                            <span className="material-symbols-outlined text-[#4F46E5]">preview</span>
+                                            Document Preview
+                                        </h3>
+                                        <button onClick={() => { setDocPreviewUrl(null); closeModal(); }} className="text-slate-400 hover:text-slate-600 transition-colors">
+                                            <span className="material-symbols-outlined">close</span>
+                                        </button>
+                                    </div>
+                                    <div className="p-4" style={{ minHeight: 400 }}>
+                                        {docPreviewUrl === '#' ? (
+                                            <div className="flex flex-col items-center justify-center h-[360px] bg-slate-50 dark:bg-slate-800/30 rounded-lg border-2 border-dashed border-slate-200 dark:border-slate-700">
+                                                <span className="material-symbols-outlined text-4xl text-slate-300 mb-2">description</span>
+                                                <p className="text-sm text-slate-500 font-medium">System-generated document</p>
+                                                <p className="text-xs text-slate-400 mt-1">Preview not available for auto-generated records.</p>
+                                            </div>
+                                        ) : (
+                                            <iframe
+                                                src={docPreviewUrl}
+                                                className="w-full rounded-lg border border-slate-200 dark:border-slate-700"
+                                                style={{ height: 400 }}
+                                                title="Document Preview"
+                                            />
+                                        )}
+                                    </div>
+                                </>
+                            )}
+
+                            {activeModal && !['deactivate', 'adjust_balance', 'edit_schedule', 'add_hours', 'salary_update', 'edit_profile', 'doc_preview'].includes(activeModal) && (
                                 <div className="p-10 text-center">
                                     <span className="material-symbols-outlined text-slate-300 text-5xl mb-4">info</span>
                                     <h3 className="text-lg font-bold text-slate-900 dark:text-white capitalize mb-1">{activeModal.replace(/_/g, ' ')}</h3>

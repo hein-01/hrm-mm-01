@@ -1,4 +1,5 @@
 import React, { useState, useMemo } from 'react';
+import { TableVirtuoso } from 'react-virtuoso';
 import Sidebar from '../components/Sidebar';
 import Header from '../components/Header';
 import { useAppData, Alert } from '../context/AppDataContext';
@@ -14,7 +15,8 @@ export default function LearningTraining() {
         setAlerts,
         completeCourse,
         alerts,
-        addAuditLog
+        addAuditLog,
+        addTrainingCourse
     } = useAppData();
 
     // Top-Level Navigation State
@@ -34,6 +36,21 @@ export default function LearningTraining() {
     const pendingEnrollments = totalEnrollments - completedEnrollments;
     const complianceLiabilitiesCount = alerts.filter(a => a.id.startsWith('CERT-RISK')).length;
 
+    const totalTrainingInvestment = useMemo(() => {
+        let sum = 0;
+        employees.forEach(emp => {
+            emp.enrolledCourses?.forEach(ec => {
+                if (ec.status === 'Completed') {
+                    const course = courses.find(c => c.id === ec.courseId);
+                    if (course?.costPerHead) {
+                        sum += course.costPerHead;
+                    }
+                }
+            });
+        });
+        return sum;
+    }, [employees, courses]);
+
     // Interaction States
     const [openDropdownId, setOpenDropdownId] = useState<string | null>(null);
     const [activeModal, setActiveModal] = useState<string | null>(null);
@@ -44,6 +61,27 @@ export default function LearningTraining() {
     const [isReminding, setIsReminding] = useState(false);
     const [remindSuccess, setRemindSuccess] = useState(false);
     const [manualNote, setManualNote] = useState('');
+    const [manualGrade, setManualGrade] = useState('');
+    
+    // Create Course State
+    const [newCourse, setNewCourse] = useState<Parameters<typeof addTrainingCourse>[0]>({
+        name: '', category: 'Compliance', duration: '1.0 Hrs', isMandatory: false, expiryDays: 365, skillTags: [], provider: '', costPerHead: 0, minPassingScore: ''
+    });
+    const [skillInput, setSkillInput] = useState('');
+
+    const handleCreateCourse = () => {
+        if (!newCourse.name) return;
+        addTrainingCourse(newCourse);
+        setAlerts(prev => [{
+            id: `NEW-COURSE-${Date.now()}`,
+            type: 'success',
+            message: `New curriculum "${newCourse.name}" has been published to the registry.`,
+            timestamp: new Date().toLocaleTimeString(),
+            isRead: false
+        }, ...prev]);
+        closeModals();
+        setActiveTab('Course Catalog');
+    };
 
     const handleRemindAll = () => {
         setIsReminding(true);
@@ -87,6 +125,8 @@ export default function LearningTraining() {
         setActiveRecord(null);
         setErrorMsg('');
         setManualNote('');
+        setNewCourse({ name: '', category: 'Compliance', duration: '1.0 Hrs', isMandatory: false, expiryDays: 365, skillTags: [] });
+        setSkillInput('');
     };
 
     const handleManualComplete = () => {
@@ -98,7 +138,7 @@ export default function LearningTraining() {
             emp.enrolledCourses.some(ec => ec.courseId === activeRecord.id && ec.status !== 'Completed')
         );
         enrolledEmps.forEach(emp => {
-            completeCourse(activeRecord.id, emp.id);
+            completeCourse(activeRecord.id, emp.id, manualGrade || 'Pass');
         });
 
         // 2. Audit entry for accountability
@@ -171,27 +211,35 @@ export default function LearningTraining() {
     );
 
     const renderCourseCatalog = () => (
-        <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl overflow-hidden shadow-sm animate-fade-in">
-            <div className="px-6 py-4 border-b border-slate-200 dark:border-slate-800 flex justify-between items-center bg-slate-50/50">
+        <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl overflow-hidden shadow-sm animate-fade-in flex flex-col h-[600px]">
+            <div className="px-6 py-4 border-b border-slate-200 dark:border-slate-800 flex justify-between items-center bg-slate-50/50 shrink-0">
                 <h4 className="font-bold text-slate-900 dark:text-white">Master Course Registry</h4>
+                <button onClick={() => setActiveModal('create_course')} className="flex items-center gap-2 px-4 py-2 bg-[#4F46E5] hover:bg-indigo-600 text-white font-bold text-xs rounded-lg shadow-sm transition-all"><span className="material-symbols-outlined text-[16px]">add_circle</span> Create Training</button>
             </div>
-            <div className="overflow-x-auto min-h-[400px]">
-                <table className="w-full text-left">
-                    <thead className="bg-[#F8FAFC] dark:bg-slate-800/50 border-b border-slate-200 dark:border-slate-700">
+            <div className="flex-1 overflow-hidden relative">
+                <TableVirtuoso
+                    className="w-full h-full absolute inset-0"
+                    data={courses.filter(c => c.name.toLowerCase().includes(searchQuery.toLowerCase()) || c.category.toLowerCase().includes(searchQuery.toLowerCase()))}
+                    components={{
+                        Table: (props) => <table {...props} className="w-full text-left" />,
+                        TableHead: React.forwardRef((props, ref) => <thead {...props} ref={ref as any} className="bg-[#F8FAFC] dark:bg-slate-800/50 border-b border-slate-200 dark:border-slate-700 sticky top-0 z-10" />),
+                        TableRow: (props) => <tr {...props} className="hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-colors group border-b border-slate-100 dark:border-slate-800/50" />,
+                        TableBody: React.forwardRef((props, ref) => <tbody {...props} ref={ref as any} className="" />)
+                    }}
+                    fixedHeaderContent={() => (
                         <tr>
-                            <th className="px-6 py-4 text-[11px] font-extrabold text-slate-500 dark:text-slate-400 uppercase tracking-widest">Course Curriculum</th>
-                            <th className="px-6 py-4 text-[11px] font-extrabold text-slate-500 dark:text-slate-400 uppercase tracking-widest">Category</th>
-                            <th className="px-6 py-4 text-[11px] font-extrabold text-slate-500 dark:text-slate-400 uppercase tracking-widest">Enrollment Fleet</th>
-                            <th className="px-6 py-4 text-[11px] font-extrabold text-slate-500 dark:text-slate-400 uppercase tracking-widest">Fleet Progress</th>
-                            <th className="px-6 py-4 text-[11px] font-extrabold text-slate-500 dark:text-slate-400 uppercase tracking-widest text-right">Actions</th>
+                            <th className="px-6 py-4 text-[11px] font-extrabold text-slate-500 dark:text-slate-400 uppercase tracking-widest bg-[#F8FAFC] dark:bg-slate-800/50">Course Curriculum</th>
+                            <th className="px-6 py-4 text-[11px] font-extrabold text-slate-500 dark:text-slate-400 uppercase tracking-widest bg-[#F8FAFC] dark:bg-slate-800/50">Category</th>
+                            <th className="px-6 py-4 text-[11px] font-extrabold text-slate-500 dark:text-slate-400 uppercase tracking-widest bg-[#F8FAFC] dark:bg-slate-800/50">Enrollment Fleet</th>
+                            <th className="px-6 py-4 text-[11px] font-extrabold text-slate-500 dark:text-slate-400 uppercase tracking-widest bg-[#F8FAFC] dark:bg-slate-800/50">Fleet Progress</th>
+                            <th className="px-6 py-4 text-[11px] font-extrabold text-slate-500 dark:text-slate-400 uppercase tracking-widest text-right bg-[#F8FAFC] dark:bg-slate-800/50">Actions</th>
                         </tr>
-                    </thead>
-                    <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
-                        {courses.filter(c => c.name.toLowerCase().includes(searchQuery.toLowerCase()) || c.category.toLowerCase().includes(searchQuery.toLowerCase())).map(course => (
-                            <tr key={course.id} className="hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-colors group">
+                    )}
+                    itemContent={(index, course) => (
+                        <>
                                 <td className="px-6 py-4">
                                     <p className="text-sm font-bold text-slate-900 dark:text-slate-200 group-hover:text-[#4F46E5] transition-colors">{course.name}</p>
-                                    <p className="text-[10px] text-slate-500 font-mono mt-0.5">{course.id} {course.isMandatory && <span className="text-red-500 font-bold ml-2 bg-red-50 px-1 py-0.5 rounded border border-red-100">MANDATORY</span>}</p>
+                                    <p className="text-[10px] text-slate-500 font-mono mt-0.5">{course.id} {course.isMandatory && <span className="text-red-500 font-bold ml-2 bg-red-50 px-1 py-0.5 rounded border border-red-100 dark:bg-red-900/20 dark:border-red-800">MANDATORY</span>}</p>
                                 </td>
                                 <td className="px-6 py-4">
                                     <span className="text-[10px] font-bold px-2.5 py-1 rounded-full bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-400 border border-slate-200 dark:border-slate-700 uppercase tracking-wider">{course.category}</span>
@@ -209,7 +257,7 @@ export default function LearningTraining() {
                                     </div>
                                 </td>
                                 <td className="px-6 py-4 text-right relative">
-                                    <button onClick={() => toggleDropdown(course.id)} className="text-slate-400 hover:text-[#4F46E5] p-1.5 rounded transition-colors bg-slate-50 hover:bg-indigo-50 border border-transparent hover:border-indigo-100 shadow-sm"><span className="material-symbols-outlined text-[20px]">more_vert</span></button>
+                                    <button onClick={() => toggleDropdown(course.id)} className="text-slate-400 hover:text-[#4F46E5] p-1.5 rounded transition-colors bg-slate-50 dark:bg-slate-800 hover:bg-indigo-50 border border-transparent hover:border-indigo-100 shadow-sm"><span className="material-symbols-outlined text-[20px]">more_vert</span></button>
                                     {openDropdownId === course.id && (
                                         <>
                                             <div className="fixed inset-0 z-10" onClick={() => setOpenDropdownId(null)}></div>
@@ -226,13 +274,10 @@ export default function LearningTraining() {
                                             </div>
                                         </>
                                     )}
-
-
                                 </td>
-                            </tr>
-                        ))}
-                    </tbody>
-                </table>
+                        </>
+                    )}
+                />
             </div>
         </div>
     );
@@ -277,25 +322,32 @@ export default function LearningTraining() {
     );
 
     const renderAnalytics = () => (
-        <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl overflow-hidden shadow-sm animate-fade-in">
-            <div className="px-6 py-4 border-b border-slate-200 dark:border-slate-800 flex justify-between items-center bg-slate-50/50">
+        <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl overflow-hidden shadow-sm animate-fade-in flex flex-col h-[600px]">
+            <div className="px-6 py-4 border-b border-slate-200 dark:border-slate-800 flex justify-between items-center bg-slate-50/50 shrink-0">
                 <h4 className="font-bold text-slate-900 dark:text-white">Employee Progress Metrics</h4>
                 <p className="text-xs font-bold text-slate-500">Synced to Profile 360 View</p>
             </div>
-            <div className="p-0">
-                <table className="w-full text-left">
-                    <thead className="bg-[#F8FAFC] border-b border-slate-100">
+            <div className="flex-1 overflow-hidden relative">
+                <TableVirtuoso
+                    className="w-full h-full absolute inset-0"
+                    data={employees.filter(e => e.status === 'Active' && e.name.toLowerCase().includes(searchQuery.toLowerCase()))}
+                    components={{
+                        Table: (props) => <table {...props} className="w-full text-left" />,
+                        TableHead: React.forwardRef((props, ref) => <thead {...props} ref={ref as any} className="bg-[#F8FAFC] dark:bg-slate-800/50 border-b border-slate-200 dark:border-slate-700 sticky top-0 z-10" />),
+                        TableRow: (props) => <tr {...props} className="hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-colors border-b border-slate-100 dark:border-slate-800/50" />,
+                        TableBody: React.forwardRef((props, ref) => <tbody {...props} ref={ref as any} className="" />)
+                    }}
+                    fixedHeaderContent={() => (
                         <tr>
-                            <th className="px-6 py-4 text-[11px] font-extrabold text-slate-500 uppercase tracking-widest">Workforce Member</th>
-                            <th className="px-6 py-4 text-[11px] font-extrabold text-slate-500 uppercase tracking-widest">Department</th>
-                            <th className="px-6 py-4 text-[11px] font-extrabold text-slate-500 uppercase tracking-widest">Global Completion</th>
+                            <th className="px-6 py-4 text-[11px] font-extrabold text-slate-500 uppercase tracking-widest bg-[#F8FAFC] dark:bg-slate-800/50">Workforce Member</th>
+                            <th className="px-6 py-4 text-[11px] font-extrabold text-slate-500 uppercase tracking-widest bg-[#F8FAFC] dark:bg-slate-800/50">Department</th>
+                            <th className="px-6 py-4 text-[11px] font-extrabold text-slate-500 uppercase tracking-widest bg-[#F8FAFC] dark:bg-slate-800/50">Global Completion</th>
                         </tr>
-                    </thead>
-                    <tbody className="divide-y divide-slate-50">
-                        {employees.filter(e => e.status === 'Active' && e.name.toLowerCase().includes(searchQuery.toLowerCase())).map(emp => {
-                            const empProgress = emp.enrolledCourses.length ? Math.round((emp.enrolledCourses.filter(ec => ec.status === 'Completed').length / emp.enrolledCourses.length) * 100) : 0;
-                            return (
-                                <tr key={emp.id} className="hover:bg-slate-50 transition-colors">
+                    )}
+                    itemContent={(index, emp) => {
+                        const empProgress = emp.enrolledCourses.length ? Math.round((emp.enrolledCourses.filter(ec => ec.status === 'Completed').length / emp.enrolledCourses.length) * 100) : 0;
+                        return (
+                            <>
                                 <td className="px-6 py-4">
                                     <div className="flex items-center gap-3">
                                         {emp.avatar ? (
@@ -303,25 +355,22 @@ export default function LearningTraining() {
                                         ) : (
                                             <div className="size-8 rounded-full bg-indigo-50 text-[#4F46E5] flex items-center justify-center font-bold text-xs shrink-0 border border-indigo-100 shadow-sm">{emp.name.charAt(0)}</div>
                                         )}
-                                        <p className="font-bold text-slate-900 text-sm">{emp.name}</p>
+                                        <p className="font-bold text-slate-900 dark:text-white text-sm">{emp.name}</p>
                                     </div>
                                 </td>
-                                <td className="px-6 py-4 text-sm font-semibold text-slate-600">{emp.dept}</td>
+                                <td className="px-6 py-4 text-sm font-semibold text-slate-600 dark:text-slate-400">{emp.dept}</td>
                                 <td className="px-6 py-4">
                                     <div className="flex items-center gap-3 max-w-xs">
-                                        <div className="flex-1 h-2 bg-slate-100 rounded-full overflow-hidden border border-slate-200">
+                                        <div className="flex-1 h-2 bg-slate-100 dark:bg-slate-800 rounded-full overflow-hidden border border-slate-200 dark:border-slate-700">
                                             <div className={`h-full transition-all ${empProgress === 100 ? 'bg-emerald-500' : empProgress < 50 ? 'bg-amber-500' : 'bg-[#4F46E5]'}`} style={{ width: `${empProgress}%` }}></div>
                                         </div>
-                                        <span className="text-xs font-bold text-slate-700 w-10 text-right">{empProgress}%</span>
-
+                                        <span className="text-xs font-bold text-slate-700 dark:text-slate-300 w-10 text-right">{empProgress}%</span>
                                     </div>
                                 </td>
-                            </tr>
+                            </>
                         );
-                    })}
-
-                    </tbody>
-                </table>
+                    }}
+                />
             </div>
         </div>
     );
@@ -356,7 +405,7 @@ export default function LearningTraining() {
                     <div className="px-8 pt-8 pb-12 space-y-8 max-w-[1600px] mx-auto">
 
                         {/* 2. Live KPI Interactivity derived directly from mapped State Arrays */}
-                        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+                        <div className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-5 gap-6">
                             <div className="bg-white p-6 rounded-xl border border-slate-200 shadow-sm flex flex-col justify-between">
                                 <p className="text-xs font-extrabold text-slate-500 uppercase tracking-widest mb-1">Total Active Courses</p>
                                 <div className="flex items-end justify-between mt-2">
@@ -382,6 +431,13 @@ export default function LearningTraining() {
                                 <div className="flex items-end justify-between mt-2">
                                     <h3 className="text-3xl font-bold text-red-600">{complianceLiabilitiesCount}</h3>
                                     <p className="text-[10px] uppercase font-bold text-red-400">Certs Expired/Soon</p>
+                                </div>
+                            </div>
+                            <div className="bg-white p-6 rounded-xl border border-slate-200 shadow-sm flex flex-col justify-between">
+                                <p className="text-xs font-extrabold text-slate-500 uppercase tracking-widest mb-1">Total Training Inv.</p>
+                                <div className="flex items-end justify-between mt-2">
+                                    <h3 className="text-3xl font-bold text-emerald-600">${totalTrainingInvestment.toLocaleString()}</h3>
+                                    <span className="material-symbols-outlined text-emerald-100 text-[40px] -mb-2 -mr-2">payments</span>
                                 </div>
                             </div>
                         </div>
@@ -547,6 +603,14 @@ export default function LearningTraining() {
                                 </div>
 
                                 <div>
+                                    <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2 block">Achieved Grade / Score (Optional)</label>
+                                    <input 
+                                        type="text"
+                                        value={manualGrade}
+                                        onChange={(e) => setManualGrade(e.target.value)}
+                                        className="w-full text-sm p-3 border border-slate-300 rounded-lg focus:ring-[#4F46E5] focus:border-[#4F46E5] font-semibold bg-white mb-4"
+                                        placeholder="e.g. 95% or Pass"
+                                    />
                                     <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2 block">Reason for Override (Audit Requirement)</label>
                                     <textarea 
                                         value={manualNote}
@@ -564,6 +628,134 @@ export default function LearningTraining() {
                                     className={`flex-[2] py-3 rounded-xl text-xs font-black text-white shadow-lg transition-all uppercase tracking-widest ${!manualNote.trim() ? 'bg-slate-300 shadow-none' : 'bg-emerald-600 shadow-emerald-200 hover:bg-emerald-700'}`}
                                 >
                                     Confirm Authorization
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                )}
+
+                {/* 5. Create Course Creation Modal */}
+                {activeModal === 'create_course' && (
+                    <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 backdrop-blur-sm animate-fade-in px-4">
+                        <div className="bg-white dark:bg-slate-900 w-full max-w-lg rounded-2xl shadow-2xl overflow-hidden border border-slate-200 dark:border-slate-800 flex flex-col">
+                            <div className="p-5 border-b border-slate-100 dark:border-slate-800 flex justify-between items-center bg-slate-50 dark:bg-slate-800/50 shrink-0">
+                                <h3 className="font-bold text-slate-900 dark:text-white flex items-center gap-2 text-sm uppercase tracking-widest leading-none">
+                                    <span className="material-symbols-outlined text-[#4F46E5] text-[20px]">add_task</span> Create New Training Curriculum
+                                </h3>
+                                <button onClick={closeModals} className="text-slate-400 hover:text-slate-600 dark:hover:text-slate-300 transition-colors">
+                                    <span className="material-symbols-outlined">close</span>
+                                </button>
+                            </div>
+                            <div className="p-6 space-y-4 max-h-[70vh] overflow-y-auto">
+                                <div className="space-y-1.5">
+                                    <label className="text-xs font-bold uppercase tracking-widest text-slate-500">Course Name</label>
+                                    <input 
+                                        type="text" 
+                                        value={newCourse.name}
+                                        onChange={e => setNewCourse({ ...newCourse, name: e.target.value })}
+                                        className="w-full text-sm p-3 border border-slate-300 dark:border-slate-700 rounded-lg focus:ring-[#4F46E5] focus:border-[#4F46E5] font-semibold bg-white dark:bg-slate-800 dark:text-white"
+                                        placeholder="e.g. Advanced Fire Protocol"
+                                    />
+                                </div>
+                                <div className="grid grid-cols-2 gap-4">
+                                    <div className="space-y-1.5">
+                                        <label className="text-xs font-bold uppercase tracking-widest text-slate-500">Provider (Vendor)</label>
+                                        <input 
+                                            type="text" 
+                                            value={newCourse.provider || ''}
+                                            onChange={e => setNewCourse({ ...newCourse, provider: e.target.value })}
+                                            className="w-full text-sm p-3 border border-slate-300 dark:border-slate-700 rounded-lg focus:ring-[#4F46E5] focus:border-[#4F46E5] font-semibold bg-white dark:bg-slate-800 dark:text-white"
+                                            placeholder="e.g. Coursera or Internal"
+                                        />
+                                    </div>
+                                    <div className="space-y-1.5">
+                                        <label className="text-xs font-bold uppercase tracking-widest text-slate-500">Cost Per Head ($)</label>
+                                        <input 
+                                            type="number" 
+                                            value={newCourse.costPerHead || 0}
+                                            onChange={e => setNewCourse({ ...newCourse, costPerHead: Number(e.target.value) })}
+                                            className="w-full text-sm p-3 border border-slate-300 dark:border-slate-700 rounded-lg focus:ring-[#4F46E5] focus:border-[#4F46E5] font-semibold bg-white dark:bg-slate-800 dark:text-white"
+                                        />
+                                    </div>
+                                </div>
+                                <div className="grid grid-cols-2 gap-4">
+                                    <div className="space-y-1.5">
+                                        <label className="text-xs font-bold uppercase tracking-widest text-slate-500">Category</label>
+                                        <select 
+                                            value={newCourse.category}
+                                            onChange={e => setNewCourse({ ...newCourse, category: e.target.value })}
+                                            className="w-full text-sm p-3 border border-slate-300 dark:border-slate-700 rounded-lg focus:ring-[#4F46E5] focus:border-[#4F46E5] font-semibold bg-white dark:bg-slate-800 dark:text-white"
+                                        >
+                                            <option>Compliance</option>
+                                            <option>Safety</option>
+                                            <option>Soft Skills</option>
+                                            <option>Technical</option>
+                                        </select>
+                                    </div>
+                                    <div className="space-y-1.5">
+                                        <label className="text-xs font-bold uppercase tracking-widest text-slate-500">Duration (Hrs)</label>
+                                        <input 
+                                            type="text" 
+                                            value={newCourse.duration}
+                                            onChange={e => setNewCourse({ ...newCourse, duration: e.target.value })}
+                                            className="w-full text-sm p-3 border border-slate-300 dark:border-slate-700 rounded-lg focus:ring-[#4F46E5] focus:border-[#4F46E5] font-semibold bg-white dark:bg-slate-800 dark:text-white"
+                                        />
+                                    </div>
+                                </div>
+                                <div className="flex items-center gap-3 p-3 bg-slate-50 dark:bg-slate-800/50 rounded-lg border border-slate-100 dark:border-slate-800">
+                                    <input 
+                                        type="checkbox" 
+                                        checked={newCourse.isMandatory}
+                                        onChange={e => setNewCourse({ ...newCourse, isMandatory: e.target.checked })}
+                                        className="size-4 text-[#4F46E5] focus:ring-[#4F46E5] rounded border-slate-300"
+                                    />
+                                    <span className="text-sm font-bold text-slate-700 dark:text-slate-300">Mandatory Completion required across active fleet?</span>
+                                </div>
+                                <div className="space-y-1.5">
+                                    <label className="text-xs font-bold uppercase tracking-widest text-slate-500">Certification Expiry (Days)</label>
+                                    <input 
+                                        type="number" 
+                                        value={newCourse.expiryDays}
+                                        onChange={e => setNewCourse({ ...newCourse, expiryDays: parseInt(e.target.value) || 365 })}
+                                        className="w-full text-sm p-3 border border-slate-300 dark:border-slate-700 rounded-lg focus:ring-[#4F46E5] focus:border-[#4F46E5] font-semibold bg-white dark:bg-slate-800 dark:text-white"
+                                    />
+                                </div>
+                                <div className="space-y-1.5">
+                                    <label className="text-xs font-bold uppercase tracking-widest text-slate-500">Skill Acquisition Tags</label>
+                                    <div className="flex gap-2">
+                                        <input 
+                                            type="text" 
+                                            value={skillInput}
+                                            onChange={e => setSkillInput(e.target.value)}
+                                            onKeyDown={e => {
+                                                if (e.key === 'Enter' && skillInput) {
+                                                    setNewCourse({ ...newCourse, skillTags: [...(newCourse.skillTags || []), skillInput] });
+                                                    setSkillInput('');
+                                                }
+                                            }}
+                                            className="flex-1 text-sm p-3 border border-slate-300 dark:border-slate-700 rounded-lg focus:ring-[#4F46E5] focus:border-[#4F46E5] font-semibold bg-white dark:bg-slate-800 dark:text-white"
+                                            placeholder="Type and press Enter to add..."
+                                        />
+                                        <button onClick={() => { if(skillInput) { setNewCourse({ ...newCourse, skillTags: [...(newCourse.skillTags || []), skillInput] }); setSkillInput(''); } }} className="px-4 py-2 bg-slate-200 dark:bg-slate-700 hover:bg-slate-300 rounded-lg font-bold text-slate-700 dark:text-white text-sm">Add</button>
+                                    </div>
+                                    <div className="flex gap-2 flex-wrap mt-2">
+                                        {(newCourse.skillTags || []).map((skill, idx) => (
+                                            <span key={idx} className="bg-indigo-50 dark:bg-indigo-900/30 text-[#4F46E5] border border-indigo-100 flex items-center gap-1 font-bold text-xs px-2.5 py-1 rounded">
+                                                {skill}
+                                                <span onClick={() => setNewCourse({ ...newCourse, skillTags: newCourse.skillTags?.filter(s => s !== skill) })} className="material-symbols-outlined text-[14px] cursor-pointer hover:text-red-500">close</span>
+                                            </span>
+                                        ))}
+                                    </div>
+                                </div>
+                            </div>
+                            <div className="p-4 bg-slate-50 dark:bg-slate-800/80 border-t border-slate-100 dark:border-slate-800 flex gap-3">
+                                <button onClick={closeModals} className="flex-1 px-5 py-3 rounded-xl text-xs font-black text-slate-500 dark:text-slate-400 hover:bg-slate-200 dark:hover:bg-slate-700 transition-all uppercase tracking-widest">Cancel</button>
+                                <button 
+                                    disabled={!newCourse.name.trim()}
+                                    onClick={handleCreateCourse}
+                                    className={`flex-[2] py-3 rounded-xl text-xs font-black text-white shadow-lg transition-all uppercase tracking-widest ${!newCourse.name.trim() ? 'bg-slate-300 dark:bg-slate-700 shadow-none' : 'bg-[#4F46E5] hover:bg-indigo-600'}`}
+                                >
+                                    Launch Curriculum
                                 </button>
                             </div>
                         </div>

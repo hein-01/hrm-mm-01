@@ -4,9 +4,11 @@ import Sidebar from '../components/Sidebar';
 import Header from '../components/Header';
 import { useAppData } from '../context/AppDataContext';
 import { useSystemCalendar } from '../context/SystemCalendarContext';
+import { useApprovals } from '../context/ApprovalContext';
 import ConfirmationModal from '../components/ConfirmationModal';
 
 export default function Setting() {
+    const { chains, delegations, oooEntries } = useApprovals();
     const { getFormattedDate, getCurrentDateISO } = useSystemCalendar();
     const { 
         complianceSettings, setComplianceSettings, 
@@ -18,7 +20,9 @@ export default function Setting() {
         addDepartment, updateDepartment, deleteDepartment, reorderDepartments,
         addPosition, updatePosition, deletePosition,
         addAllowanceConfig, addDeductionConfig,
-        holidays, addHoliday, updateHoliday, deleteHoliday
+        holidays, addHoliday, updateHoliday, deleteHoliday,
+        downloadSystemBackup,
+        logSettingChange
     } = useAppData();
 
     const [activeTab, setActiveTab] = useState('General & Org');
@@ -457,12 +461,21 @@ export default function Setting() {
             // 4. Audit: New Compliance Fields
             if (localCompliance.workingDaysPerMonth !== complianceSettings.workingDaysPerMonth) {
                 addAuditLog({ adminId: 'ADM-001', actionType: 'Compliance Change', module: 'Payroll', detail: `Base Working Days updated from ${complianceSettings.workingDaysPerMonth} to ${localCompliance.workingDaysPerMonth} days.` });
+                logSettingChange('Compliance.WorkingDays', complianceSettings.workingDaysPerMonth, localCompliance.workingDaysPerMonth);
             }
             if (localCompliance.pitRate !== complianceSettings.pitRate) {
                 addAuditLog({ adminId: 'ADM-001', actionType: 'Compliance Change', module: 'Payroll', detail: `PIT Rate updated from ${complianceSettings.pitRate * 100}% to ${localCompliance.pitRate * 100}%.` });
+                logSettingChange('Compliance.PITRate', `${complianceSettings.pitRate * 100}%`, `${localCompliance.pitRate * 100}%`);
             }
             if (localCompliance.pitThreshold !== complianceSettings.pitThreshold) {
                 addAuditLog({ adminId: 'ADM-001', actionType: 'Compliance Change', module: 'Payroll', detail: `PIT Threshold updated from ${complianceSettings.pitThreshold.toLocaleString()} to ${localCompliance.pitThreshold.toLocaleString()} MMK.` });
+                logSettingChange('Compliance.PITThreshold', complianceSettings.pitThreshold, localCompliance.pitThreshold);
+            }
+            if (localCompliance.ssbPercent !== complianceSettings.ssbPercent) {
+                logSettingChange('Compliance.SSBPercent', complianceSettings.ssbPercent, localCompliance.ssbPercent);
+            }
+            if (localSystem.companyLogo !== systemSettings.companyLogo) {
+                logSettingChange('Branding.Logo', 'Logo Updated', 'Logo Updated');
             }
 
             // 5. Commit Core Settings
@@ -530,7 +543,7 @@ export default function Setting() {
 
             <main className="flex-1 flex flex-col h-full overflow-hidden relative ml-[280px] bg-[#F8FAFC] dark:bg-slate-950">
                 <Header 
-                    title="System Settings"
+                    title={`${localSystem.companyName} Governance`}
                     subtitle="Configure global workforce parameters, security roles, and compliance tracking"
                 />
 
@@ -539,7 +552,7 @@ export default function Setting() {
 
 
                         <nav className="flex border-b border-slate-200 dark:border-slate-800 mb-10 gap-8 overflow-x-auto">
-                            {['General & Org', 'Compliance & Tax', 'Locations', 'Departments', 'Positions', 'User Access', 'Onboarding Templates', 'Payment Providers', 'Devices & APIs', 'Holidays & Closures', 'Audit Registry'].map(tab => (
+                            {['General & Org', 'Compliance & Tax', 'Locations', 'Departments', 'Positions', 'User Access', 'Onboarding Templates', 'Payment Providers', 'Devices & APIs', 'Holidays & Closures', 'Approval Workflows', 'Audit Registry', 'NRC Registry'].map(tab => (
                                 <button
                                     key={tab}
                                     onClick={() => setActiveTab(tab)}
@@ -557,7 +570,9 @@ export default function Setting() {
                                         {tab === 'Payment Providers' && 'Bank & Wallet Routing'}
                                         {tab === 'Devices & APIs' && 'Hardware Sync'}
                                         {tab === 'Holidays & Closures' && 'Manage Company Breaks'}
+                                        {tab === 'Approval Workflows' && 'Approval Chains & Delegation'}
                                         {tab === 'Audit Registry' && 'Security Logs'}
+                                        {tab === 'NRC Registry' && 'Employee NRC Validation'}
                                     </span>
                                 </button>
                             ))}
@@ -623,13 +638,26 @@ export default function Setting() {
                                                 </div>
                                             </div>
 
+                                            <div className="pt-2">
+                                                <button 
+                                                    onClick={downloadSystemBackup}
+                                                    className="w-full py-4 border-2 border-dashed border-indigo-200 dark:border-indigo-900/40 rounded-2xl flex flex-col items-center justify-center gap-1 hover:bg-indigo-50/30 dark:hover:bg-indigo-900/10 transition-all group"
+                                                >
+                                                    <div className="flex items-center gap-2 text-indigo-600 dark:text-indigo-400">
+                                                        <span className="material-symbols-outlined !text-[20px] group-hover:scale-110 transition-transform">cloud_download</span>
+                                                        <span className="text-xs font-black uppercase tracking-widest">Download Full System Backup</span>
+                                                    </div>
+                                                    <span className="text-[10px] text-slate-400 font-bold">Data Sovereignty: Export all records as a secure JSON file</span>
+                                                </button>
+                                            </div>
+
                                             <div className="space-y-2 relative z-10">
                                                 <label className="text-xs font-black text-slate-500 uppercase tracking-widest pl-1">Legal Entity Name</label>
-                                                <input className="w-full px-4 py-3 border border-slate-200 dark:border-slate-700 rounded-xl dark:bg-slate-950 focus:ring-2 focus:ring-[#4F46E5]/20 focus:border-[#4F46E5] text-sm font-bold outline-none transition-all shadow-sm" type="text" defaultValue="Myanmar Enterprise Solutions Co., Ltd." />
+                                                <input className="w-full px-4 py-3 border border-slate-200 dark:border-slate-700 rounded-xl dark:bg-slate-950 focus:ring-2 focus:ring-[#4F46E5]/20 focus:border-[#4F46E5] text-sm font-bold outline-none transition-all shadow-sm" type="text" value={localSystem.companyName} onChange={e => setLocalSystem(prev => ({...prev, companyName: e.target.value}))} />
                                             </div>
                                             <div className="space-y-2 relative z-10">
                                                 <label className="text-xs font-black text-slate-500 uppercase tracking-widest pl-1">Govt Registration ID</label>
-                                                <input className="w-full px-4 py-3 border border-slate-200 dark:border-slate-700 rounded-xl dark:bg-slate-950 focus:ring-2 focus:ring-[#4F46E5]/20 focus:border-[#4F46E5] text-sm font-mono font-bold outline-none transition-all shadow-sm" type="text" defaultValue="MES-YGN-2023-0891" />
+                                                <input className="w-full px-4 py-3 border border-slate-200 dark:border-slate-700 rounded-xl dark:bg-slate-950 focus:ring-2 focus:ring-[#4F46E5]/20 focus:border-[#4F46E5] text-sm font-mono font-bold outline-none transition-all shadow-sm" type="text" value={localSystem.registrationNumber} onChange={e => setLocalSystem(prev => ({...prev, registrationNumber: e.target.value}))} />
                                             </div>
                                             <div className="space-y-2 relative z-10">
                                                 <label className="text-xs font-black text-slate-500 uppercase tracking-widest pl-1">Company TIN</label>
@@ -674,7 +702,7 @@ export default function Setting() {
                                             </div>
                                             <div className="space-y-2 md:col-span-2">
                                                 <label className="text-xs font-black text-slate-500 uppercase tracking-widest pl-1">Main Headquarters</label>
-                                                <textarea className="w-full px-4 py-3 border border-slate-200 dark:border-slate-700 rounded-xl dark:bg-slate-950 focus:ring-2 focus:ring-[#4F46E5]/20 focus:border-[#4F46E5] text-sm font-medium outline-none transition-all shadow-sm min-h-[100px]" defaultValue="No. 123, Pyay Road, Kamayut Township, Yangon, Myanmar"></textarea>
+                                                <textarea className="w-full px-4 py-3 border border-slate-200 dark:border-slate-700 rounded-xl dark:bg-slate-950 focus:ring-2 focus:ring-[#4F46E5]/20 focus:border-[#4F46E5] text-sm font-medium outline-none transition-all shadow-sm min-h-[100px]" value={localSystem.headquarters} onChange={e => setLocalSystem(prev => ({...prev, headquarters: e.target.value}))}></textarea>
                                             </div>
                                         </div>
                                     </section>
@@ -778,6 +806,30 @@ export default function Setting() {
                                             </div>
                                         )}
                                     </section>
+
+                                    <section>
+                                        <div className="flex items-center gap-3 mb-6">
+                                            <div className="size-10 rounded-xl bg-indigo-50 dark:bg-indigo-900/20 flex items-center justify-center text-[#4F46E5]">
+                                                <span className="material-symbols-outlined">person_search</span>
+                                            </div>
+                                            <div className="flex-1">
+                                                <h3 className="text-xl font-bold text-slate-900 dark:text-white flex items-center gap-2">
+                                                    Recruitment & Applicant Tracking
+                                                    {localSystem.recruitmentModuleEnabled && <span className="px-2 py-0.5 bg-emerald-100 text-emerald-700 text-[10px] font-black uppercase tracking-widest rounded">Active</span>}
+                                                </h3>
+                                                <p className="text-xs text-slate-500 font-medium">Manage job postings, applicant pipelines, and interview schedules</p>
+                                            </div>
+                                            <div className="flex items-center gap-3">
+                                                <span className="text-sm font-bold text-slate-700 dark:text-slate-300">Module Switch</span>
+                                                <button 
+                                                    onClick={() => setLocalSystem(prev => ({ ...prev, recruitmentModuleEnabled: !prev.recruitmentModuleEnabled }))}
+                                                    className={`w-14 h-7 rounded-full transition-colors relative flex items-center ${localSystem.recruitmentModuleEnabled ? 'bg-[#4F46E5]' : 'bg-slate-200 dark:bg-slate-700'}`}
+                                                >
+                                                    <span className={`absolute left-1 size-5 bg-white rounded-full shadow-sm transition-transform ${localSystem.recruitmentModuleEnabled ? 'translate-x-7' : 'translate-x-0'}`}></span>
+                                                </button>
+                                            </div>
+                                        </div>
+                                    </section>
                                 </div>
                             )}
 
@@ -869,6 +921,48 @@ export default function Setting() {
                                                 </p>
                                             </div>
                                             <div className="space-y-3">
+                                                <label className="text-xs font-black text-slate-500 uppercase tracking-widest block">PIT Personal Exemption (Annual)</label>
+                                                <div className="relative">
+                                                    <input 
+                                                        type="number"
+                                                        className="w-full px-4 py-3 border border-slate-200 dark:border-slate-700 rounded-xl dark:bg-slate-950 focus:ring-2 focus:ring-[#4F46E5]/20 focus:border-[#4F46E5] text-base font-black outline-none transition-all shadow-sm"
+                                                        value={localCompliance.pitExemption}
+                                                        onChange={(e) => setLocalCompliance({...localCompliance, pitExemption: parseInt(e.target.value) || 0})}
+                                                    />
+                                                    <span className="absolute right-4 top-1/2 -translate-y-1/2 text-sm font-bold text-slate-400">MMK</span>
+                                                </div>
+                                                <p className="text-[11px] text-slate-500 font-medium leading-relaxed">
+                                                    Standard: 4,800,000 MMK. Income below this threshold is non-taxable.
+                                                </p>
+                                            </div>
+                                            <div className="space-y-3">
+                                                <label className="text-xs font-black text-slate-500 uppercase tracking-widest block">System Currency</label>
+                                                <div className="relative">
+                                                    <select 
+                                                        className="w-full px-4 py-3 border border-slate-200 dark:border-slate-700 rounded-xl dark:bg-slate-950 focus:ring-2 focus:ring-[#4F46E5]/20 focus:border-[#4F46E5] text-base font-black outline-none transition-all shadow-sm"
+                                                        value={localCompliance.currency}
+                                                        onChange={(e) => setLocalCompliance({...localCompliance, currency: e.target.value as 'MMK' | 'SGD'})}
+                                                    >
+                                                        <option value="MMK">MMK - Myanmar Kyat</option>
+                                                        <option value="SGD">SGD - Singapore Dollar</option>
+                                                    </select>
+                                                </div>
+                                            </div>
+                                            <div className="space-y-3">
+                                                <label className="text-xs font-black text-slate-500 uppercase tracking-widest block">Attendance Grace Period (Mins)</label>
+                                                <div className="relative">
+                                                    <input 
+                                                        type="number"
+                                                        className="w-full px-4 py-3 border border-slate-200 dark:border-slate-700 rounded-xl dark:bg-slate-950 focus:ring-2 focus:ring-[#4F46E5]/20 focus:border-[#4F46E5] text-base font-black outline-none transition-all shadow-sm"
+                                                        value={localCompliance.attendanceGracePeriod}
+                                                        onChange={(e) => setLocalCompliance({...localCompliance, attendanceGracePeriod: parseInt(e.target.value) || 0})}
+                                                    />
+                                                </div>
+                                                <p className="text-[11px] text-slate-500 font-medium leading-relaxed">
+                                                    Minutes allowed before an employee is marked Late or penalized.
+                                                </p>
+                                            </div>
+                                            <div className="space-y-3">
                                                 <label className="text-xs font-black text-slate-500 uppercase tracking-widest block">Attendance/Late Penalty</label>
                                                 <div className="relative">
                                                     <input 
@@ -877,7 +971,7 @@ export default function Setting() {
                                                         value={localCompliance.attendancePenalty}
                                                         onChange={(e) => setLocalCompliance({...localCompliance, attendancePenalty: parseInt(e.target.value) || 0})}
                                                     />
-                                                    <span className="absolute right-4 top-1/2 -translate-y-1/2 text-xs font-bold text-slate-400">MMK</span>
+                                                    <span className="absolute right-4 top-1/2 -translate-y-1/2 text-xs font-bold text-slate-400">{localCompliance.currency}</span>
                                                 </div>
                                                 <p className="text-[11px] text-slate-500 font-medium leading-relaxed">
                                                     Flat deduction amount applied for unexcused attendance violations or geofence breaches.
@@ -1333,6 +1427,69 @@ export default function Setting() {
                                         </div>
                                     </section>
 
+                                    <section className="bg-white dark:bg-slate-900 rounded-3xl border border-slate-200 dark:border-slate-800 shadow-sm overflow-hidden">
+                                        <div className="p-6 border-b border-slate-100 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-800/30 flex items-center justify-between">
+                                            <div className="flex items-center gap-3">
+                                                <div className="size-10 rounded-xl bg-indigo-50 dark:bg-indigo-900/20 flex items-center justify-center text-indigo-600">
+                                                    <span className="material-symbols-outlined">rule</span>
+                                                </div>
+                                                <div>
+                                                    <h3 className="text-lg font-bold text-slate-900 dark:text-white">Role Permission Matrix</h3>
+                                                    <p className="text-[10px] text-slate-500 font-bold uppercase tracking-widest">Define granular access for non-admin roles</p>
+                                                </div>
+                                            </div>
+                                        </div>
+                                        <div className="overflow-x-auto">
+                                            <table className="w-full text-left">
+                                                <thead>
+                                                    <tr className="border-b border-slate-100 dark:border-slate-800">
+                                                        <th className="px-6 py-4 text-[10px] font-black text-slate-400 uppercase tracking-widest">Permission Scope</th>
+                                                        {localSystem.roles?.filter(r => r.role !== 'Admin').map(role => (
+                                                            <th key={role.role} className="px-6 py-4 text-center text-[11px] font-bold text-slate-900 dark:text-white uppercase tracking-tight">{role.role}</th>
+                                                        ))}
+                                                    </tr>
+                                                </thead>
+                                                <tbody className="divide-y divide-slate-50 dark:divide-slate-800/50 text-sm">
+                                                    {[
+                                                        { key: 'canViewPayroll', label: 'View Payroll & Salaries', desc: 'Access to Payroll Run and Bank Disbursement modules.' },
+                                                        { key: 'canApproveLoans', label: 'Approve Loans/Advances', desc: 'Review and approve financial loan requests.' },
+                                                        { key: 'canEditAssets', label: 'Manage Company Assets', desc: 'Modify asset registry and audit records.' },
+                                                        { key: 'canEditSettings', label: 'Access System Settings', desc: 'Modify global configurations.' },
+                                                        { key: 'canAccessForms', label: 'Access Forms Library', desc: 'View archived documents.' }
+                                                    ].map(perm => (
+                                                        <tr key={perm.key} className="hover:bg-slate-50/60 dark:hover:bg-slate-800/20 transition-colors">
+                                                            <td className="px-6 py-4">
+                                                                <p className="font-bold text-slate-900 dark:text-white text-xs">{perm.label}</p>
+                                                                <p className="text-[10px] text-slate-400 mt-0.5">{perm.desc}</p>
+                                                            </td>
+                                                            {localSystem.roles?.filter(r => r.role !== 'Admin').map(role => {
+                                                                const hasPerm = role.permissions.includes(perm.key);
+                                                                return (
+                                                                    <td key={role.role} className="px-6 py-4 text-center">
+                                                                        <button 
+                                                                            onClick={() => {
+                                                                                setLocalSystem(prev => ({
+                                                                                    ...prev,
+                                                                                    roles: prev.roles.map(r => r.role === role.role ? {
+                                                                                        ...r,
+                                                                                        permissions: hasPerm ? r.permissions.filter(p => p !== perm.key) : [...r.permissions, perm.key]
+                                                                                    } : r)
+                                                                                }));
+                                                                            }}
+                                                                            className={`relative inline-flex h-5 w-10 items-center rounded-full transition-colors focus:outline-none ${hasPerm ? 'bg-indigo-600' : 'bg-slate-200 dark:bg-slate-700'}`}
+                                                                        >
+                                                                            <span className={`inline-block h-3 w-3 transform rounded-full bg-white transition-transform ${hasPerm ? 'translate-x-6' : 'translate-x-1'}`} />
+                                                                        </button>
+                                                                    </td>
+                                                                );
+                                                            })}
+                                                        </tr>
+                                                    ))}
+                                                </tbody>
+                                            </table>
+                                        </div>
+                                    </section>
+
                                     <section>
                                         <div className="flex items-center justify-between mb-6 pt-6 border-t border-slate-100 dark:border-slate-800">
                                             <div className="flex items-center gap-3">
@@ -1649,17 +1806,45 @@ export default function Setting() {
                                                     <p className="text-sm text-slate-500">Define global non-working days for leave validations</p>
                                                 </div>
                                             </div>
-                                            <button 
-                                                onClick={() => {
-                                                    setEditingHolidayStr(null);
-                                                    setNewHoliday({ name: '', date: '', isRestricted: true });
-                                                    setShowHolidayModal(true);
-                                                }}
-                                                className="px-5 py-2.5 bg-[#4F46E5] text-white rounded-xl text-sm font-bold shadow-lg shadow-indigo-200 dark:shadow-none hover:bg-[#4338CA] transition-all flex items-center gap-2"
-                                            >
-                                                <span className="material-symbols-outlined text-[18px]">add</span>
-                                                Add Holiday
-                                            </button>
+                                            <div className="flex items-center gap-3">
+                                                <button
+                                                    onClick={() => {
+                                                        const moiHolidays = [
+                                                            { date: '2024-01-04', name: 'Independence Day', isRestricted: true },
+                                                            { date: '2024-02-12', name: 'Union Day', isRestricted: true },
+                                                            { date: '2024-03-02', name: 'Peasants Day', isRestricted: true },
+                                                            { date: '2024-03-27', name: 'Armed Forces Day', isRestricted: true },
+                                                            { date: '2024-04-13', name: 'Thingyan Festival (Water Festival)', isRestricted: true },
+                                                            { date: '2024-04-14', name: 'Thingyan Festival (Water Festival)', isRestricted: true },
+                                                            { date: '2024-04-15', name: 'Thingyan Festival (Water Festival)', isRestricted: true },
+                                                            { date: '2024-04-16', name: 'Thingyan Festival (Water Festival)', isRestricted: true },
+                                                            { date: '2024-04-17', name: 'Myanmar New Year', isRestricted: true },
+                                                            { date: '2024-05-01', name: 'Labor Day', isRestricted: true },
+                                                            { date: '2024-07-19', name: 'Martyrs Day', isRestricted: true }
+                                                        ];
+                                                        moiHolidays.forEach(h => {
+                                                            if (!holidays.some(ext => ext.date === h.date)) {
+                                                                addHoliday(h);
+                                                            }
+                                                        });
+                                                    }}
+                                                    className="px-4 py-2.5 rounded-xl text-sm font-bold border border-indigo-200 text-indigo-700 bg-indigo-50 hover:bg-indigo-100 transition-all flex items-center gap-2"
+                                                >
+                                                    <span className="material-symbols-outlined text-[18px]">sync</span>
+                                                    Sync MOI Holidays
+                                                </button>
+                                                <button 
+                                                    onClick={() => {
+                                                        setEditingHolidayStr(null);
+                                                        setNewHoliday({ name: '', date: '', isRestricted: true });
+                                                        setShowHolidayModal(true);
+                                                    }}
+                                                    className="px-5 py-2.5 bg-[#4F46E5] text-white rounded-xl text-sm font-bold shadow-lg shadow-indigo-200 dark:shadow-none hover:bg-[#4338CA] transition-all flex items-center gap-2"
+                                                >
+                                                    <span className="material-symbols-outlined text-[18px]">add</span>
+                                                    Add Holiday
+                                                </button>
+                                            </div>
                                         </div>
 
                                         <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl overflow-hidden shadow-sm">
@@ -1702,6 +1887,159 @@ export default function Setting() {
                                                 </tbody>
                                             </table>
                                         </div>
+                                    </section>
+                                </div>
+                            )}
+
+                            {activeTab === 'Approval Workflows' && (
+                                <div className="space-y-10 animate-fade-in">
+                                    <section>
+                                        <div className="flex items-center justify-between mb-6">
+                                            <div className="flex items-center gap-3">
+                                                <div className="size-10 rounded-xl bg-indigo-50 dark:bg-indigo-900/20 flex items-center justify-center text-indigo-500">
+                                                    <span className="material-symbols-outlined">fact_check</span>
+                                                </div>
+                                                <div>
+                                                    <h3 className="text-xl font-bold text-slate-900 dark:text-white">Approval Chains</h3>
+                                                    <p className="text-sm text-slate-500">Configure hierarchical approval workflows per request type</p>
+                                                </div>
+                                            </div>
+                                        </div>
+                                        <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl overflow-hidden shadow-sm">
+                                            <table className="w-full text-left">
+                                                <thead className="bg-slate-50 dark:bg-slate-800/50">
+                                                    <tr>
+                                                        <th className="px-6 py-4 text-xs font-bold text-slate-500 uppercase tracking-widest">Request Type</th>
+                                                        <th className="px-6 py-4 text-xs font-bold text-slate-500 uppercase tracking-widest">Chain Name</th>
+                                                        <th className="px-6 py-4 text-xs font-bold text-slate-500 uppercase tracking-widest">Steps</th>
+                                                        <th className="px-6 py-4 text-xs font-bold text-slate-500 uppercase tracking-widest">Status</th>
+                                                        <th className="px-6 py-4 text-xs font-bold text-slate-500 uppercase tracking-widest text-right">Actions</th>
+                                                    </tr>
+                                                </thead>
+                                                <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
+                                                    {chains.map(chain => (
+                                                        <tr key={chain.id} className="hover:bg-slate-50 dark:hover:bg-slate-800/50">
+                                                            <td className="px-6 py-4"><span className={`px-3 py-1 rounded-full text-xs font-bold ${chain.requestType === 'Leave' ? 'bg-blue-100 text-blue-700' : chain.requestType === 'OT' ? 'bg-indigo-100 text-indigo-700' : chain.requestType === 'Expense' ? 'bg-amber-100 text-amber-700' : 'bg-violet-100 text-violet-700'}`}>{chain.requestType}</span></td>
+                                                            <td className="px-6 py-4 text-sm font-bold">{chain.name}</td>
+                                                            <td className="px-6 py-4 text-sm text-slate-500">{chain.steps.map(s => s.role).join(' → ')}</td>
+                                                            <td className="px-6 py-4"><span className={`inline-flex items-center gap-1 px-2 py-1 rounded text-[10px] font-bold ${chain.isActive ? 'bg-emerald-50 text-emerald-700' : 'bg-slate-100 text-slate-500'}`}>{chain.isActive ? 'Active' : 'Inactive'}</span></td>
+                                                            <td className="px-6 py-4 text-right"><button className="text-indigo-600 font-bold text-sm hover:underline">Edit</button></td>
+                                                        </tr>
+                                                    ))}
+                                                </tbody>
+                                            </table>
+                                        </div>
+                                    </section>
+
+                                    <section>
+                                        <div className="flex items-center gap-3 mb-6">
+                                            <div className="size-10 rounded-xl bg-rose-50 dark:bg-rose-900/20 flex items-center justify-center text-rose-500">
+                                                <span className="material-symbols-outlined">sync_alt</span>
+                                            </div>
+                                            <div>
+                                                <h3 className="text-xl font-bold text-slate-900 dark:text-white">Delegation & Out-of-Office</h3>
+                                                <p className="text-sm text-slate-500">Manage temporary approval authority and auto-routing</p>
+                                            </div>
+                                        </div>
+                                        <div className="grid grid-cols-2 gap-6">
+                                            <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl p-6">
+                                                <h4 className="font-bold text-sm mb-4">Active Delegations</h4>
+                                                {delegations.filter(d => d.isActive).length === 0 ? (
+                                                    <div className="text-center py-8 text-slate-400 text-sm">
+                                                        <span className="material-symbols-outlined text-4xl mb-2">person_off</span>
+                                                        <p>No active delegations</p>
+                                                    </div>
+                                                ) : (
+                                                    <div className="space-y-3">
+                                                        {delegations.filter(d => d.isActive).map(d => (
+                                                            <div key={d.id} className="p-3 bg-slate-50 dark:bg-slate-800 rounded-lg">
+                                                                <p className="font-bold text-sm">{d.delegatorName} → {d.delegateName}</p>
+                                                                <p className="text-xs text-slate-500">{d.startDate} to {d.endDate}</p>
+                                                            </div>
+                                                        ))}
+                                                    </div>
+                                                )}
+                                            </div>
+                                            <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl p-6">
+                                                <h4 className="font-bold text-sm mb-4">Out-of-Office Settings</h4>
+                                                {oooEntries.filter(o => o.isActive).length === 0 ? (
+                                                    <div className="text-center py-8 text-slate-400 text-sm">
+                                                        <span className="material-symbols-outlined text-4xl mb-2">beach_access</span>
+                                                        <p>No active OOO entries</p>
+                                                    </div>
+                                                ) : (
+                                                    <div className="space-y-3">
+                                                        {oooEntries.filter(o => o.isActive).map(o => (
+                                                            <div key={o.id} className="p-3 bg-slate-50 dark:bg-slate-800 rounded-lg">
+                                                                <p className="font-bold text-sm">{o.userName} → {o.autoDelegateToName}</p>
+                                                                <p className="text-xs text-slate-500">{o.startDate} to {o.endDate}</p>
+                                                            </div>
+                                                        ))}
+                                                    </div>
+                                                )}
+                                            </div>
+                                        </div>
+                                    </section>
+                                </div>
+                            )}
+
+                            {activeTab === 'NRC Registry' && (
+                                <div className="space-y-6 animate-fade-in">
+                                    <section>
+                                        <div className="flex items-center gap-3 mb-6">
+                                            <div className="size-10 rounded-xl bg-violet-50 dark:bg-violet-900/20 flex items-center justify-center text-violet-600">
+                                                <span className="material-symbols-outlined">fingerprint</span>
+                                            </div>
+                                            <div>
+                                                <h3 className="text-xl font-bold text-slate-900 dark:text-white">NRC Format Validation</h3>
+                                                <p className="text-sm text-slate-500">Validate employee NRC numbers against Myanmar format standards</p>
+                                            </div>
+                                        </div>
+
+                                        {(() => {
+                                            const nrcRegex = /^([1-9]|1[0-4])\/[a-zA-Z]+\([N|E|P]\)\d{6}$/i;
+                                            const active = employees.filter(e => e.status !== 'Terminated');
+                                            const valid = active.filter(e => e.nrcNumber && nrcRegex.test(e.nrcNumber));
+                                            const invalid = active.filter(e => e.nrcNumber && !nrcRegex.test(e.nrcNumber));
+                                            const missing = active.filter(e => !e.nrcNumber);
+                                            return (
+                                                <>
+                                                    <div className="grid grid-cols-4 gap-4 mb-6">
+                                                        <div className="p-4 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl text-center"><p className="text-2xl font-black">{active.length}</p><p className="text-[10px] uppercase text-slate-500 font-bold">Employees</p></div>
+                                                        <div className="p-4 bg-emerald-50 border border-emerald-200 rounded-xl text-center"><p className="text-2xl font-black text-emerald-600">{valid.length}</p><p className="text-[10px] uppercase text-emerald-700 font-bold">Valid Format</p></div>
+                                                        <div className="p-4 bg-rose-50 border border-rose-200 rounded-xl text-center"><p className="text-2xl font-black text-rose-600">{invalid.length}</p><p className="text-[10px] uppercase text-rose-700 font-bold">Invalid Syntax</p></div>
+                                                        <div className="p-4 bg-amber-50 border border-amber-200 rounded-xl text-center"><p className="text-2xl font-black text-amber-600">{missing.length}</p><p className="text-[10px] uppercase text-amber-700 font-bold">Missing</p></div>
+                                                    </div>
+
+                                                    <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl overflow-hidden shadow-sm">
+                                                        <div className="p-4 border-b bg-slate-50 dark:bg-slate-800/50 font-bold text-slate-800 dark:text-white">NRC Format Validation Report</div>
+                                                        <div className="divide-y divide-slate-100 dark:divide-slate-800 max-h-[500px] overflow-y-auto">
+                                                            {(invalid.length > 0 ? invalid : missing).map(e => (
+                                                                <div key={e.id} className="p-4 flex items-center justify-between hover:bg-slate-50 dark:hover:bg-slate-800/50">
+                                                                    <div className="flex items-center gap-3">
+                                                                        <div className="size-8 bg-slate-200 dark:bg-slate-700 rounded-full flex items-center justify-center font-bold text-xs">{e.initials || e.name[0]}</div>
+                                                                        <div>
+                                                                            <p className="text-sm font-bold text-slate-800 dark:text-white">{e.name}</p>
+                                                                            <p className="text-xs text-slate-500">{e.role}</p>
+                                                                        </div>
+                                                                    </div>
+                                                                    <div className="text-right">
+                                                                        <p className="font-mono text-sm font-bold text-slate-700 dark:text-slate-300">{e.nrcNumber || '—'}</p>
+                                                                        {e.nrcNumber
+                                                                            ? <span className="px-2 py-0.5 rounded text-[10px] font-black uppercase tracking-wider border bg-rose-50 text-rose-700 border-rose-200">Invalid Format</span>
+                                                                            : <span className="px-2 py-0.5 rounded text-[10px] font-black uppercase tracking-wider border bg-amber-50 text-amber-700 border-amber-200">Missing</span>
+                                                                        }
+                                                                    </div>
+                                                                </div>
+                                                            ))}
+                                                            {invalid.length === 0 && missing.length === 0 && (
+                                                                <div className="p-10 text-center font-bold text-emerald-500">All employee NRCs are valid!</div>
+                                                            )}
+                                                        </div>
+                                                    </div>
+                                                </>
+                                            );
+                                        })()}
                                     </section>
                                 </div>
                             )}

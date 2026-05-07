@@ -5,9 +5,14 @@ import { useUserAccess } from '../context/UserAccessProvider';
 interface ProtectedRouteProps {
   children: React.ReactNode;
   allowedRoles?: ('Admin' | 'Manager' | 'Employee')[];
+  allowedPermission?: string;
 }
 
-export const ProtectedRoute: React.FC<ProtectedRouteProps> = ({ children, allowedRoles = ['Admin', 'Manager', 'Employee'] }) => {
+export const ProtectedRoute: React.FC<ProtectedRouteProps> = ({ 
+  children, 
+  allowedRoles = ['Admin', 'Manager', 'Employee'],
+  allowedPermission
+}) => {
   const { currentUser } = useUserAccess();
   const location = useLocation();
 
@@ -15,8 +20,13 @@ export const ProtectedRoute: React.FC<ProtectedRouteProps> = ({ children, allowe
     return <Navigate to="/login" state={{ from: location }} replace />;
   }
 
-  if (allowedRoles.length > 0 && !allowedRoles.includes(currentUser.role)) {
-    return <Navigate to="/insights-dashboard" replace />;
+  const hasRole = allowedRoles.length === 0 || allowedRoles.includes(currentUser.role);
+  const isAdmin = currentUser.role === 'Admin';
+  const hasPermission = isAdmin || !allowedPermission || (currentUser.permissions || []).includes(allowedPermission);
+
+  if (!hasRole || !hasPermission) {
+    // Redirect to home with a denial flag so the UI can show a notification
+    return <Navigate to="/home" state={{ denied: true, requiredPermission: allowedPermission }} replace />;
   }
 
   return <>{children}</>;

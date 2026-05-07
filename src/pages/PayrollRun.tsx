@@ -2,6 +2,7 @@ import React, { useState, useMemo, useEffect } from 'react';
 import Sidebar from '../components/Sidebar';
 import Header from '../components/Header';
 import { useAppData } from '../context/AppDataContext';
+import { exportSSBForm15CSV, exportPITReportCSV, downloadCSV } from '../utils/taxExport';
 
 export default function PayrollRun() {
     const { 
@@ -36,6 +37,16 @@ export default function PayrollRun() {
     const [showErrorsOnly, setShowErrorsOnly] = useState(false);
     const [isConfirmFinalizeOpen, setIsConfirmFinalizeOpen] = useState(false);
 
+    const activeGroup = useMemo(() => 
+        payrollGroups.find(g => g.id === activePayrollGroupId),
+        [payrollGroups, activePayrollGroupId]
+    );
+
+    // ─── CSV Exports (shared utility — same function used by SSBPIT page) ───────
+    const exportSuffix = (activeGroup?.period ?? 'Payroll').replace(' ', '_');
+    const handleExportPITForm = () => exportPITReportCSV(payrollRecords, employees, exportSuffix);
+    const handleExportSSBReturn = () => exportSSBForm15CSV(payrollRecords, employees, exportSuffix);
+
     const handleBankExport = () => {
         const validRecords = payrollRecords.filter(r => r.status !== 'Error');
         const headers = ['Employee Name', 'Bank Name', 'Account Number', 'Net Pay (MMK)'];
@@ -48,18 +59,7 @@ export default function PayrollRun() {
                 rec.netPay.toString()
             ];
         });
-        const csv = [headers, ...rows]
-            .map(r => r.map(c => `"${String(c).replace(/"/g, '""')}"`).join(','))
-            .join('\n');
-        const blob = new Blob([csv], { type: 'text/csv' });
-        const url = URL.createObjectURL(blob);
-        const a = document.createElement('a');
-        a.href = url;
-        a.download = `Bank_Transfer_${(activeGroup?.period ?? 'Payroll').replace(' ', '_')}.csv`;
-        document.body.appendChild(a);
-        a.click();
-        document.body.removeChild(a);
-        URL.revokeObjectURL(url);
+        downloadCSV(`Bank_Transfer_${exportSuffix}.csv`, headers, rows);
     };
 
     // Live sync: OT approvals in another tab reflect immediately in Net Pay
@@ -92,19 +92,22 @@ export default function PayrollRun() {
             a.effectiveMonth === activeGroup?.period
           ).reduce((sum, a) => sum + a.amount, 0)
         : 0;
-    const payslipAllowances = payslipEmployee ? Math.max(0, payslipEmployee.additions - payslipOTPay) : 0;
-
-    const activeGroup = useMemo(() => 
-        payrollGroups.find(g => g.id === activePayrollGroupId),
-        [payrollGroups, activePayrollGroupId]
-    );
+    const payslipExpenseReimb = payslipEmployee
+        ? adjustments.filter(a =>
+            a.empId === payslipEmployee.empId &&
+            a.source === 'System-Expense' &&
+            a.status === 'Approved' &&
+            a.effectiveMonth === activeGroup?.period
+          ).reduce((sum, a) => sum + a.amount, 0)
+        : 0;
+    const payslipAllowances = payslipEmployee ? Math.max(0, payslipEmployee.additions - payslipOTPay - payslipExpenseReimb) : 0;
 
     // Active Admin ID for simulation
     const activeAdminId = 'EMP-001'; 
 
     const handleRecalculate = () => {
         setIsRecalculating(true);
-        calculatePayroll(30); // Dynamic 30-day base
+        calculatePayroll(complianceSettings.workingDaysPerMonth || 30); // Use governance-anchored base
         setTimeout(() => {
             setIsRecalculating(false);
         }, 800);
@@ -148,9 +151,7 @@ export default function PayrollRun() {
     // Dynamic KPI Calculations
     const kpis = useMemo(() => {
         const totalGross = payrollRecords.reduce((sum, r) => sum + r.salary + r.additions, 0);
-        const emplSsbRate = (5 - (complianceSettings?.ssbPercent ?? 2)) / 100;
-        const emplSsbCap  = Math.round((complianceSettings?.ssbCap ?? 9000) * (5 - (complianceSettings?.ssbPercent ?? 2)) / (complianceSettings?.ssbPercent ?? 2));
-        const employerSSB = payrollRecords.filter(r => r.status !== 'Error').reduce((sum, r) => sum + Math.min(Math.round(r.salary * emplSsbRate), emplSsbCap), 0);
+        const employerSSB = payrollRecords.filter(r => r.status !== 'Error').reduce((sum, r) => sum + (r.employerSsb ?? 0), 0);
         const employeeSSB = payrollRecords.reduce((sum, r) => sum + r.ssb, 0);
         const totalPIT = payrollRecords.reduce((sum, r) => sum + r.pit, 0);
         const netPayable = payrollRecords.reduce((sum, r) => sum + r.netPay, 0);
@@ -608,9 +609,9 @@ export default function PayrollRun() {
                                                     <p className="text-[10px] text-slate-500 font-black uppercase tracking-widest">Monthly Income Tax Form</p>
                                                 </div>
                                             </div>
-                                            <button className="w-full py-3 bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl text-xs font-black uppercase tracking-widest text-[#4F46E5] hover:bg-slate-100 transition-all flex items-center justify-center gap-2">
+                                            <button onClick={handleExportPITForm} className="w-full py-3 bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl text-xs font-black uppercase tracking-widest text-[#4F46E5] hover:bg-slate-100 transition-all flex items-center justify-center gap-2">
                                                 <span className="material-symbols-outlined text-[18px]">download_for_offline</span>
-                                                Generate PDF
+                                                Download PIT CSV
                                             </button>
                                         </div>
 
@@ -624,9 +625,9 @@ export default function PayrollRun() {
                                                     <p className="text-[10px] text-slate-500 font-black uppercase tracking-widest">Employer & Employee 5% Contrib</p>
                                                 </div>
                                             </div>
-                                            <button className="w-full py-3 bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl text-xs font-black uppercase tracking-widest text-[#4F46E5] hover:bg-slate-100 transition-all flex items-center justify-center gap-2">
+                                            <button onClick={handleExportSSBReturn} className="w-full py-3 bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl text-xs font-black uppercase tracking-widest text-[#4F46E5] hover:bg-slate-100 transition-all flex items-center justify-center gap-2">
                                                 <span className="material-symbols-outlined text-[18px]">download_for_offline</span>
-                                                Download Excel
+                                                Download SSB CSV
                                             </button>
                                         </div>
                                     </div>
@@ -755,6 +756,15 @@ export default function PayrollRun() {
                                         <div className="space-y-2">
                                             <div className="flex justify-between text-sm"><span className="text-slate-500">Base Salary</span><span className="font-bold tabular-nums">{payslipEmployee.salary.toLocaleString()} MMK</span></div>
                                             <div className="flex justify-between text-sm text-emerald-600"><span>OT Pay</span><span className="font-bold tabular-nums">+{payslipOTPay.toLocaleString()} MMK</span></div>
+                                            {payslipExpenseReimb > 0 && (
+                                                <div className="flex justify-between text-sm text-violet-600">
+                                                    <span className="flex items-center gap-1.5">
+                                                        <span className="material-symbols-outlined text-[14px]">receipt_long</span>
+                                                        Expense Reimbursement
+                                                    </span>
+                                                    <span className="font-bold tabular-nums">+{payslipExpenseReimb.toLocaleString()} MMK</span>
+                                                </div>
+                                            )}
                                             <div className="flex justify-between text-sm text-emerald-600"><span>Allowances &amp; Adjustments</span><span className="font-bold tabular-nums">+{payslipAllowances.toLocaleString()} MMK</span></div>
                                             <div className="flex justify-between text-sm font-black border-t border-slate-100 dark:border-slate-800 pt-2">
                                                 <span>Gross Earnings</span>

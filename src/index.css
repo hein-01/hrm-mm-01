@@ -37,6 +37,10 @@
   .fonts-loaded .material-symbols-outlined {
     visibility: visible;
   }
+  /* If fonts never load, do not show raw ligature text while app is still booting */
+  body.app-ready:not(.fonts-loaded) .material-symbols-outlined {
+    visibility: hidden;
+  }
   /* Lumina-Shield: secondary safety net — force transparent color until app is fully ready */
   body:not(.app-ready) .material-symbols-outlined {
     color: transparent !important;

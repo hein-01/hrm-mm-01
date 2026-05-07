@@ -1,11 +1,13 @@
-import React, { createContext, useContext, useState, useMemo, ReactNode } from 'react';
+import React, { createContext, useContext, useState, useMemo, ReactNode, useEffect } from 'react';
 import { AuditLog, SecurityAuditLog, Employee } from '../types/hrms.types';
 import { useSystemCalendar } from './SystemCalendarContext';
+import { supabase } from '../lib/supabase';
 
 interface CurrentUser {
     id: string;
     role: 'Admin' | 'Manager' | 'Employee';
     name: string;
+    permissions?: string[];
 }
 
 interface UserAccessContextType {
@@ -22,17 +24,107 @@ interface UserAccessContextType {
     verifyLocalAuth: (input: string) => boolean;
     subscriptionTier: 'premium' | 'standard';
     setSubscriptionTier: React.Dispatch<React.SetStateAction<'premium' | 'standard'>>;
+    signOut: () => Promise<void>;
 }
 
 const UserAccessContext = createContext<UserAccessContextType | undefined>(undefined);
 
+// Dev fallback so the app is usable without a Supabase Auth session.
+// When a real session is detected, this is replaced by the authenticated user.
+const DEV_ADMIN_USER: CurrentUser = {
+    id: 'EMP-001',
+    role: 'Admin',
+    name: 'Dev Admin',
+    permissions: [],
+};
+
 export const UserAccessProvider: React.FC<{ children: ReactNode; initialAdmins?: string[] }> = ({ children, initialAdmins = ['EMP-001'] }) => {
     const { getFormattedDate } = useSystemCalendar();
-    const [currentUser, setCurrentUser] = useState<CurrentUser | null>({ id: 'EMP-001', role: 'Admin', name: 'Nilar Lwin' });
+    const [currentUser, setCurrentUser] = useState<CurrentUser | null>(DEV_ADMIN_USER);
     const [subscriptionTier, setSubscriptionTier] = useState<'premium' | 'standard'>('standard');
     const [adminIds, setAdminIds] = useState<string[]>(initialAdmins);
     const [auditLogs, setAuditLogs] = useState<AuditLog[]>([]);
     const [securityAuditLogs, setSecurityAuditLogs] = useState<SecurityAuditLog[]>([]);
+    const [isLoading, setIsLoading] = useState(true);
+
+    // Listen for Supabase auth state changes
+    useEffect(() => {
+        const initAuth = async () => {
+            try {
+                const { data: { session } } = await supabase.auth.getSession();
+                
+                if (session?.user && session.user.email) {
+                    // Try to fetch employee, but fallback to dev admin if it fails or takes too long
+                    const timeoutPromise = new Promise(resolve => setTimeout(resolve, 3000));
+                    const fetchPromise = supabase
+                        .from('employees')
+                        .select('id, role, name')
+                        .ilike('email', session.user.email)
+                        .limit(1);
+
+                    const result = await Promise.race([fetchPromise, timeoutPromise]) as any;
+                    const employees = result?.data;
+                    const employee = employees && employees.length > 0 ? employees[0] : null;
+
+                    if (employee) {
+                        setCurrentUser({
+                            id: employee.id,
+                            role: employee.role || 'Employee',
+                            name: employee.name || session.user.email?.split('@')[0] || 'User',
+                            permissions: [],
+                        });
+                    } else {
+                        setCurrentUser(DEV_ADMIN_USER);
+                    }
+                } else {
+                    setCurrentUser(DEV_ADMIN_USER);
+                }
+            } catch (error) {
+                console.error('Auth init error:', error);
+                setCurrentUser(DEV_ADMIN_USER);
+            } finally {
+                setIsLoading(false);
+            }
+        };
+
+        initAuth();
+
+        const { data: { subscription } } = supabase.auth.onAuthStateChange(async (_event, session) => {
+            try {
+                if (session?.user && session.user.email) {
+                    // Try to fetch employee, but fallback to dev admin if it fails
+                    const timeoutPromise = new Promise(resolve => setTimeout(resolve, 3000));
+                    const fetchPromise = supabase
+                        .from('employees')
+                        .select('id, role, name')
+                        .ilike('email', session.user.email)
+                        .limit(1);
+
+                    const result = await Promise.race([fetchPromise, timeoutPromise]) as any;
+                    const employees = result?.data;
+                    const employee = employees && employees.length > 0 ? employees[0] : null;
+
+                    if (employee) {
+                        setCurrentUser({
+                            id: employee.id,
+                            role: employee.role || 'Employee',
+                            name: employee.name || session.user.email?.split('@')[0] || 'User',
+                            permissions: [],
+                        });
+                    } else {
+                        setCurrentUser(DEV_ADMIN_USER);
+                    }
+                } else {
+                    setCurrentUser(DEV_ADMIN_USER);
+                }
+            } catch (error) {
+                console.error('Auth change error:', error);
+                setCurrentUser(DEV_ADMIN_USER);
+            }
+        });
+
+        return () => subscription.unsubscribe();
+    }, []);
 
     const isAdmin = (empId: string) => adminIds.includes(empId);
 
@@ -81,6 +173,11 @@ export const UserAccessProvider: React.FC<{ children: ReactNode; initialAdmins?:
         return input === mockHash;
     };
 
+    const signOut = async () => {
+        await supabase.auth.signOut();
+        setCurrentUser(DEV_ADMIN_USER);
+    };
+
     const value = useMemo(() => ({
         currentUser,
         setCurrentUser,
@@ -94,7 +191,8 @@ export const UserAccessProvider: React.FC<{ children: ReactNode; initialAdmins?:
         revokeAdmin,
         verifyLocalAuth,
         subscriptionTier,
-        setSubscriptionTier
+        setSubscriptionTier,
+        signOut
     }), [auditLogs, securityAuditLogs, adminIds, subscriptionTier, currentUser]);
 
     return (

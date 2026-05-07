@@ -17,11 +17,34 @@ export type Review = {
         Execution?: number;
         Collaboration?: number;
     };
+    selfRating?: number;
+    managerRating?: number;
+    managerComments?: string;
+    peerRatings?: number[];
     bonusEligible: boolean;
     status: 'Pending' | 'Draft' | 'Submitted' | 'Finalized' | 'Completed' | 'In Progress';
+    checksum?: string;
     initials?: string;
     colorClass?: string;
     hasReminderSent?: boolean;
+};
+
+export type Objective = {
+    id: string;
+    empId: string;
+    title: string;
+    period: string;
+    weight: number;
+    alignment: string;
+    progress: number;
+};
+
+export type KeyResult = {
+    id: string;
+    objectiveId: string;
+    title: string;
+    targetValue: number;
+    currentValue: number;
 };
 
 export type PerformanceReviewRequest = {
@@ -59,6 +82,10 @@ export type Asset = {
     assigneeId: string | null;
     status: string;
     value: number;
+    serialNumber?: string;
+    purchaseDate?: string;
+    purchaseValue?: number;
+    depreciationRate?: number;
     lastAuditDate: string;
     expectedReturnDate: string | null;
     isDeductible: boolean;
@@ -72,6 +99,11 @@ export type Course = {
     enrolled: number;
     progress: number;
     isMandatory: boolean;
+    expiryDays?: number;
+    skillTags: string[];
+    provider?: string;
+    costPerHead?: number;
+    minPassingScore?: string | number;
 };
 
 export type Certification = {
@@ -113,7 +145,8 @@ export type ComplianceSettings = {
     officeStamp: string | null;
     companyTIN: string;
     region: string;
-    currency: 'MMK';
+    currency: 'MMK' | 'SGD';
+    attendanceGracePeriod: number;
     allowanceConfigs: AllowanceConfig[];
     deductionConfigs: DeductionConfig[];
 };
@@ -183,7 +216,7 @@ export type AttendanceLog = {
     adminAuditReason?: string;
     dept: string;
     totalHours: number;
-    checkInMethod: 'Web Portal' | 'Mobile App' | 'Biometric' | '🤖 Auto';
+    checkInMethod: 'Web Portal' | 'Mobile App' | 'Biometric' | '🤖 Auto' | 'QR' | 'CSV' | 'Remote';
     isManual: boolean;
     penaltyRuleId?: string;
     penaltyAmount: number;
@@ -266,7 +299,7 @@ export type Adjustment = {
     status: 'Pending' | 'Approved' | 'Rejected';
     reason: string;
     sourceLink: string;
-    source: 'Manual' | 'System-Performance' | 'System-Attendance' | 'System-Asset' | 'System-OT';
+    source: 'Manual' | 'System-Performance' | 'System-Attendance' | 'System-Asset' | 'System-OT' | 'System-Disciplinary' | 'System-Expense';
     isImmutable: boolean;
     isTaxable?: boolean;
     isSSBRelevant?: boolean;
@@ -303,6 +336,7 @@ export type PayrollRecord = {
     additions: number;
     deductions: number;
     ssb: number;
+    employerSsb?: number;
     pit: number;
     netPay: number;
     status: 'Draft' | 'Approved' | 'Disbursed' | 'Error';
@@ -372,6 +406,7 @@ export type OTRequest = {
     requestedDate: string;
     priority: 'High' | 'Medium' | 'Low';
     category: 'Attendance';
+    convertToToil?: boolean;
     source?: 'Mobile' | 'Web' | 'Biometric';
     isConflict?: boolean;
     conflictNote?: string;
@@ -498,24 +533,36 @@ export type DisciplinaryAction = {
     employeeName: string;
     dept: string;
     type: 'Verbal Warning' | 'Written Warning' | 'Final Warning' | 'Suspension';
+    category: 'Misconduct' | 'Performance' | 'Attendance' | 'Safety Violation' | 'Policy Breach';
     issueDate: string;
     expiryDate: string | null;
     status: 'Active' | 'Resolved' | 'Expired';
     reason: string;
     actionTaken: string;
     documentUrl: string;
+    penaltyAmount: number | null;
+    employeeStatement: string | null;
+    resolvedDate: string | null;
+    resolvedBy: string | null;
 };
 
-export type FormTemplate = {
+export type ArchivedDocument = {
     id: string;
     title: string;
-    category: 'HR' | 'Payroll' | 'Legal' | 'Admin';
+    category: 'Government Filing' | 'Employment Contract' | 'Disciplinary Record' | 'Payroll Summary' | 'HR Template' | 'Internal Memo' | 'Performance Record';
+    sourceModule: 'SSB' | 'PIT' | 'Disciplinary' | 'Labor Contracts' | 'Payroll' | 'Manual' | 'Performance';
     description: string;
-    fileUrl: string;
+    period: string;
+    generatedBy: string;
+    generatedAt: string;
+    checksum: string;
+    fileContent: string;
+    fileName: string;
     isMandatory: boolean;
+    relatedRecordId: string | null;
 };
 
-export type FieldAgentAlert = 'GPS Signal Lost' | 'Fake GPS Detected' | 'Low Battery Warning' | 'None';
+export type FieldAgentAlert = 'GPS Signal Lost' | 'Fake GPS Detected' | 'Low Battery Warning' | 'High Speed Alert' | 'None';
 
 export type FieldAgent = {
     id: string;
@@ -527,11 +574,28 @@ export type FieldAgent = {
     locationName: string;
     mapPosition: { x: number, y: number };
     gps: { lat: number, lng: number };
-    history: { x: number, y: number, lat?: number, lng?: number, timestamp: string }[];
+    history: { x: number, y: number, lat?: number, lng?: number, timestamp: string, speed?: number, isDwellPoint?: boolean }[];
     lastUpdate: string;
     routeAssigned: string;
     batteryLevel: number;
     alert: FieldAgentAlert;
+    isTrackingActive: boolean;
+    currentSpeed: number;
+};
+
+export type GPSLog = {
+    id: string;
+    agentId: string;
+    lat: number;
+    lng: number;
+    timestamp: string;
+    startTime?: string;
+    endTime?: string;
+    durationMins?: number;
+    speed: number;
+    isDwellPoint: boolean;
+    batteryLevel: number;
+    onLine: boolean;
 };
 
 export type ProjectPayment = {
@@ -653,6 +717,9 @@ export type ExpenseRequest = {
     attachments: string[];
     approverId: string;
     status: 'Pending' | 'Approved' | 'Rejected' | 'Processed';
+    rejectionReason?: string;
+    approvedAt?: string;
+    approvedBy?: string;
 };
 
 export type Department = {
@@ -677,6 +744,11 @@ export type Position = {
     reportTo?: string;
 };
 
+export type RoleDefinition = {
+    role: string;
+    permissions: string[];
+};
+
 export type SystemSettings = {
     companyName: string;
     registrationNumber: string;
@@ -698,6 +770,7 @@ export type SystemSettings = {
     paymentRoundingLogic: 'Ceiling' | 'Floor' | 'Nearest' | 'None';
     companyLogo?: string | null;
     expenseModuleEnabled: boolean;
+    recruitmentModuleEnabled: boolean;
     expenseCategories: ExpenseCategory[];
     autoAttendancePolicyEnabled: boolean;
     autoHolidayWorkEnabled: boolean;
@@ -707,6 +780,7 @@ export type SystemSettings = {
     positions: Position[];
     penaltyRules: PenaltyRule[];
     projectRates: Record<string, number>;
+    roles: RoleDefinition[];
 };
 
 export type EmploymentHistory = {
@@ -741,7 +815,7 @@ export interface SecurityAuditLog {
     id: string;
     timestamp: string;
     deviceId: string;
-    authMethod: 'Biometric' | 'PIN' | 'Setup Token' | 'SYSTEM' | 'Auto-Heal';
+    authMethod: 'Biometric' | 'PIN' | 'Setup Token' | 'SYSTEM' | 'Auto-Heal' | 'Admin Action';
     status: 'Success' | 'Failed';
     empId?: string;
     detail?: string;
@@ -752,12 +826,13 @@ export type Employee = {
     name: string;
     role: string;
     dept: string;
-    status: 'Active' | 'On Leave' | 'Terminated';
+    status: 'Active' | 'On Leave' | 'Terminated' | 'Resigned' | 'Retired';
     joinDate: string;
     avatar: string | null;
     township: string;
     nrcNumber?: string;
     ssbNumber?: string;
+    taxId?: string;
     initials?: string;
     colorClass?: string;
     mobile?: string | null;
@@ -777,7 +852,10 @@ export type Employee = {
         enrollmentDate: string;
         status: 'In Progress' | 'Completed';
         completionDate?: string;
+        grade?: string;
+        expiryDate?: string;
     }[];
+    skills: string[];
     leaveBalances: Record<string, number>;
     policyId: string;
     officeLocation?: string;
@@ -786,5 +864,189 @@ export type Employee = {
     supervisorId?: string;
     employmentHistory?: EmploymentHistory[];
     salaryHistory?: SalaryHistoryEntry[];
+    currentContractId?: string;
+    contractActionRequired?: boolean;
     autoAttendanceEnabled: boolean;
+    separationReason?: 'Resignation' | 'Termination' | 'Left/Absconded' | 'Retirement';
+    separationDate?: string;
+    eligibleForRehire?: boolean;
+};
+
+// ─── Employee Self-Service Request ────────────────────────────────────────────
+export type ProfileChangeCategory = 'Personal Info' | 'Bank / Financial' | 'Document Upload' | 'Emergency Contact';
+
+export type ProfileChangeRequest = {
+    id: string;
+    empId: string;
+    name: string;
+    dept: string;
+    avatar?: string;
+    category: ProfileChangeCategory;
+    // Changed fields as key-value pairs (new value)
+    changes: Record<string, string>;
+    // Snapshot of old values for diff display
+    oldValues: Record<string, string>;
+    // Document metadata for document-upload category
+    documentName?: string;
+    documentType?: string;
+    documentUrl?: string;
+    notes?: string;
+    status: 'Pending' | 'Approved' | 'Rejected';
+    submittedAt: string;
+    reviewedBy?: string;
+    reviewedAt?: string;
+    rejectionReason?: string;
+};
+
+// ─── Approval Workflow Engine ────────────────────────────────────────────
+export type ApprovalRequestType = 'Leave' | 'OT' | 'Expense' | 'Loan' | 'Swap' | 'ProfileChange';
+
+export type ApprovalStepCondition = {
+    field: 'amount' | 'hours' | 'days' | 'custom';
+    operator: 'gt' | 'lt' | 'eq' | 'gte' | 'lte';
+    value: number;
+};
+
+export type ApprovalStep = {
+    order: number;
+    name: string;
+    role: string; // 'Team Lead', 'Manager', 'HR', 'Finance', 'CEO'
+    approverId?: string; // Specific user ID (optional, defaults to role-based lookup)
+    condition?: ApprovalStepCondition; // Conditional step
+    isOptional?: boolean;
+};
+
+export type ApprovalChain = {
+    id: string;
+    name: string;
+    requestType: ApprovalRequestType;
+    steps: ApprovalStep[];
+    isActive: boolean;
+    createdAt: string;
+    updatedAt: string;
+};
+
+export type ApprovalHistoryEntry = {
+    step: number;
+    stepName: string;
+    approverId: string;
+    approverName: string;
+    action: 'Approved' | 'Rejected' | 'Delegated';
+    comment?: string;
+    timestamp: string;
+    isDelegated: boolean;
+    delegatedFrom?: string;
+};
+
+export type ApprovalRequest = {
+    id: string;
+    requestId: string; // Original request ID (e.g., leave request ID)
+    requestType: ApprovalRequestType;
+    requesterId: string;
+    requesterName: string;
+    requesterDept: string;
+    currentStep: number;
+    totalSteps: number;
+    status: 'Dormant' | 'Pending' | 'Approved' | 'Rejected' | 'Escalated';
+    metadata: Record<string, any>; // Stores original request details for display
+    history: ApprovalHistoryEntry[];
+    createdAt: string;
+    updatedAt: string;
+    escalatedAt?: string;
+    // For Step 0: Reliever/Partner acknowledgement
+    peerAcknowledgement?: {
+        required: boolean;
+        peerId?: string;
+        peerName?: string;
+        acknowledged: boolean;
+        acknowledgedAt?: string;
+    };
+};
+
+export type Delegation = {
+    id: string;
+    delegatorId: string;
+    delegatorName: string;
+    delegateId: string;
+    delegateName: string;
+    requestTypes: ApprovalRequestType[];
+    startDate: string;
+    endDate: string;
+    isActive: boolean;
+    createdAt: string;
+};
+
+export type OutOfOffice = {
+    id: string;
+    userId: string;
+    userName: string;
+    autoDelegateTo: string;
+    autoDelegateToName: string;
+    startDate: string;
+    endDate: string;
+    reason?: string;
+    isActive: boolean;
+    createdAt: string;
+};
+
+// ─── Benefits Administration ────────────────────────────────────────────
+export type BenefitType = 'Health Insurance' | 'Transport Allowance' | 'Meal Allowance' | 'Phone Allowance' | 'Education' | 'Other';
+
+export type BenefitPlan = {
+    id: string;
+    name: string;
+    type: BenefitType;
+    description: string;
+    amount: number; // Monthly value
+    isActive: boolean;
+    eligibilityCriteria?: string; // e.g. "All employees", "Level 3+"
+};
+
+export type BenefitEnrollment = {
+    id: string;
+    empId: string;
+    empName: string;
+    planId: string;
+    planName: string;
+    planType: BenefitType;
+    enrolledAt: string;
+    startDate: string;
+    endDate?: string; // If terminated
+    status: 'Active' | 'Pending' | 'Cancelled';
+    notes?: string;
+};
+
+export type AnnouncementAcknowledgement = {
+    empId: string;
+    empName: string;
+    acknowledgedAt: string;
+};
+
+export type Announcement = {
+    id: string;
+    title: string;
+    content: string;
+    priority: 'High' | 'Medium' | 'Low';
+    targetAudience: 'All' | 'Department' | 'Role';
+    targetDept?: string;
+    targetRole?: string;
+    createdAt: string;
+    createdBy: string;
+    status: 'Published' | 'Draft';
+    sourceType: 'System' | 'Manual';
+    requiresAcknowledgement: boolean;
+    acknowledgements: AnnouncementAcknowledgement[];
+};
+
+export type Ticket = {
+    id: string;
+    empId: string;
+    empName: string;
+    category: 'payroll' | 'leave' | 'it' | 'facilities' | 'benefits' | 'document' | 'other';
+    subject: string;
+    description: string;
+    priority: 'High' | 'Medium' | 'Low';
+    status: 'Open' | 'Pending' | 'Resolved';
+    createdAt: string;
+    updatedAt?: string;
 };

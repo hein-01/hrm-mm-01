@@ -3,6 +3,7 @@ import DropdownMenu from '../components/DropdownMenu';
 import Sidebar from '../components/Sidebar';
 import Header from '../components/Header';
 import { useAppData } from '../context/AppDataContext';
+import { useNotifications } from '../context/NotificationProvider';
 
 // Toast Component
 const Toast = ({ message, type, onClose }: { message: string, type: 'success' | 'error', onClose: () => void }) => {
@@ -44,6 +45,7 @@ export default function OTApprovals() {
         rejectOT, 
         bulkApproveOT 
     } = useAppData();
+    const { pushNotification } = useNotifications();
 
     const [searchQuery, setSearchQuery] = useState('');
     const [statusFilter, setStatusFilter] = useState<'All' | 'Pending' | 'Approved' | 'Rejected'>('Pending');
@@ -55,6 +57,8 @@ export default function OTApprovals() {
     const [editingHours, setEditingHours] = useState<Record<string, number>>({});
     const [rejectModal, setRejectModal] = useState<{ id: string; name: string; otHours: number; date: string } | null>(null);
     const [rejectReason, setRejectReason] = useState('');
+    const [bulkRejectModal, setBulkRejectModal] = useState(false);
+    const [bulkRejectReason, setBulkRejectReason] = useState('');
 
     const getWeekStart = (dateStr: string): string => {
         const d = new Date(dateStr + 'T00:00:00');
@@ -116,9 +120,25 @@ export default function OTApprovals() {
 
     // Actions
     const handleApprove = (id: string) => {
+        const req = otRequests.find(r => r.id === id);
         const res = approveOT(id, currentAdminId, editingHours[id]);
         setToast({ message: res.message, type: res.success ? 'success' : 'error' });
-        if (res.success) setEditingHours(prev => { const n = { ...prev }; delete n[id]; return n; });
+        if (res.success) {
+            setEditingHours(prev => { const n = { ...prev }; delete n[id]; return n; });
+            if (req) {
+                const hrs = editingHours[id] ?? req.otHours;
+                const payout = previewPayout(req.empId, hrs, req.otType);
+                pushNotification({
+                    title: 'OT Request Approved ✅',
+                    body: `${req.name}'s ${hrs}h OT (${req.otType}) on ${req.date} approved.${payout ? ` Payout: ${payout.toLocaleString()} MMK → Payroll.` : ''}`,
+                    category: 'Financial', priority: 'high',
+                    icon: 'schedule',
+                    iconBg: 'bg-indigo-100 dark:bg-indigo-900/30', iconColor: 'text-indigo-600 dark:text-indigo-400',
+                    actionRoute: '/ot-approvals', actionLabel: 'View OT',
+                    badge: 'Approved', badgeColor: 'indigo', empId: req.empId, sourceId: id,
+                });
+            }
+        }
     };
 
     const handleReject = (id: string) => {
@@ -131,6 +151,17 @@ export default function OTApprovals() {
         if (!rejectModal || !rejectReason.trim()) return;
         const res = rejectOT(rejectModal.id, currentAdminId, rejectReason.trim());
         setToast({ message: res.message, type: res.success ? 'success' : 'error' });
+        if (res.success) {
+            pushNotification({
+                title: 'OT Request Rejected',
+                body: `${rejectModal.name}'s ${rejectModal.otHours}h OT on ${rejectModal.date} was rejected. Reason: ${rejectReason.trim()}`,
+                category: 'Financial', priority: 'normal',
+                icon: 'cancel',
+                iconBg: 'bg-rose-100 dark:bg-rose-900/30', iconColor: 'text-rose-600 dark:text-rose-400',
+                actionRoute: '/ot-approvals', actionLabel: 'View OT',
+                badge: 'Rejected', badgeColor: 'rose', sourceId: rejectModal.id,
+            });
+        }
         setRejectModal(null);
         setRejectReason('');
     };
@@ -153,29 +184,47 @@ export default function OTApprovals() {
 
     const handleBulkApprove = () => {
         if (selectedIds.size === 0) return;
+        const count = selectedIds.size;
         const res = bulkApproveOT(Array.from(selectedIds), currentAdminId);
         setToast({ message: res.message, type: res.success ? 'success' : 'error' });
         if (res.success) {
+            pushNotification({
+                title: `${count} OT Request${count !== 1 ? 's' : ''} Approved`,
+                body: `Bulk OT approval: ${count} request${count !== 1 ? 's' : ''} processed and queued for payroll.`,
+                category: 'Financial', priority: 'normal',
+                icon: 'done_all',
+                iconBg: 'bg-indigo-100 dark:bg-indigo-900/30', iconColor: 'text-indigo-600 dark:text-indigo-400',
+                actionRoute: '/ot-approvals', actionLabel: 'View OT',
+                badge: `${count} Approved`, badgeColor: 'indigo',
+            });
             setSelectedIds(new Set());
         }
     };
 
     const handleBulkReject = () => {
         if (selectedIds.size === 0) return;
+        setBulkRejectModal(true);
+    };
+
+    const executeBulkReject = () => {
+        if (!bulkRejectReason.trim()) return;
         let successCount = 0;
         let rejectError = '';
         selectedIds.forEach(id => {
-            const res = rejectOT(id, currentAdminId);
+            const res = rejectOT(id, currentAdminId, bulkRejectReason.trim());
             if (res.success) successCount++;
             else rejectError = res.message;
         });
         
-        if (successCount === selectedIds.size) {
+        if (successCount > 0) {
             setToast({ message: `Successfully rejected ${successCount} OT requests.`, type: 'success' });
             setSelectedIds(new Set());
-        } else {
-            setToast({ message: rejectError || 'Bulk reject failed.', type: 'error' });
         }
+        if (rejectError) {
+            setToast({ message: rejectError, type: 'error' });
+        }
+        setBulkRejectModal(false);
+        setBulkRejectReason('');
     };
 
     const handleExport = () => {
@@ -214,7 +263,7 @@ export default function OTApprovals() {
             {/* Main Content */}
             <main className="flex-1 flex flex-col ml-[280px] overflow-hidden">
                 <Header 
-                    title="OT Approvals"
+                    title="Overtime Management"
                     subtitle="Review and authorize overtime requests based on biometric logs and policy compliance"
                 >
                     <div className="relative w-full max-w-[480px] ml-4 hidden lg:block">
@@ -612,6 +661,58 @@ export default function OTApprovals() {
                                 }`}
                             >
                                 Confirm Rejection
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {/* Bulk Rejection Modal */}
+            {bulkRejectModal && (
+                <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm">
+                    <div className="bg-white dark:bg-slate-900 rounded-2xl shadow-2xl border border-slate-200 dark:border-slate-700 w-full max-w-md mx-4 p-6">
+                        <div className="flex items-start gap-3 mb-5">
+                            <div className="w-10 h-10 rounded-xl bg-red-100 dark:bg-red-900/30 flex items-center justify-center shrink-0">
+                                <span className="material-symbols-outlined text-red-600 dark:text-red-400">cancel</span>
+                            </div>
+                            <div>
+                                <h3 className="text-base font-bold text-slate-900 dark:text-white">Bulk Reject OT Requests</h3>
+                                <p className="text-sm text-slate-500 dark:text-slate-400 mt-0.5">
+                                    Reject <span className="font-bold text-slate-700 dark:text-slate-300">{selectedIds.size}</span> selected OT request{selectedIds.size !== 1 ? 's' : ''}
+                                </p>
+                            </div>
+                        </div>
+                        <div className="mb-5">
+                            <label className="block text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-widest mb-2">
+                                Reason for Rejection <span className="text-red-500">*</span>
+                            </label>
+                            <textarea
+                                value={bulkRejectReason}
+                                onChange={e => setBulkRejectReason(e.target.value)}
+                                placeholder="e.g. OT was not pre-authorized. Shift was covered by another team member."
+                                rows={3}
+                                className="w-full px-3 py-2.5 text-sm border border-slate-200 dark:border-slate-700 rounded-xl bg-slate-50 dark:bg-slate-800 text-slate-900 dark:text-white placeholder-slate-400 focus:ring-2 focus:ring-red-500 focus:border-transparent outline-none resize-none"
+                                autoFocus
+                            />
+                            <p className="text-[11px] text-slate-400 mt-1.5">This reason will be dispatched to all selected employees.</p>
+                        </div>
+                        <div className="flex items-center justify-end gap-3">
+                            <button
+                                onClick={() => { setBulkRejectModal(false); setBulkRejectReason(''); }}
+                                className="px-4 py-2 text-sm font-bold text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-xl transition-colors"
+                            >
+                                Cancel
+                            </button>
+                            <button
+                                onClick={executeBulkReject}
+                                disabled={!bulkRejectReason.trim()}
+                                className={`px-5 py-2 text-sm font-bold rounded-xl transition-all ${
+                                    bulkRejectReason.trim()
+                                        ? 'bg-red-500 text-white hover:bg-red-600 shadow-lg shadow-red-500/20'
+                                        : 'bg-red-100 dark:bg-red-900/20 text-red-300 cursor-not-allowed'
+                                }`}
+                            >
+                                Confirm Bulk Rejection
                             </button>
                         </div>
                     </div>

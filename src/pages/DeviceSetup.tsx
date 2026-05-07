@@ -13,11 +13,22 @@ export default function DeviceSetup() {
     const [selectedLocation, setSelectedLocation] = useState<string | null>(systemSettings.deviceConfig.activeLocationId);
     const [statusMessage, setStatusMessage] = useState({ text: '', type: 'info' as 'info' | 'success' | 'error' });
     const [currentTime, setCurrentTime] = useState(new Date());
+    const [qrTimestamp, setQrTimestamp] = useState(() => Date.now());
+    const [qrTtl, setQrTtl] = useState(60); // seconds remaining before QR rotates
 
     const DEVICE_ID = 'ZKT-ZPAD-882294'; // Simulated fixed hardware ID
 
     useEffect(() => {
-        const timer = setInterval(() => setCurrentTime(new Date()), 1000);
+        const timer = setInterval(() => {
+            setCurrentTime(new Date());
+            setQrTtl(prev => {
+                if (prev <= 1) {
+                    setQrTimestamp(Date.now()); // Rotate QR
+                    return 60;
+                }
+                return prev - 1;
+            });
+        }, 1000);
         return () => clearInterval(timer);
     }, []);
 
@@ -85,9 +96,11 @@ export default function DeviceSetup() {
 
     const locationName = systemSettings.officeLocations.find(l => l.id === selectedLocation)?.name || 'Unknown Location';
 
-    // Proximity Verification QR Data
-    const proximityQRData = `VERIFY_PROXIMITY|DEV:${DEVICE_ID}|LOC:${selectedLocation || 'NULL'}|TS:${Date.now()}`;
+    // Proximity Verification QR Data — includes rotating timestamp for expiry enforcement
+    const proximityQRData = `VERIFY_PROXIMITY|DEV:${DEVICE_ID}|LOC:${selectedLocation || 'NULL'}|LOC_NAME:${encodeURIComponent(locationName)}|TS:${qrTimestamp}|TTL:60`;
     const qrUrl = `https://api.qrserver.com/v1/create-qr-code/?size=250x250&data=${encodeURIComponent(proximityQRData)}`;
+    const qrRingPct = (qrTtl / 60) * 100;
+    const qrUrgent = qrTtl <= 15;
 
     return (
         <div className="min-h-screen bg-[#0F172A] text-slate-100 font-mono flex items-center justify-center p-4 select-none">
@@ -197,13 +210,45 @@ export default function DeviceSetup() {
                             {/* Interaction Area */}
                             <div className="flex-1 flex flex-col items-center justify-center">
                                 {systemSettings.deviceConfig.showQR ? (
-                                    <div className="relative group flex flex-col items-center">
-                                        <div className="size-48 bg-white p-4 rounded-3xl shadow-[0_0_40px_rgba(59,130,246,0.2)]">
-                                            <img src={qrUrl} className="size-full opacity-90" alt="QR Code" />
+                                    <div className="relative flex flex-col items-center gap-3">
+                                        {/* Scanner corner brackets */}
+                                        <div className="relative">
+                                            <div className={`absolute inset-0 rounded-3xl pointer-events-none z-10 transition-colors duration-700 ${
+                                                qrUrgent ? 'ring-2 ring-red-500/70 animate-pulse' : 'ring-2 ring-blue-500/40'
+                                            }`}/>
+                                            {/* Corner scanner marks */}
+                                            <div className="absolute top-2 left-2 w-5 h-5 border-t-2 border-l-2 border-blue-400 rounded-tl-lg z-20"/>
+                                            <div className="absolute top-2 right-2 w-5 h-5 border-t-2 border-r-2 border-blue-400 rounded-tr-lg z-20"/>
+                                            <div className="absolute bottom-2 left-2 w-5 h-5 border-b-2 border-l-2 border-blue-400 rounded-bl-lg z-20"/>
+                                            <div className="absolute bottom-2 right-2 w-5 h-5 border-b-2 border-r-2 border-blue-400 rounded-br-lg z-20"/>
+                                            <div className="size-48 bg-white p-4 rounded-3xl shadow-[0_0_40px_rgba(59,130,246,0.25)] relative overflow-hidden">
+                                                <img src={qrUrl} className="size-full opacity-95 transition-opacity duration-500" alt="QR Code" key={qrTimestamp} />
+                                                {/* Scanning sweep line animation */}
+                                                <div className="absolute left-0 right-0 h-0.5 bg-gradient-to-r from-transparent via-blue-400 to-transparent animate-[scan_2s_ease-in-out_infinite] opacity-80"
+                                                    style={{ top: '50%', animation: 'scan 2s ease-in-out infinite' }}
+                                                />
+                                            </div>
                                         </div>
-                                        <div className="mt-4 text-center">
-                                            <p className="text-[10px] font-black uppercase text-slate-400 tracking-widest">Mobile Proximity Verified</p>
-                                            <p className="text-[8px] text-slate-600 mt-1 font-mono uppercase">ID: {DEVICE_ID}</p>
+                                        {/* TTL progress bar */}
+                                        <div className="w-48">
+                                            <div className="flex justify-between items-center mb-1">
+                                                <span className="text-[8px] font-black uppercase tracking-widest text-slate-500">QR Expires In</span>
+                                                <span className={`text-[9px] font-black tabular-nums ${
+                                                    qrUrgent ? 'text-red-400 animate-pulse' : 'text-blue-400'
+                                                }`}>{qrTtl}s</span>
+                                            </div>
+                                            <div className="h-1 bg-slate-700 rounded-full overflow-hidden">
+                                                <div
+                                                    className={`h-full rounded-full transition-all duration-1000 ${
+                                                        qrUrgent ? 'bg-red-500' : 'bg-blue-500'
+                                                    }`}
+                                                    style={{ width: `${qrRingPct}%` }}
+                                                />
+                                            </div>
+                                        </div>
+                                        <div className="text-center">
+                                            <p className="text-[10px] font-black uppercase text-slate-400 tracking-widest">Scan with TechDance HR App</p>
+                                            <p className="text-[8px] text-slate-600 mt-0.5 font-mono uppercase">ID: {DEVICE_ID} • {locationName}</p>
                                         </div>
                                     </div>
                                 ) : (

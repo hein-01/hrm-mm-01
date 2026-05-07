@@ -1,10 +1,24 @@
 import React, { useState, useMemo, useEffect } from 'react';
+import { TableVirtuoso } from 'react-virtuoso';
+import { Radar, RadarChart, PolarGrid, PolarAngleAxis, PolarRadiusAxis, ResponsiveContainer } from 'recharts';
 import Sidebar from '../components/Sidebar';
 import Header from '../components/Header';
 import { useAppData, Review } from '../context/AppDataContext';
 
 export default function Performance() {
-    const { employees: activeEmployees, reviews, setReviews, flagEmployeeRisk, addDocumentToEmployee, finalizeReview, submitReview } = useAppData();
+    const { 
+        employees: activeEmployees, 
+        reviews, setReviews, 
+        flagEmployeeRisk, 
+        addDocumentToEmployee, 
+        finalizeReview, 
+        submitReview,
+        objectives,
+        keyResults,
+        updateKeyResult,
+        addDocumentToLibrary,
+        isAdmin
+    } = useAppData();
 
     // Simulated current admin ID
     const currentAdminId = 'EMP-ADM-001';
@@ -25,6 +39,11 @@ export default function Performance() {
     const [activeModal, setActiveModal] = useState<string | null>(null);
     const [activeRecord, setActiveRecord] = useState<any>(null);
     const [actionFeedback, setActionFeedback] = useState<string | null>(null);
+    const [recommendPromotion, setRecommendPromotion] = useState<boolean>(false);
+    const [promotionRole, setPromotionRole] = useState<string>('');
+    const [promotionSalary, setPromotionSalary] = useState<number | ''>('');
+    const [isSealing, setIsSealing] = useState(false);
+    const [sealSuccess, setSealSuccess] = useState<string | null>(null);
 
     // Competency Slider State for Start Review modal
     const COMPETENCIES = ['Technical', 'Leadership', 'Communication', 'Execution', 'Collaboration'] as const;
@@ -120,6 +139,7 @@ export default function Performance() {
 
     const handleViewReport = (review: any) => {
         setActiveRecord(review);
+        setRecommendPromotion(false);
         setActiveModal('view_report');
     };
 
@@ -127,6 +147,9 @@ export default function Performance() {
         setActiveModal(null);
         setActiveRecord(null);
         setCompetencyScores({});
+        setRecommendPromotion(false);
+        setPromotionRole('');
+        setPromotionSalary('');
     };
 
     const handleStartReview = (review: any) => {
@@ -142,7 +165,7 @@ export default function Performance() {
         COMPETENCIES.forEach(c => {
             if (competencyScores[c] > 0) (scores as any)[c] = competencyScores[c];
         });
-        const res = submitReview(activeRecord.id, currentAdminId, scores);
+        const res = submitReview(activeRecord.id, currentAdminId, scores, activeRecord.selfRating, activeRecord.managerComments);
         closeModals();
         setActionFeedback(res.message);
         setTimeout(() => setActionFeedback(null), 6000);
@@ -274,20 +297,33 @@ export default function Performance() {
                             <div className="px-6 py-4 border-b border-slate-200 bg-[#F8FAFC]">
                                 <h4 className="font-bold text-slate-900 text-sm uppercase tracking-widest">Active Review Registry</h4>
                             </div>
-                            <div className="overflow-x-auto min-h-[300px]">
-                                <table className="w-full text-left">
-                                    <thead className="bg-[#F8FAFC] text-slate-500 text-xs font-extrabold uppercase tracking-wider border-b border-slate-200">
-                                        <tr>
-                                            <th className="px-6 py-4">Employee / Function</th>
-                                            <th className="px-6 py-4">Assessment Matrix</th>
-                                            <th className="px-6 py-4">Scale Aggregation</th>
-                                            <th className="px-6 py-4">Status Map</th>
-                                            <th className="px-6 py-4 text-right">Context Actions</th>
-                                        </tr>
-                                    </thead>
-                                    <tbody className="divide-y divide-slate-100 text-sm">
-                                        {filteredReviews.map(review => (
-                                            <tr key={review.id} className="hover:bg-slate-50 transition-colors">
+                            <div className="overflow-x-auto min-h-[400px] h-[55vh]">
+                                {filteredReviews.length === 0 ? (
+                                    <div className="px-6 py-12 text-center text-slate-500">
+                                        <span className="material-symbols-outlined text-4xl text-slate-300 mb-2">person_search</span>
+                                        <p className="font-medium">No reviews found matching your query.</p>
+                                    </div>
+                                ) : (
+                                    <TableVirtuoso
+                                        data={filteredReviews}
+                                        className="w-full h-full"
+                                        components={{
+                                            Table: (props) => <table {...props} className="w-full text-left min-w-[800px]" />,
+                                            TableHead: React.forwardRef((props, ref) => <thead {...props} ref={ref} className="bg-[#F8FAFC] text-slate-500 text-xs font-extrabold uppercase tracking-wider border-b border-slate-200 sticky top-0 z-10" />),
+                                            TableRow: (props) => <tr {...props} className="hover:bg-slate-50 transition-colors border-b border-slate-100 last:border-0 text-sm bg-white" />,
+                                            TableBody: React.forwardRef((props, ref) => <tbody {...props} ref={ref} />)
+                                        }}
+                                        fixedHeaderContent={() => (
+                                            <tr>
+                                                <th className="px-6 py-4">Employee / Function</th>
+                                                <th className="px-6 py-4">Assessment Matrix</th>
+                                                <th className="px-6 py-4">Scale Aggregation</th>
+                                                <th className="px-6 py-4">Status Map</th>
+                                                <th className="px-6 py-4 text-right">Context Actions</th>
+                                            </tr>
+                                        )}
+                                        itemContent={(_i, review) => (
+                                            <>
                                                 <td className="px-6 py-4">
                                                     <div className="flex items-center gap-4">
                                                         <div className={`w-10 h-10 rounded-full flex items-center justify-center text-xs font-bold shrink-0 ${review.colorClass}`}>{review.initials}</div>
@@ -318,9 +354,15 @@ export default function Performance() {
                                                     {review.status === 'Completed' && <span className="px-2.5 py-1 rounded-full bg-emerald-50 text-emerald-700 text-[10px] font-extrabold uppercase tracking-widest border border-emerald-200 shadow-sm flex inline-flex items-center gap-1"><span className="size-1.5 rounded-full bg-emerald-500"></span>{review.status}</span>}
                                                     {review.status === 'In Progress' && <span className="px-2.5 py-1 rounded-full bg-indigo-50 text-[#4F46E5] text-[10px] font-extrabold uppercase tracking-widest border border-indigo-200 shadow-sm flex inline-flex items-center gap-1"><span className="size-1.5 rounded-full animate-pulse bg-indigo-500"></span>{review.status}</span>}
                                                     {review.status === 'Pending' && <span className="px-2.5 py-1 rounded-full bg-slate-100 text-slate-600 text-[10px] font-extrabold uppercase tracking-widest border border-slate-200 shadow-sm flex inline-flex items-center gap-1">{review.status}</span>}
+                                                    {review.status === 'Finalized' && (
+                                                        <div className="flex flex-col gap-1 items-start">
+                                                            <span className="px-2.5 py-1 rounded-full bg-amber-50 text-amber-700 text-[10px] font-extrabold uppercase tracking-widest border border-amber-200 shadow-sm flex inline-flex items-center gap-1"><span className="size-1.5 rounded-full bg-amber-500"></span>{review.status}</span>
+                                                            {review.checksum && <span className="text-[9px] font-mono text-slate-400 bg-slate-50 px-1.5 py-0.5 rounded border border-slate-100" title="Archived Checksum ID">SECURE-{review.checksum}</span>}
+                                                        </div>
+                                                    )}
                                                 </td>
                                                 <td className="px-6 py-4 text-right">
-                                                    {review.status === 'Completed' && <button onClick={() => handleViewReport(review)} className="text-xs font-bold px-3 py-1.5 border border-slate-200 rounded-lg shadow-sm text-slate-600 hover:text-[#4F46E5] hover:border-[#4F46E5] hover:bg-indigo-50/50 flex flex-inline items-center gap-2 transition-all ml-auto"><span className="material-symbols-outlined !text-[16px]">picture_as_pdf</span> Extract Report</button>}
+                                                    {(review.status === 'Completed' || review.status === 'Finalized') && <button onClick={() => handleViewReport(review)} className="text-xs font-bold px-3 py-1.5 border border-slate-200 rounded-lg shadow-sm text-slate-600 hover:text-[#4F46E5] hover:border-[#4F46E5] hover:bg-indigo-50/50 flex flex-inline items-center gap-2 transition-all ml-auto"><span className="material-symbols-outlined !text-[16px]">picture_as_pdf</span> Extract Report</button>}
                                                     {review.status === 'In Progress' && <button className="text-xs font-bold px-3 py-1.5 bg-indigo-50 text-[#4F46E5] rounded-lg border border-indigo-100 hover:bg-[#4F46E5] hover:text-white flex flex-inline items-center gap-2 transition-all shadow-sm ml-auto"><span className="material-symbols-outlined !text-[16px]">draw</span> Form Intercept</button>}
                                                     {(review.status === 'Pending' || review.status === 'Draft' || review.status === 'In Progress') && (
                                                         <div className="flex items-center gap-2 ml-auto">
@@ -331,6 +373,15 @@ export default function Performance() {
                                                                 <span className="material-symbols-outlined !text-[16px]">rate_review</span>
                                                                 Start Review
                                                             </button>
+                                                            {isAdmin(currentAdminId) && (
+                                                                <button
+                                                                    onClick={() => { setActiveRecord(review); setActiveModal('okr_tracking'); }}
+                                                                    className="text-xs font-bold px-3 py-1.5 rounded-lg border bg-blue-50 text-blue-700 border-blue-200 hover:bg-blue-600 hover:text-white flex items-center gap-2 transition-all shadow-sm"
+                                                                >
+                                                                    <span className="material-symbols-outlined !text-[16px]">track_changes</span>
+                                                                    Track OKRs
+                                                                </button>
+                                                            )}
                                                             {review.status === 'Pending' && (
                                                                 <button
                                                                     onClick={() => handleSendReminder(review)}
@@ -344,18 +395,10 @@ export default function Performance() {
                                                         </div>
                                                     )}
                                                 </td>
-                                            </tr>
-                                        ))}
-                                        {filteredReviews.length === 0 && (
-                                            <tr>
-                                                <td colSpan={5} className="px-6 py-12 text-center text-slate-500">
-                                                    <span className="material-symbols-outlined text-4xl text-slate-300 mb-2">person_search</span>
-                                                    <p className="font-medium">No reviews found matching your query.</p>
-                                                </td>
-                                            </tr>
+                                            </>
                                         )}
-                                    </tbody>
-                                </table>
+                                    />
+                                )}
                             </div>
                         </div>
 
@@ -423,6 +466,41 @@ export default function Performance() {
                                             </div>
                                         );
                                     })}
+                                </div>
+
+                                {/* Self-Rating and Manager Comments */}
+                                <div className="px-6 pb-4 space-y-4">
+                                    {/* Self-Rating Block */}
+                                    <div>
+                                        <label className="text-sm font-bold text-slate-700">Self-Assessment Score</label>
+                                        <input
+                                            type="number"
+                                            value={activeRecord.selfRating || ''}
+                                            readOnly={isAdmin(currentAdminId) && activeRecord.status !== 'Submitted'}
+                                            onChange={e => setActiveRecord((prev: any) => ({ ...prev, selfRating: Number(e.target.value) }))}
+                                            placeholder="Score out of 5"
+                                            className="w-full mt-1 border border-slate-200 rounded-lg p-2 text-sm focus:ring-[#4F46E5]"
+                                            min="1"
+                                            max="5"
+                                        />
+                                        {isAdmin(currentAdminId) && activeRecord.status !== 'Submitted' && (
+                                            <p className="text-[10px] font-bold text-slate-500 mt-1 uppercase tracking-wider">Locked: Awaiting employee submission.</p>
+                                        )}
+                                    </div>
+                                    
+                                    {/* Manager Comments Block */}
+                                    {isAdmin(currentAdminId) && (
+                                        <div>
+                                            <label className="text-sm font-bold text-slate-700">Manager Comments</label>
+                                            <textarea
+                                                value={activeRecord.managerComments || ''}
+                                                onChange={e => setActiveRecord((prev: any) => ({ ...prev, managerComments: e.target.value }))}
+                                                placeholder="Enter observations here... Hidden from employee until Finalized."
+                                                rows={3}
+                                                className="w-full mt-1 border border-slate-200 rounded-lg p-2 text-sm focus:ring-[#4F46E5]"
+                                            />
+                                        </div>
+                                    )}
                                 </div>
 
                                 {/* Live Score Summary */}
@@ -507,44 +585,206 @@ export default function Performance() {
                 )}
 
                 {/* 3. Forms Library / Document Routing PDF Intercept */}
-                {activeModal === 'view_report' && activeRecord && (
+                {activeModal === 'view_report' && activeRecord && (() => {
+                    const chartData = COMPETENCIES.map(comp => ({
+                        subject: comp,
+                        A: activeRecord.competencyScores?.[comp] || 0,
+                        fullMark: 5,
+                    }));
+                    return (
                     <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/60 backdrop-blur-sm animate-fade-in px-4">
-                        <div className="bg-white w-full max-w-sm rounded-[24px] shadow-2xl overflow-hidden border border-slate-200 flex flex-col">
-                            <div className="p-8 text-center bg-[#F8FAFC] border-b border-slate-100">
+                        <div className="bg-white w-full max-w-2xl rounded-[24px] shadow-2xl overflow-hidden border border-slate-200 flex flex-col md:flex-row">
+                            <div className="flex-1 p-8 text-center bg-[#F8FAFC] border-b md:border-b-0 md:border-r border-slate-100 flex flex-col justify-center">
                                 <div className="border border-slate-200 bg-white w-16 h-20 mx-auto shadow-sm rounded flex items-center justify-center mb-4 relative overflow-hidden">
                                     <div className="absolute top-0 left-0 w-full h-4 bg-red-500 flex items-center justify-center text-[8px] font-bold text-white uppercase tracking-widest">PDF</div>
                                     <span className="material-symbols-outlined text-[32px] text-slate-300 mt-2">assessment</span>
                                 </div>
                                 <h3 className="text-lg font-bold text-slate-900 leading-tight">Generate Formal Extract</h3>
                                 <p className="text-xs font-semibold text-slate-500 mt-2">This command parses the {activeRecord.period} matrix metrics for {activeRecord.name}.</p>
-                            </div>
-                            <div className="p-6 bg-white space-y-4">
-                                <div className="bg-indigo-50 border border-indigo-100 p-4 rounded-xl flex items-start gap-3">
-                                    <span className="material-symbols-outlined text-[#4F46E5]">route</span>
-                                    <p className="text-xs font-bold text-slate-700 leading-relaxed uppercase tracking-widest">
-                                        Data is automatically routed backwards directly into the 'Documents' tab on this Employee's Core Profile.
-                                    </p>
+                                
+                                <div className="mt-8 h-48 w-full">
+                                    <ResponsiveContainer width="100%" height="100%">
+                                        <RadarChart cx="50%" cy="50%" outerRadius="80%" data={chartData}>
+                                            <PolarGrid />
+                                            <PolarAngleAxis dataKey="subject" tick={{fontSize: 10, fill: '#64748b'}} />
+                                            <PolarRadiusAxis angle={30} domain={[0, 5]} tick={false} axisLine={false} />
+                                            <Radar name={activeRecord.name} dataKey="A" stroke="#4F46E5" fill="#4F46E5" fillOpacity={0.4} />
+                                        </RadarChart>
+                                    </ResponsiveContainer>
                                 </div>
                             </div>
-                            <div className="p-4 bg-slate-50 border-t border-slate-100 flex justify-end gap-3 shrink-0">
-                                <button onClick={closeModals} className="px-5 py-2.5 rounded-lg text-sm font-bold text-slate-600 hover:bg-slate-200 transition-colors w-full">Cancel</button>
-                                <button onClick={() => {
-                                    addDocumentToEmployee(activeRecord.empId, {
-                                        name: `Performance Summary PDF - ${activeRecord.period}`,
-                                        type: 'PDF',
-                                        url: '#'
-                                    });
-                                    // Trigger Payroll Adjustment Bonus logic if rating > 4.5
-                                    finalizeReview(activeRecord.id); 
-                                    
-                                    closeModals();
-                                    setActionFeedback(`Extract compiled securely. Performance Bonus (10% Base) successfully pushed to Adjustments module.`);
-                                    setTimeout(() => setActionFeedback(null), 5000);
-                                }} className="px-5 py-2.5 rounded-lg text-sm font-bold text-white bg-[#4F46E5] hover:bg-indigo-600 transition-colors shadow-sm w-full">Got it, Generate PDF</button>
+                            <div className="flex-1 flex flex-col h-full bg-white">
+                                <div className="p-6 space-y-4 flex-1">
+                                    <div className="bg-indigo-50 border border-indigo-100 p-4 rounded-xl flex items-start gap-3">
+                                        <span className="material-symbols-outlined text-[#4F46E5]">route</span>
+                                        <p className="text-[10px] font-bold text-slate-700 leading-relaxed uppercase tracking-widest">
+                                            Data is automatically routed directly into the Global Forms Archive and linked to the Employee Profile via cryptographic checksum.
+                                        </p>
+                                    </div>
+                                    {isAdmin(currentAdminId) && (
+                                        <div className="flex flex-col gap-3 p-4 border border-slate-200 rounded-xl hover:bg-slate-50 transition-colors">
+                                            <label className="flex items-start gap-3 cursor-pointer">
+                                                <input type="checkbox" checked={recommendPromotion} onChange={e => setRecommendPromotion(e.target.checked)} className="mt-1 accent-[#4F46E5] w-4 h-4" />
+                                                <div>
+                                                    <p className="text-sm font-bold text-slate-900">Recommend Promotion/Increment</p>
+                                                    <p className="text-xs text-slate-500 font-medium">This automatically triggers an HR Job Activity request.</p>
+                                                </div>
+                                            </label>
+                                            {recommendPromotion && (
+                                                <div className="pl-7 grid grid-cols-2 gap-4 mt-2 animate-fade-in">
+                                                    <div>
+                                                        <label className="block text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1">New Role</label>
+                                                        <input type="text" value={promotionRole} onChange={e => setPromotionRole(e.target.value)} placeholder="e.g. Senior Developer" className="w-full border border-slate-200 rounded-md py-1.5 px-3 text-sm focus:ring-[#4F46E5] text-slate-900" />
+                                                    </div>
+                                                    <div>
+                                                        <label className="block text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1">New Salary (MMK)</label>
+                                                        <input type="number" value={promotionSalary} onChange={e => setPromotionSalary(e.target.value ? Number(e.target.value) : '')} placeholder="e.g. 1500000" className="w-full border border-slate-200 rounded-md py-1.5 px-3 text-sm focus:ring-[#4F46E5] text-slate-900" />
+                                                    </div>
+                                                </div>
+                                            )}
+                                        </div>
+                                    )}
+                                </div>
+                                <div className="p-4 bg-slate-50 border-t border-slate-100 flex justify-end gap-3 shrink-0">
+                                    <button onClick={closeModals} className="px-5 py-2.5 rounded-lg text-sm font-bold text-slate-600 hover:bg-slate-200 transition-colors w-full">Cancel</button>
+                                    <button onClick={() => {
+                                        setIsSealing(true);
+                                        const docContent = `Performance Review for ${activeRecord.name}\nPeriod: ${activeRecord.period}\nRating: ${activeRecord.rating}\nStatus: Finalized\nCompetency Details: ${JSON.stringify(activeRecord.competencyScores)}`;
+                                        
+                                        const res = addDocumentToLibrary({
+                                            title: `Performance Extract - ${activeRecord.name} (${activeRecord.period})`,
+                                            category: 'Performance Record',
+                                            sourceModule: 'Performance',
+                                            period: activeRecord.period,
+                                            fileContent: docContent,
+                                            relatedRecordId: activeRecord.id,
+                                            description: 'Auto-archived standardized performance summary.',
+                                            isMandatory: false
+                                        }, currentAdminId);
+
+                                        setTimeout(() => {
+                                            addDocumentToEmployee(activeRecord.empId, {
+                                                name: `Performance Summary - ${activeRecord.period}`,
+                                                type: 'PDF',
+                                                url: `forms-library?search=${activeRecord.id}`,
+                                                checksum: res.checksum || 'CHK-89X0'
+                                            });
+
+                                            // Trigger Payroll Adjustment Bonus logic if rating >= 4.5
+                                            finalizeReview(activeRecord.id, currentAdminId, recommendPromotion, promotionRole, promotionSalary !== '' ? Number(promotionSalary) : undefined, res.checksum); 
+                                            
+                                            setIsSealing(false);
+                                            const empBaseSalary = activeEmployees.find(e => e.id === activeRecord.empId)?.baseSalary || 0;
+                                            setSealSuccess(`Bonus of ${activeRecord.rating >= 4.5 ? (empBaseSalary * 0.1).toLocaleString() : '0'} MMK queued for Oct 2023 Payroll.`);
+                                            setTimeout(() => {
+                                                setSealSuccess(null);
+                                                closeModals();
+                                            }, 2500);
+                                        }, 1500);
+                                    }} disabled={isSealing || sealSuccess !== null} className="px-5 py-2.5 rounded-lg text-sm font-bold text-white bg-[#4F46E5] hover:bg-indigo-600 transition-colors shadow-sm w-full shrink-0 flex items-center justify-center gap-2">
+                                        {isSealing ? (
+                                            <><span className="material-symbols-outlined flex animate-spin !text-[18px]">sync</span> Syncing to Payroll...</>
+                                        ) : sealSuccess ? (
+                                            <><span className="material-symbols-outlined !text-[18px]">check_circle</span> {sealSuccess}</>
+                                        ) : (
+                                            <><span className="material-symbols-outlined !text-[18px]">verified</span> Verify & Seal</>
+                                        )}
+                                    </button>
+                                </div>
                             </div>
                         </div>
                     </div>
-                )}
+                    );
+                })()}
+
+                {/* 4. OKR Tracking Modal */}
+                {activeModal === 'okr_tracking' && activeRecord && (() => {
+                    const empObjectives = objectives.filter(o => o.empId === activeRecord.empId);
+                    
+                    return (
+                        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/60 backdrop-blur-sm animate-fade-in px-4">
+                            <div className="bg-white w-full max-w-3xl rounded-[24px] shadow-2xl overflow-hidden border border-slate-200 flex flex-col">
+                                <div className="p-6 border-b border-slate-100 bg-slate-50 flex items-center justify-between shrink-0">
+                                    <div>
+                                        <p className="text-[10px] font-extrabold uppercase tracking-widest text-[#4F46E5] flex items-center gap-1"><span className="material-symbols-outlined text-[12px]">track_changes</span> OKR Tracking Matrix</p>
+                                        <h3 className="text-lg font-bold text-slate-900 mt-0.5">{activeRecord.name}'s Objectives</h3>
+                                        <p className="text-xs font-semibold text-slate-400 mt-0.5">Period: {activeRecord.period}</p>
+                                    </div>
+                                    <button onClick={closeModals} className="text-slate-400 hover:text-slate-600 p-1 transition-colors">
+                                        <span className="material-symbols-outlined">close</span>
+                                    </button>
+                                </div>
+                                <div className="p-6 overflow-y-auto max-h-[65vh] bg-[#F8FAFC]">
+                                    {empObjectives.length === 0 ? (
+                                        <div className="text-center py-12">
+                                            <span className="material-symbols-outlined text-4xl text-slate-300 mb-2">radar</span>
+                                            <p className="text-sm font-medium text-slate-500">No OKRs defined for this employee in the current period.</p>
+                                        </div>
+                                    ) : (
+                                        <div className="space-y-6">
+                                            {empObjectives.map(obj => {
+                                                const krs = keyResults.filter(kr => kr.objectiveId === obj.id);
+                                                return (
+                                                    <div key={obj.id} className="bg-white border border-slate-200 rounded-xl overflow-hidden shadow-sm">
+                                                        <div className="p-5 border-b border-slate-100 flex items-start justify-between">
+                                                            <div className="flex-1">
+                                                                <h4 className="text-sm font-bold text-slate-900">{obj.title}</h4>
+                                                                <p className="text-xs text-slate-500 mt-1 flex items-center gap-1"><span className="material-symbols-outlined text-[12px]">mediation</span> {obj.alignment}</p>
+                                                            </div>
+                                                            <div className="w-24 text-right flex flex-col items-end">
+                                                                <p className="text-[10px] font-extrabold uppercase text-slate-400 mb-1">Completion</p>
+                                                                <div className="flex items-center gap-2">
+                                                                    <div className="w-16 h-1.5 bg-slate-100 rounded-full overflow-hidden">
+                                                                        <div className="h-full bg-[#4F46E5] transition-all" style={{width: `${obj.progress}%`}}></div>
+                                                                    </div>
+                                                                    <span className="text-xs font-bold text-[#4F46E5]">{obj.progress}%</span>
+                                                                </div>
+                                                            </div>
+                                                        </div>
+                                                        <div className="p-0">
+                                                            {krs.length === 0 ? (
+                                                                 <p className="text-xs text-slate-400 p-4 font-medium">No Key Results attached.</p>
+                                                            ) : (
+                                                                <table className="w-full text-left bg-slate-50/50">
+                                                                    <tbody>
+                                                                        {krs.map(kr => {
+                                                                            return (
+                                                                            <tr key={kr.id} className="border-b border-slate-100 last:border-0 hover:bg-slate-50 transition-colors">
+                                                                                <td className="px-5 py-4 w-[45%]">
+                                                                                    <p className="text-xs font-semibold text-slate-800">{kr.title}</p>
+                                                                                    <p className="text-[10px] text-slate-500 mt-0.5">Target: <span className="font-bold text-slate-600">{kr.targetValue}</span></p>
+                                                                                </td>
+                                                                                <td className="px-5 py-4">
+                                                                                    <div className="flex items-center gap-3">
+                                                                                        <input 
+                                                                                            type="range" 
+                                                                                            min="0" max={kr.targetValue} step="1"
+                                                                                            value={kr.currentValue}
+                                                                                            onChange={e => updateKeyResult(kr.id, Number(e.target.value))}
+                                                                                            className="flex-1 h-1.5 rounded-full accent-blue-600 cursor-pointer"
+                                                                                        />
+                                                                                        <span className="text-xs font-bold text-slate-700 w-12 text-right border border-slate-200 bg-white px-2 py-1 rounded shadow-sm">{kr.currentValue}</span>
+                                                                                    </div>
+                                                                                </td>
+                                                                            </tr>
+                                                                        )})}
+                                                                    </tbody>
+                                                                </table>
+                                                            )}
+                                                        </div>
+                                                    </div>
+                                                );
+                                            })}
+                                        </div>
+                                    )}
+                                </div>
+                                <div className="p-4 bg-slate-50 border-t border-slate-100 flex justify-end gap-3 shrink-0">
+                                    <button onClick={closeModals} className="px-5 py-2.5 rounded-lg text-sm font-bold text-white bg-[#4F46E5] hover:bg-indigo-600 transition-colors shadow-sm cursor-pointer">Done Tracking</button>
+                                </div>
+                            </div>
+                        </div>
+                    );
+                })()}
 
             </main>
         </div>

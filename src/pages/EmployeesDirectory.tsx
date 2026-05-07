@@ -12,7 +12,7 @@ export default function EmployeesDirectory() {
     const navigate = useNavigate();
 
     // Core Data Schema comes from Context now
-    const { employees, setEmployees, terminateEmployee, addJobActivityChange, addAdjustment, lastPayrollStatus, shifts, systemSettings } = useAppData();
+    const { employees, setEmployees, terminateEmployee, addJobActivityChange, addAdjustment, lastPayrollStatus, shifts, systemSettings, addDocumentToEmployee, fieldAgents, setFieldAgents, addEmployee } = useAppData();
 
     const [searchQuery, setSearchQuery] = useState('');
     const [deptFilter, setDeptFilter] = useState('All Departments');
@@ -61,8 +61,16 @@ export default function EmployeesDirectory() {
     const [newEmpDept, setNewEmpDept] = useState('');
     const [newEmpRole, setNewEmpRole] = useState('');
     const [newEmpLocation, setNewEmpLocation] = useState('');
+    const [newEmpNrc, setNewEmpNrc] = useState('');
+    const [newEmpBankName, setNewEmpBankName] = useState('');
+    const [newEmpAccountNumber, setNewEmpAccountNumber] = useState('');
+    const [newEmpBranchCode, setNewEmpBranchCode] = useState('');
+    const [newEmpTaxId, setNewEmpTaxId] = useState('');
     const [authError, setAuthError] = useState('');
+
+    const NRC_REGEX = new RegExp('^([0-9]{1,2})\\/[a-zA-Z]+\\([NEP]\\)[0-9]{6}$');
     const [terminationError, setTerminationError] = useState<string | null>(null);
+    const [separationReason, setSeparationReason] = useState<'Resignation' | 'Termination' | 'Left/Absconded' | 'Retirement'>('Termination');
 
     // Resignation Form State
     const [resignDate, setResignDate] = useState('');
@@ -113,34 +121,103 @@ export default function EmployeesDirectory() {
         return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
     }, [lastPayrollStatus]);
 
-    const handleAddEmployeeSubmit = () => {
+    const handleAddEmployeeSubmit = async () => {
         if (!newEmpName || !newEmpDept || !newEmpRole) {
             setAuthError('Name, Department, and Role are all required.');
             return;
         }
 
-        // Mock Add with full organizational data
+        // NRC Validation (Mandatory)
+        if (!newEmpNrc.trim()) {
+            setAuthError('NRC Number is mandatory for all new hires.');
+            return;
+        }
+        if (!NRC_REGEX.test(newEmpNrc.trim())) {
+            setAuthError('Invalid NRC format. Expected: 12/TownshipName(N)123456');
+            return;
+        }
+
+        // Duplicate NRC Guard
+        if (employees.some(e => e.nrcNumber === newEmpNrc.trim())) {
+            setAuthError(`Duplicate NRC detected: ${newEmpNrc} already exists in the system.`);
+            return;
+        }
+
+        // Financial Onboarding Validation (Mandatory)
+        const selectedProvider = systemSettings.paymentProviders.find(p => p.name === newEmpBankName);
+        const isDigitalWallet = selectedProvider?.type === 'Digital Wallet';
+        
+        if (!newEmpBankName || !newEmpAccountNumber || (!isDigitalWallet && !newEmpBranchCode)) {
+            setAuthError('Bank Name, Account Number, and Branch Code are required for payroll disbursement.');
+            return;
+        }
+
+        // Generate collision-safe Employee ID
+        let counter = employees.length + 1;
+        let newEmpId = `EMP-${String(counter).padStart(3, '0')}`;
+        while (employees.some(e => e.id === newEmpId)) {
+            counter++;
+            newEmpId = `EMP-${String(counter).padStart(3, '0')}`;
+        }
+
+        const selectedLocation = systemSettings.officeLocations.find(l => l.name === newEmpLocation);
+
         const newEmp = {
-            id: `EMP-90${Math.floor(Math.random() * 9)}`,
+            id: newEmpId,
             name: newEmpName,
             role: newEmpRole,
             dept: newEmpDept,
-            status: 'Active',
-            joinDate: new Date().toLocaleDateString('en-GB', { month: 'short', year: 'numeric' }),
+            status: 'Active' as const,
+            joinDate: new Date().toISOString().split('T')[0],
             avatar: null,
             township: 'TBD',
-            nrcNumber: 'TBD',
-            ssbId: 'TBD',
-            initials: newEmpName.charAt(0).toUpperCase(),
+            nrcNumber: newEmpNrc.trim(),
+            ssbNumber: 'Pending Verification',
+            taxId: newEmpTaxId.trim() || undefined,
+            initials: newEmpName.split(' ').map(w => w[0]).join('').toUpperCase().slice(0, 2),
             colorClass: 'bg-blue-100 text-blue-700',
             hasCriticalRiskFlag: false,
             documents: [],
+            recruitmentSource: 'Direct',
             officeLocation: newEmpLocation || undefined,
-            baseSalary: 500000, // Default entry
-            shiftId: 'SH-GEN-96'
+            officeCoords: selectedLocation?.coords || undefined,
+            baseSalary: 500000,
+            reliefs: { spouse: false, parentsCount: 0 },
+            shiftId: 'SH-GEN-96',
+            bankName: newEmpBankName,
+            accountNumber: newEmpAccountNumber,
+            bankBranch: '',
+            bankBranchCode: newEmpBranchCode,
+            enrolledCourses: [],
+            leaveBalances: { Casual: 6, Medical: 15, Earned: 10 },
+            policyId: 'LP-GEN-01',
+            autoAttendanceEnabled: false
         };
 
-        setEmployees(prev => [newEmp as any, ...prev]);
+        const result = await addEmployee(newEmp as any, 'EMP-001');
+        const finalEmpId = result.empId || newEmpId;
+
+        // Auto-create Field Agent entry so new hire appears on GPS map
+        if (selectedLocation) {
+            const newAgent = {
+                id: `FA-${Date.now()}`,
+                empId: finalEmpId,
+                name: newEmpName,
+                role: newEmpRole,
+                avatar: null,
+                status: 'Offline' as const,
+                locationName: newEmpLocation,
+                mapPosition: { x: 50, y: 50 },
+                gps: selectedLocation.coords,
+                history: [],
+                lastUpdate: 'Just now',
+                routeAssigned: 'Unassigned',
+                batteryLevel: 100,
+                alert: 'None' as const
+            };
+            setFieldAgents(prev => [newAgent, ...prev]);
+        }
+
         closeModals();
     };
 
@@ -153,7 +230,7 @@ export default function EmployeesDirectory() {
 
     const handleDeactivateConfirm = () => {
         if (!activeRecord) return;
-        const result = terminateEmployee(activeRecord.id, 'ADM-001');
+        const result = terminateEmployee(activeRecord.id, 'ADM-001', separationReason);
         if (result.success) {
             closeModals();
         } else {
@@ -281,6 +358,23 @@ export default function EmployeesDirectory() {
         setTimeout(() => { setTransferLoading(false); closeModals(); }, 700);
     };
 
+    const handleExportCSV = () => {
+        const headers = ['ID', 'Name', 'Role', 'Department', 'Status', 'Join Date', 'NRC', 'Bank', 'Account', 'Branch Code', 'Phone'];
+        const rows = filteredEmployees.map(e => [
+            e.id, e.name, e.role, e.dept, e.status, e.joinDate,
+            e.nrcNumber || '', e.bankName || '', e.accountNumber || '',
+            e.bankBranchCode || '', e.mobile || ''
+        ]);
+        const csvContent = [headers, ...rows].map(r => r.map(c => `"${String(c).replace(/"/g, '""')}"`).join(',')).join('\n');
+        const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `employees_export_${new Date().toISOString().split('T')[0]}.csv`;
+        a.click();
+        URL.revokeObjectURL(url);
+    };
+
     const closeModals = () => {
         setActiveModal(null);
         setActiveRecord(null);
@@ -288,7 +382,13 @@ export default function EmployeesDirectory() {
         setNewEmpDept('');
         setNewEmpRole('');
         setNewEmpLocation('');
+        setNewEmpNrc('');
+        setNewEmpBankName('');
+        setNewEmpAccountNumber('');
+        setNewEmpBranchCode('');
+        setNewEmpTaxId('');
         setTerminationError(null);
+        setSeparationReason('Termination');
         setResignDate('');
         setResignReason('');
         // Promotion
@@ -345,7 +445,7 @@ export default function EmployeesDirectory() {
                                 <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">Master Directory</p>
                             </div>
                             <div className="flex items-center gap-3">
-                                <button className="px-4 py-2 bg-white border border-slate-200 text-slate-700 rounded-lg text-sm font-semibold hover:bg-slate-50 shadow-sm flex items-center gap-2">
+                                <button onClick={handleExportCSV} className="px-4 py-2 bg-white border border-slate-200 text-slate-700 rounded-lg text-sm font-semibold hover:bg-slate-50 shadow-sm flex items-center gap-2">
                                     <span className="material-symbols-outlined text-[18px]">download</span> Export CSV
                                 </button>
                                 <button onClick={() => setActiveModal('upload')} className="px-4 py-2 bg-white border border-slate-200 text-slate-700 rounded-lg text-sm font-semibold hover:bg-slate-50 shadow-sm flex items-center gap-2">
@@ -433,6 +533,7 @@ export default function EmployeesDirectory() {
                                                 <th className="px-6 py-4">Employee</th>
                                                 <th className="px-6 py-4 text-left">Status</th>
                                                 <th className="px-6 py-4 text-left">Department & Role</th>
+                                                <th className="px-6 py-4 text-center">Validation</th>
                                                 <th className="px-6 py-4 border-l border-slate-100 text-left">Security Status</th>
                                                 <th className="px-6 py-4 text-left">Join Date</th>
                                                 <th className="px-6 py-4 text-right">Actions</th>
@@ -457,10 +558,43 @@ export default function EmployeesDirectory() {
                                                     {emp.status === 'Active' && <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-bold bg-emerald-50 text-emerald-700 border border-emerald-100"><span className="size-1.5 rounded-full bg-emerald-500"></span> Active</span>}
                                                     {emp.status === 'On Leave' && <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-bold bg-amber-50 text-amber-700 border border-amber-100"><span className="size-1.5 rounded-full bg-amber-500"></span> On Leave</span>}
                                                     {emp.status === 'Terminated' && <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-bold bg-slate-100 text-slate-600 border border-slate-200">Terminated</span>}
+                                                    {emp.status === 'Resigned' && <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-bold bg-blue-50 text-blue-600 border border-blue-100">Resigned</span>}
+                                                    {emp.status === 'Retired' && <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-bold bg-purple-50 text-purple-600 border border-purple-100">Retired</span>}
+                                                    {emp.contractActionRequired && (
+                                                        <span className="ml-2 inline-flex items-center gap-1 px-2 py-1 rounded-full text-[10px] font-bold bg-amber-50 text-amber-700 border border-amber-200">
+                                                            <span className="material-symbols-outlined text-[12px]">warning</span>
+                                                            Contract Action Required
+                                                        </span>
+                                                    )}
                                                 </td>
                                                 <td className="px-6 py-4 text-left">
                                                     <p className="font-bold text-slate-700 text-xs uppercase tracking-tighter">{emp.dept}</p>
                                                     <p className="text-[10px] text-slate-400 font-bold uppercase tracking-widest">{emp.role}</p>
+                                                </td>
+                                                <td className="px-6 py-4 text-center">
+                                                    {(() => {
+                                                        const missing: string[] = [];
+                                                        if (!emp.bankName || !emp.accountNumber) missing.push('Bank Account');
+                                                        if (!emp.nrcNumber || emp.nrcNumber === 'TBD' || emp.nrcNumber === 'Pending Verification') missing.push('NRC');
+                                                        if (!emp.mobile) missing.push('Phone');
+                                                        if (missing.length > 0) {
+                                                            return (
+                                                                <span className="relative group cursor-help">
+                                                                    <span className="inline-flex items-center gap-1 px-2 py-1 rounded-full text-[10px] font-bold bg-red-50 text-red-600 border border-red-100">
+                                                                        <span className="material-symbols-outlined text-[14px]">warning</span> {missing.length}
+                                                                    </span>
+                                                                    <span className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 px-3 py-2 bg-slate-900 text-white text-[10px] font-semibold rounded-lg whitespace-nowrap opacity-0 group-hover:opacity-100 transition-opacity z-50 pointer-events-none shadow-lg">
+                                                                        Missing payroll-critical data: {missing.join(', ')}
+                                                                    </span>
+                                                                </span>
+                                                            );
+                                                        }
+                                                        return (
+                                                            <span className="inline-flex items-center gap-1 px-2 py-1 rounded-full text-[10px] font-bold bg-emerald-50 text-emerald-600 border border-emerald-100">
+                                                                <span className="material-symbols-outlined text-[14px]">check_circle</span> OK
+                                                            </span>
+                                                        );
+                                                    })()}
                                                 </td>
                                                 <td className="px-6 py-4 border-l border-slate-50 text-left">
                                                     <div className="flex items-center gap-1.5">
@@ -856,6 +990,56 @@ export default function EmployeesDirectory() {
                                     </div>
                                 </div>
                                 <div className="space-y-4">
+                                    <p className="text-[10px] font-bold uppercase tracking-widest text-[#4F46E5] border-b pb-2">Identity Verification</p>
+                                    <div>
+                                        <label className="text-xs font-bold text-slate-700 block mb-1.5">NRC Number <span className="text-red-500">*</span></label>
+                                        <input value={newEmpNrc} onChange={e => { setNewEmpNrc(e.target.value); setAuthError(''); }} type="text" className={`w-full text-sm p-2.5 border rounded-lg focus:ring-[#4F46E5] focus:border-[#4F46E5] font-mono ${newEmpNrc && !NRC_REGEX.test(newEmpNrc) ? 'border-red-300 bg-red-50/30' : 'border-slate-300'}`} placeholder="e.g. 12/BaHan(N)123456" />
+                                        {newEmpNrc && !NRC_REGEX.test(newEmpNrc) && (
+                                            <p className="text-[10px] text-red-500 font-semibold mt-1">Format: [1-2 digits]/[Township]([N/E/P])[6 digits]</p>
+                                        )}
+                                        {newEmpNrc && NRC_REGEX.test(newEmpNrc) && (
+                                            <p className="text-[10px] text-emerald-600 font-semibold mt-1 flex items-center gap-1"><span className="material-symbols-outlined text-[12px]">check_circle</span> Valid NRC format</p>
+                                        )}
+                                    </div>
+                                    <div>
+                                        <label className="text-xs font-bold text-slate-700 block mb-1.5">Tax Identification Number (TIN)</label>
+                                        <input value={newEmpTaxId} onChange={e => setNewEmpTaxId(e.target.value)} type="text" className="w-full text-sm p-2.5 border border-slate-300 rounded-lg focus:ring-[#4F46E5] focus:border-[#4F46E5] font-mono" placeholder="Optional — required for PIT payer lists" />
+                                    </div>
+                                </div>
+                                <div className="space-y-4">
+                                    <p className="text-[10px] font-bold uppercase tracking-widest text-[#4F46E5] border-b pb-2">Financial Onboarding <span className="text-red-500">*</span></p>
+                                    <div>
+                                        <label className="text-xs font-bold text-slate-700 block mb-1.5">Bank Name <span className="text-red-500">*</span></label>
+                                        <select value={newEmpBankName} onChange={e => setNewEmpBankName(e.target.value)} className="w-full text-sm p-2.5 border border-slate-300 rounded-lg focus:ring-[#4F46E5] focus:border-[#4F46E5]">
+                                            <option value="">-- Select Bank / Wallet --</option>
+                                            {systemSettings.paymentProviders.map(p => (
+                                                <option key={p.id} value={p.name}>{p.name} ({p.type})</option>
+                                            ))}
+                                        </select>
+                                    </div>
+                                    <div className="grid grid-cols-2 gap-4">
+                                        <div>
+                                            <label className="text-xs font-bold text-slate-700 block mb-1.5">Account Number <span className="text-red-500">*</span></label>
+                                            <input value={newEmpAccountNumber} onChange={e => setNewEmpAccountNumber(e.target.value)} type="text" className="w-full text-sm p-2.5 border border-slate-300 rounded-lg focus:ring-[#4F46E5] focus:border-[#4F46E5] font-mono" placeholder="e.g. 1002019920031" />
+                                        </div>
+                                        <div>
+                                            <label className="text-xs font-bold text-slate-700 block mb-1.5">Branch Code {systemSettings.paymentProviders.find(p => p.name === newEmpBankName)?.type === 'Digital Wallet' && <span className="text-slate-400">(N/A)</span>} <span className="text-red-500">*</span></label>
+                                            <input 
+                                                value={newEmpBranchCode} 
+                                                onChange={e => setNewEmpBranchCode(e.target.value)} 
+                                                type="text" 
+                                                disabled={systemSettings.paymentProviders.find(p => p.name === newEmpBankName)?.type === 'Digital Wallet'}
+                                                className="w-full text-sm p-2.5 border border-slate-300 rounded-lg focus:ring-[#4F46E5] focus:border-[#4F46E5] font-mono disabled:bg-slate-100 disabled:text-slate-400" 
+                                                placeholder={systemSettings.paymentProviders.find(p => p.name === newEmpBankName)?.type === 'Digital Wallet' ? 'Not required for digital wallet' : 'e.g. KBZ-B01'} 
+                                            />
+                                        </div>
+                                    </div>
+                                    <div className="p-2.5 bg-blue-50 border border-blue-100 rounded-lg flex gap-2 items-start">
+                                        <span className="material-symbols-outlined text-blue-500 text-[16px] mt-0.5">info</span>
+                                        <p className="text-[10px] text-blue-700 font-medium">Bank details auto-sync to Bank Disbursements. Employee will be marked <strong>"Verified"</strong> upon completion.</p>
+                                    </div>
+                                </div>
+                                <div className="space-y-4">
                                     <p className="text-[10px] font-bold uppercase tracking-widest text-[#4F46E5] border-b pb-2">Hardware Sync Parameters</p>
                                     <div className="bg-emerald-50/50 p-4 border border-emerald-100 rounded-lg flex items-start gap-3">
                                         <span className="material-symbols-outlined text-emerald-500 mt-0.5">mark_email_unread</span>
@@ -900,19 +1084,49 @@ export default function EmployeesDirectory() {
                                     </button>
                                 </div>
                             )}
-                            <div className="p-6 text-center">
-                                <span className="material-symbols-outlined text-red-500 text-5xl mb-2 bg-red-50 rounded-full p-4">warning</span>
-                                <h3 className="text-lg font-bold text-slate-900 mt-2">Deactivate User?</h3>
-                                <p className="text-sm text-slate-500 mt-2">
-                                    You are about to terminate <strong>{activeRecord.name}</strong>. Their status locally, in Payroll, and in Attendance tracking protocols will be suspended immediately.
-                                </p>
+                            <div className="p-6 space-y-4">
+                                <div className="text-center">
+                                    <span className="material-symbols-outlined text-red-500 text-5xl mb-2 bg-red-50 rounded-full p-4">warning</span>
+                                    <h3 className="text-lg font-bold text-slate-900 mt-2">Separate Employee</h3>
+                                    <p className="text-sm text-slate-500 mt-2">
+                                        You are about to process separation for <strong>{activeRecord.name}</strong>. Select a reason below.
+                                    </p>
+                                </div>
+                                <div>
+                                    <label className="text-xs font-bold text-slate-500 uppercase tracking-wider block mb-1.5">Separation Reason <span className="text-red-500">*</span></label>
+                                    <select
+                                        value={separationReason}
+                                        onChange={e => setSeparationReason(e.target.value as any)}
+                                        className="w-full text-sm p-2.5 border border-slate-300 rounded-lg focus:ring-[#4F46E5] focus:border-[#4F46E5] bg-white"
+                                    >
+                                        <option value="Resignation">Resignation</option>
+                                        <option value="Termination">Termination</option>
+                                        <option value="Left/Absconded">Left / Absconded</option>
+                                        <option value="Retirement">Retirement</option>
+                                    </select>
+                                </div>
+                                <div className="p-3 rounded-lg border text-xs font-semibold flex items-center gap-2 bg-slate-50 border-slate-200">
+                                    <span className="material-symbols-outlined text-[16px] text-slate-500">badge</span>
+                                    <span className="text-slate-600">Re-hire Eligible:</span>
+                                    {(separationReason === 'Resignation' || separationReason === 'Retirement') ? (
+                                        <span className="text-emerald-600 flex items-center gap-1"><span className="material-symbols-outlined text-[14px]">check_circle</span> Yes</span>
+                                    ) : (
+                                        <span className="text-red-600 flex items-center gap-1"><span className="material-symbols-outlined text-[14px]">cancel</span> No</span>
+                                    )}
+                                </div>
+                                {separationReason === 'Left/Absconded' && (
+                                    <div className="p-2.5 bg-amber-50 border border-amber-100 rounded-lg flex gap-2 items-start">
+                                        <span className="material-symbols-outlined text-amber-600 text-[16px] mt-0.5">warning</span>
+                                        <p className="text-[10px] text-amber-700 font-medium">Asset and financial gates will be bypassed. A <strong>High Priority</strong> asset recovery alert will be dispatched to the Insights Dashboard.</p>
+                                    </div>
+                                )}
                             </div>
                             <div className="flex bg-slate-50 text-sm font-semibold border-t border-slate-100">
                                 <button onClick={closeModals} className="flex-1 py-4 hover:bg-slate-100 text-slate-600 border-r border-slate-100 transition-colors">
                                     Cancel
                                 </button>
                                 <button onClick={handleDeactivateConfirm} className="flex-1 py-4 hover:bg-red-50 text-red-600 transition-colors flex items-center justify-center gap-1">
-                                    Yes, Terminate
+                                    Confirm Separation
                                 </button>
                             </div>
                         </div>

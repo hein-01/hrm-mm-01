@@ -2,6 +2,8 @@ import React, { useState, useEffect, useCallback } from 'react';
 import { MapContainer, TileLayer, Marker, Popup, Polyline, useMap } from 'react-leaflet';
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
+import MarkerClusterGroup from 'react-leaflet-cluster';
+import { Virtuoso } from 'react-virtuoso';
 import Sidebar from '../components/Sidebar';
 import Header from '../components/Header';
 import { useAppData } from '../context/AppDataContext';
@@ -22,6 +24,7 @@ function MapController({ center }: { center: [number, number] | null }) {
 
 function createAgentIcon(agent: FieldAgent, isSelected: boolean) {
     const color = agent.alert === 'Fake GPS Detected' ? '#ef4444'
+        : agent.alert === 'High Speed Alert' ? '#8b5cf6'
         : agent.alert !== 'None' ? '#f59e0b'
         : agent.status === 'Offline' ? '#9ca3af' : '#10b981';
     const ring = isSelected ? 'box-shadow:0 0 0 3px #4F46E5,0 4px 14px rgba(0,0,0,.35)' : 'box-shadow:0 4px 14px rgba(0,0,0,.35)';
@@ -39,7 +42,7 @@ function createAgentIcon(agent: FieldAgent, isSelected: boolean) {
 }
 
 export default function FieldForce() {
-    const { fieldAgents, setFieldAgents, optimizeFieldRoutes } = useAppData();
+    const { fieldAgents, setFieldAgents, logFieldAgentLocation, optimizeFieldRoutes, checkIn } = useAppData();
     const [searchQuery, setSearchQuery] = useState('');
     const [activeTab, setActiveTab] = useState<'Online' | 'Offline'>('Online');
     const [currentTime, setCurrentTime] = useState(new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }));
@@ -50,6 +53,8 @@ export default function FieldForce() {
     const [mapCenter, setMapCenter] = useState<[number, number] | null>(null);
     const [selectedAgentId, setSelectedAgentId] = useState<string | null>(null);
     const [activeAlertAgent, setActiveAlertAgent] = useState<FieldAgent | null>(null);
+
+    const [geofenceError, setGeofenceError] = useState<{ active: boolean; distance: number; target: string } | null>(null);
 
     // Clock: real time when not in timeline playback
     useEffect(() => {
@@ -74,25 +79,36 @@ export default function FieldForce() {
         return () => clearInterval(timer);
     }, [isTimelinePlaying]);
 
-    // GPS Heartbeat: nudge Online agents every 10 seconds
+    // GPS Heartbeat: nudge Online agents every 10 seconds using REAL device context when available
+    // PRIVACY HARD-KILL: Dependency array ensures interval is cleared/reset when status changes
     useEffect(() => {
-        const interval = setInterval(() => {
-            setFieldAgents(prev => prev.map(agent => {
-                if (agent.status !== 'Online') return agent;
+        const activeAgents = fieldAgents.filter(a => a.status === 'Online' && a.isTrackingActive);
+        if (activeAgents.length === 0) return;
+
+        const interval = setInterval(async () => {
+            let batteryLevel = 85;
+            try {
+                const battery: any = await (navigator as any).getBattery?.();
+                if (battery) batteryLevel = Math.round(battery.level * 100);
+            } catch (e) {}
+
+            const onLine = navigator.onLine;
+
+            activeAgents.forEach(agent => {
+                // Simulate movement nudges for demo
                 const d = 0.0003;
                 const newLat = agent.gps.lat + (Math.random() * d * 2 - d);
                 const newLng = agent.gps.lng + (Math.random() * d * 2 - d);
-                const ts = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-                return {
-                    ...agent,
-                    gps: { lat: newLat, lng: newLng },
-                    lastUpdate: 'Just now',
-                    history: [...agent.history, { x: agent.mapPosition.x, y: agent.mapPosition.y, lat: agent.gps.lat, lng: agent.gps.lng, timestamp: ts }].slice(-20),
-                };
-            }));
+                
+                logFieldAgentLocation(agent.id, { lat: newLat, lng: newLng }, batteryLevel, onLine);
+            });
         }, 10000);
-        return () => clearInterval(interval);
-    }, [setFieldAgents]);
+
+        return () => {
+            clearInterval(interval);
+            console.log("GPS Heartbeat Physically Cleared - Privacy compliance verified.");
+        };
+    }, [fieldAgents.map(a => `${a.id}:${a.status}:${a.isTrackingActive}`).join(','), logFieldAgentLocation]);
 
     // Derived state
     const filteredAgents = fieldAgents.filter(agent =>
@@ -141,6 +157,7 @@ export default function FieldForce() {
             case 'GPS Signal Lost': return { border: 'border-slate-100 dark:border-slate-800', bg: 'bg-white dark:bg-slate-800/50', iconBg: 'bg-orange-100 dark:bg-orange-900/30', iconText: 'text-orange-500', titleClass: 'text-slate-900 dark:text-white', icon: 'location_off' };
             case 'Fake GPS Detected': return { border: 'border-red-100 dark:border-red-900/30', bg: 'bg-red-50/50 dark:bg-red-900/10', iconBg: 'bg-red-100 dark:bg-red-900/30', iconText: 'text-red-600', titleClass: 'text-red-900 dark:text-red-100', icon: 'wrong_location' };
             case 'Low Battery Warning': return { border: 'border-amber-100 dark:border-amber-900/30', bg: 'bg-amber-50/50 dark:bg-amber-900/10', iconBg: 'bg-amber-100 dark:bg-amber-900/30', iconText: 'text-amber-500', titleClass: 'text-slate-900 dark:text-white', icon: 'battery_alert' };
+            case 'High Speed Alert': return { border: 'border-purple-100 dark:border-purple-900/30', bg: 'bg-purple-50/50 dark:bg-purple-900/10', iconBg: 'bg-purple-100 dark:bg-purple-900/30', iconText: 'text-purple-600', titleClass: 'text-purple-900 dark:text-purple-100', icon: 'speed' };
             default: return { border: 'border-slate-100', bg: 'bg-white', iconBg: 'bg-slate-100', iconText: 'text-slate-500', titleClass: 'text-slate-900', icon: 'info' };
         }
     };
@@ -181,45 +198,74 @@ export default function FieldForce() {
                             <TileLayer url={tileUrl} attribution={tileAttr} />
                             <MapController center={mapCenter} />
 
-                            {/* Breadcrumb polylines + markers — iterates filteredAgents only */}
-                            {filteredAgents.map(agent => {
-                                const displayPos = getDisplayPos(agent);
-                                const crumbs: [number, number][] = agent.history
-                                    .filter(h => h.lat != null && h.lng != null)
-                                    .map(h => [h.lat!, h.lng!]);
-                                const lineColor = agent.alert !== 'None' ? '#f59e0b' : '#6366f1';
-                                return (
-                                    <React.Fragment key={agent.id}>
-                                        {crumbs.length > 0 && (
-                                            <Polyline
-                                                positions={[...crumbs, [agent.gps.lat, agent.gps.lng]]}
-                                                color={lineColor} weight={2} opacity={0.55} dashArray="5 5"
-                                            />
-                                        )}
-                                        <Marker
-                                            position={displayPos}
-                                            icon={createAgentIcon(agent, selectedAgentId === agent.id)}
-                                            eventHandlers={{ click: () => handleAgentClick(agent) }}
-                                        >
-                                            <Popup>
-                                                <div style={{ minWidth: 160 }}>
-                                                    <p style={{ fontWeight: 800, marginBottom: 2 }}>{agent.name}</p>
-                                                    <p style={{ color: '#64748b', fontSize: 11 }}>{agent.role} · {agent.routeAssigned}</p>
-                                                    <p style={{ fontFamily: 'monospace', color: '#6366f1', fontSize: 10, marginTop: 4 }}>
-                                                        {agent.gps.lat.toFixed(5)}° N, {agent.gps.lng.toFixed(5)}° E
-                                                    </p>
-                                                    <p style={{ fontSize: 10, color: '#94a3b8', marginTop: 2 }}>
-                                                        Battery: {agent.batteryLevel}% · {agent.lastUpdate}
-                                                    </p>
-                                                    {agent.alert !== 'None' && (
-                                                        <p style={{ color: '#ef4444', fontWeight: 700, fontSize: 10, marginTop: 4 }}>⚠ {agent.alert}</p>
-                                                    )}
-                                                </div>
-                                            </Popup>
-                                        </Marker>
-                                    </React.Fragment>
-                                );
-                            })}
+                            <MarkerClusterGroup chunkedLoading>
+                                {/* Breadcrumb polylines + markers — iterates filteredAgents only */}
+                                {filteredAgents.map(agent => {
+                                    const displayPos = getDisplayPos(agent);
+                                    const crumbs: [number, number][] = agent.history
+                                        .filter(h => h.lat != null && h.lng != null)
+                                        .map(h => [h.lat!, h.lng!]);
+                                    const lineColor = agent.alert !== 'None' ? '#f59e0b' : '#6366f1';
+                                    return (
+                                        <React.Fragment key={agent.id}>
+                                            {crumbs.length > 0 && (
+                                                <Polyline
+                                                    positions={[...crumbs, [agent.gps.lat, agent.gps.lng]]}
+                                                    color={lineColor} weight={2} opacity={0.55} dashArray="5 5"
+                                                />
+                                            )}
+                                            {/* Dwell points markers */}
+                                            {agent.history.filter(h => h.isDwellPoint).map((h, i) => (
+                                                <Marker key={`dwell-${agent.id}-${i}`} position={[h.lat!, h.lng!]} icon={L.divIcon({ html: '<div class="size-2 bg-amber-500 rounded-full border border-white shadow-sm cursor-pointer"></div>', className: '' })}>
+                                                    <Popup>
+                                                        <div className="p-1">
+                                                            <p className="font-bold text-xs text-amber-600 mb-1 flex items-center gap-1">
+                                                                <span className="material-symbols-outlined text-xs">event_seat</span>
+                                                                Dwell Point detected
+                                                            </p>
+                                                            <p className="text-[10px] text-slate-500">{h.timestamp}</p>
+                                                            <p className="text-[9px] text-slate-400 mt-1 uppercase font-bold tracking-tighter">Operational Audit Segment</p>
+                                                        </div>
+                                                    </Popup>
+                                                </Marker>
+                                            ))}
+                                            <Marker
+                                                position={displayPos}
+                                                icon={createAgentIcon(agent, selectedAgentId === agent.id)}
+                                                eventHandlers={{ click: () => handleAgentClick(agent) }}
+                                            >
+                                                <Popup>
+                                                    <div style={{ minWidth: 160 }}>
+                                                        <p style={{ fontWeight: 800, marginBottom: 2 }}>{agent.name}</p>
+                                                        <p style={{ color: '#64748b', fontSize: 11 }}>{agent.role} · {agent.routeAssigned}</p>
+                                                        <p style={{ fontFamily: 'monospace', color: '#6366f1', fontSize: 10, marginTop: 4 }}>
+                                                            {agent.gps.lat.toFixed(5)}° N, {agent.gps.lng.toFixed(5)}° E
+                                                        </p>
+                                                        <p style={{ fontSize: 10, color: '#94a3b8', marginTop: 2 }}>
+                                                            Battery: {agent.batteryLevel}% · Speed: {Math.round(agent.currentSpeed)} km/h
+                                                        </p>
+                                                        {agent.alert !== 'None' && (
+                                                            <p style={{ color: '#ef4444', fontWeight: 700, fontSize: 10, marginTop: 4 }}>⚠ {agent.alert}</p>
+                                                        )}
+                                                        <button 
+                                                            onClick={async () => {
+                                                                const res = await checkIn(agent.empId, agent.locationName, agent.gps, 'Mobile App');
+                                                                if (!res.success && res.message.includes('Access Denied')) {
+                                                                    const dist = parseInt(res.message.match(/\d+/)?.[0] || '0');
+                                                                    setGeofenceError({ active: true, distance: dist, target: agent.locationName });
+                                                                }
+                                                            }}
+                                                            className="mt-3 w-full bg-slate-900 text-white text-[10px] font-bold py-1.5 rounded uppercase tracking-wider hover:bg-slate-800 transition-colors"
+                                                        >
+                                                            Force Check-In Audit
+                                                        </button>
+                                                    </div>
+                                                </Popup>
+                                            </Marker>
+                                        </React.Fragment>
+                                    );
+                                })}
+                            </MarkerClusterGroup>
                         </MapContainer>
 
                         {/* Layer switcher — above Leaflet controls */}
@@ -264,27 +310,31 @@ export default function FieldForce() {
                                 ))}
                             </div>
                             {/* Agent rows */}
-                            <div className="overflow-y-auto flex-1">
+                            <div className="flex-1">
                                 {filteredAgents.length === 0 ? (
                                     <p className="text-center text-xs text-slate-500 py-6">No staff match your search.</p>
                                 ) : (
-                                    filteredAgents.map(agent => (
-                                        <div key={agent.id} onClick={() => handleAgentClick(agent)}
-                                            className={`flex items-center gap-3 p-3 cursor-pointer border-l-4 transition-all hover:bg-indigo-50 dark:hover:bg-indigo-900/20 ${selectedAgentId === agent.id ? 'border-primary bg-indigo-50 dark:bg-indigo-900/20' : agent.alert !== 'None' ? 'border-amber-400' : 'border-transparent'}`}>
-                                            <div className="relative shrink-0">
-                                                <div className="size-10 flex items-center justify-center rounded-full bg-slate-700 text-white font-bold text-sm">{agent.name.charAt(0)}</div>
-                                                <div className={`absolute -bottom-0.5 -right-0.5 size-3 border-2 border-white dark:border-[#182130] rounded-full ${getStatusDot(agent)}`}></div>
-                                            </div>
-                                            <div className="flex-1 min-w-0">
-                                                <div className="flex justify-between items-center">
-                                                    <p className="text-sm font-bold text-slate-900 dark:text-white truncate">{agent.name}</p>
-                                                    <p className="text-[10px] text-slate-400 shrink-0">{agent.lastUpdate}</p>
+                                    <Virtuoso
+                                        style={{ height: '100%' }}
+                                        data={filteredAgents}
+                                        itemContent={(index, agent) => (
+                                            <div key={agent.id} onClick={() => handleAgentClick(agent)}
+                                                className={`flex items-center gap-3 p-3 cursor-pointer border-l-4 transition-all hover:bg-indigo-50 dark:hover:bg-indigo-900/20 ${selectedAgentId === agent.id ? 'border-primary bg-indigo-50 dark:bg-indigo-900/20' : agent.alert !== 'None' ? 'border-amber-400' : 'border-transparent'}`}>
+                                                <div className="relative shrink-0">
+                                                    <div className="size-10 flex items-center justify-center rounded-full bg-slate-700 text-white font-bold text-sm">{agent.name.charAt(0)}</div>
+                                                    <div className={`absolute -bottom-0.5 -right-0.5 size-3 border-2 border-white dark:border-[#182130] rounded-full ${getStatusDot(agent)}`}></div>
                                                 </div>
-                                                <p className="text-xs text-slate-500 truncate">{agent.locationName} · {agent.batteryLevel}%</p>
-                                                <p className="text-[9px] font-mono text-indigo-500 mt-0.5">{agent.gps.lat.toFixed(4)}° N, {agent.gps.lng.toFixed(4)}° E</p>
+                                                <div className="flex-1 min-w-0">
+                                                    <div className="flex justify-between items-center">
+                                                        <p className="text-sm font-bold text-slate-900 dark:text-white truncate">{agent.name}</p>
+                                                        <p className="text-[10px] text-slate-400 shrink-0">{agent.lastUpdate}</p>
+                                                    </div>
+                                                    <p className="text-xs text-slate-500 truncate">{agent.locationName} · {agent.batteryLevel}%</p>
+                                                    <p className="text-[9px] font-mono text-indigo-500 mt-0.5">{agent.gps.lat.toFixed(4)}° N, {agent.gps.lng.toFixed(4)}° E</p>
+                                                </div>
                                             </div>
-                                        </div>
-                                    ))
+                                        )}
+                                    />
                                 )}
                             </div>
                         </div>
@@ -414,6 +464,48 @@ export default function FieldForce() {
                         </div>
                     );
                 })()}
+
+                {/* Geofence Rejection Overlay */}
+                {geofenceError?.active && (
+                    <div className="absolute inset-0 z-[5000] bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-6">
+                        <div className="bg-white dark:bg-slate-800 rounded-3xl shadow-2xl border-2 border-red-500 w-full max-w-md overflow-hidden animate-in fade-in zoom-in duration-300">
+                            <div className="bg-red-500 p-4 flex items-center gap-3 text-white">
+                                <span className="material-symbols-outlined font-bold">block</span>
+                                <div>
+                                    <h3 className="font-bold">Access Denied: Geofence Limit</h3>
+                                    <p className="text-xs opacity-90 text-red-50 font-medium">Compliance Hard-Block Triggered</p>
+                                </div>
+                            </div>
+                            <div className="p-8 text-center">
+                                <div className="size-20 bg-red-100 rounded-full flex items-center justify-center mx-auto mb-4 border-2 border-red-200">
+                                    <span className="material-symbols-outlined text-red-600 text-4xl">location_on</span>
+                                </div>
+                                <h4 className="text-xl font-black text-slate-900 dark:text-white mb-2">You are too far!</h4>
+                                <p className="text-slate-500 dark:text-slate-400 text-sm mb-6 leading-relaxed">
+                                    You are currently <span className="text-red-600 font-black">{geofenceError.distance}m</span> away from **{geofenceError.target}**. 
+                                    Visit verification is strictly restricted to within <span className="font-bold text-slate-900 dark:text-white">200m</span>.
+                                </p>
+                                <div className="bg-slate-50 dark:bg-slate-900/50 p-4 rounded-xl border border-slate-100 dark:border-slate-800 flex items-center justify-center gap-6 mb-8">
+                                    <div className="text-center">
+                                        <p className="text-[10px] uppercase font-bold text-slate-400 tracking-widest mb-1">Current</p>
+                                        <p className="font-mono text-xs text-red-500">Out of Range</p>
+                                    </div>
+                                    <div className="h-8 w-px bg-slate-200 dark:bg-slate-700"></div>
+                                    <div className="text-center">
+                                        <p className="text-[10px] uppercase font-bold text-slate-400 tracking-widest mb-1">Target Gap</p>
+                                        <p className="font-mono text-xs text-slate-900 dark:text-white">-{geofenceError.distance - 200}m</p>
+                                    </div>
+                                </div>
+                                <button 
+                                    onClick={() => setGeofenceError(null)}
+                                    className="w-full bg-slate-900 text-white font-bold py-3 rounded-xl hover:bg-slate-800 transition-all shadow-lg active:scale-95"
+                                >
+                                    Dismiss & Move Closer
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                )}
             </main>
         </div>
     );

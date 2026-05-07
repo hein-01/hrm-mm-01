@@ -5,12 +5,16 @@ import Header from '../components/Header';
 import { useAppData } from '../context/AppDataContext';
 import { useSystemCalendar } from '../context/SystemCalendarContext';
 import { countWorkingDays } from '../utils/leaveBalance';
+import { useNotifications } from '../context/NotificationProvider';
+import { useApprovals } from '../context/ApprovalContext';
 
 export default function LeaveRequests() {
     const { leaveRequests, approveLeave, rejectLeave, addLeaveRequest, employees, holidays, policies, isAdmin } = useAppData();
+    const { createApprovalRequest } = useApprovals();
     const ADMIN_ID = 'ADM-001';
     const isCurrentUserAdmin = isAdmin(ADMIN_ID);
     const { parseGregorianDate, getFormattedDate } = useSystemCalendar();
+    const { pushNotification } = useNotifications();
     const [activeFilter, setActiveFilter] = useState('All');
     const [searchQuery, setSearchQuery] = useState('');
     const [selectedIds, setSelectedIds] = useState<string[]>([]);
@@ -24,6 +28,7 @@ export default function LeaveRequests() {
     const [bulkToast, setBulkToast] = useState<{ count: number, days: number } | null>(null);
     const [historyTarget, setHistoryTarget] = useState<string | null>(null);
     const [relieverSearch, setRelieverSearch] = useState('');
+    const [relieverDropdownOpen, setRelieverDropdownOpen] = useState(false);
     const [certFileName, setCertFileName] = useState<string | null>(null);
 
     // Form State
@@ -49,10 +54,21 @@ export default function LeaveRequests() {
 
     const handleStatusChange = (id: string, newStatus: string) => {
         if (newStatus === 'Approved') {
+            const req = leaveRequests.find(r => r.id === id);
             const result = approveLeave(id, ADMIN_ID);
             if (!result.success) {
                 setErrorMsg(result.message);
                 setTimeout(() => setErrorMsg(null), 5000);
+            } else if (req) {
+                pushNotification({
+                    title: 'Leave Request Approved ✅',
+                    body: `${req.name}'s ${req.type} Leave (${req.durationStr}, ${req.totalDays} day${req.totalDays !== 1 ? 's' : ''}) has been approved.`,
+                    category: 'HR', priority: 'high',
+                    icon: 'beach_access',
+                    iconBg: 'bg-blue-100 dark:bg-blue-900/30', iconColor: 'text-blue-600 dark:text-blue-400',
+                    actionRoute: '/leave-requests', actionLabel: 'View Leave',
+                    badge: 'Approved', badgeColor: 'blue', empId: req.empId, sourceId: id,
+                });
             }
         } else if (newStatus === 'Rejected') {
             setRejectTarget({ ids: [id], isBulk: false });
@@ -60,10 +76,21 @@ export default function LeaveRequests() {
     };
 
     const handleForceApprove = (id: string) => {
+        const req = leaveRequests.find(r => r.id === id);
         const result = approveLeave(id, ADMIN_ID, true);
         if (!result.success) {
             setErrorMsg(result.message);
             setTimeout(() => setErrorMsg(null), 5000);
+        } else if (req) {
+            pushNotification({
+                title: 'Admin Override: Leave Approved ⚡',
+                body: `${req.name}'s ${req.type} Leave was force-approved (conflict override) by admin.`,
+                category: 'HR', priority: 'high',
+                icon: 'admin_panel_settings',
+                iconBg: 'bg-amber-100 dark:bg-amber-900/30', iconColor: 'text-amber-600 dark:text-amber-400',
+                actionRoute: '/leave-requests', actionLabel: 'View Leave',
+                badge: 'Override', badgeColor: 'amber', empId: req.empId, sourceId: id,
+            });
         }
     };
 
@@ -89,6 +116,15 @@ export default function LeaveRequests() {
         if (successCount > 0) {
             setBulkToast({ count: successCount, days: totalDaysDeducted });
             setTimeout(() => setBulkToast(null), 5000);
+            pushNotification({
+                title: `${successCount} Leave Request${successCount !== 1 ? 's' : ''} Approved`,
+                body: `Bulk approval processed: ${successCount} request${successCount !== 1 ? 's' : ''}, ${totalDaysDeducted} working day${totalDaysDeducted !== 1 ? 's' : ''} deducted from balances.`,
+                category: 'HR', priority: 'normal',
+                icon: 'done_all',
+                iconBg: 'bg-blue-100 dark:bg-blue-900/30', iconColor: 'text-blue-600 dark:text-blue-400',
+                actionRoute: '/leave-requests', actionLabel: 'View All',
+                badge: `${successCount} Approved`, badgeColor: 'blue',
+            });
         }
         if (errors.length > 0) {
             setErrorMsg(`${errors.length} request(s) could not be processed: ${errors[0]}`);
@@ -112,10 +148,27 @@ export default function LeaveRequests() {
     const confirmRejection = () => {
         if (!rejectReason.trim() || !rejectTarget) return;
         const errors: string[] = [];
+        const rejectedNames: string[] = [];
         rejectTarget.ids.forEach(id => {
+            const req = leaveRequests.find(r => r.id === id);
             const result = rejectLeave(id, ADMIN_ID, rejectReason.trim());
             if (!result.success) errors.push(result.message);
+            else if (req) rejectedNames.push(req.name);
         });
+        if (rejectedNames.length > 0) {
+            const isBulk = rejectedNames.length > 1;
+            pushNotification({
+                title: isBulk ? `${rejectedNames.length} Leave Requests Rejected` : `Leave Request Rejected`,
+                body: isBulk
+                    ? `${rejectedNames.slice(0, 2).join(', ')}${rejectedNames.length > 2 ? ` +${rejectedNames.length - 2} more` : ''} — Reason: ${rejectReason.trim()}`
+                    : `${rejectedNames[0]}'s leave request was rejected. Reason: ${rejectReason.trim()}`,
+                category: 'HR', priority: 'normal',
+                icon: 'cancel',
+                iconBg: 'bg-rose-100 dark:bg-rose-900/30', iconColor: 'text-rose-600 dark:text-rose-400',
+                actionRoute: '/leave-requests', actionLabel: 'View Requests',
+                badge: 'Rejected', badgeColor: 'rose',
+            });
+        }
         if (errors.length > 0) {
             setErrorMsg(`${errors.length} rejection(s) failed: ${errors[0]}`);
             setTimeout(() => setErrorMsg(null), 7000);
@@ -187,7 +240,18 @@ export default function LeaveRequests() {
             return;
         }
 
+        // Balance Check Warning
+        const balanceFreeTypes = ['Unpaid', 'Maternity', 'Paternity'];
+        if (!balanceFreeTypes.includes(newRequest.type)) {
+            const currentBalance = emp.leaveBalances?.[newRequest.type] ?? 0;
+            if (currentBalance < diffDays) {
+                setErrorMsg(`Insufficient Balance: You have ${currentBalance} day(s) of ${newRequest.type} leave, but requested ${diffDays} day(s).`);
+                return;
+            }
+        }
+
         try {
+            const newId = `LR-${Date.now()}`;
             addLeaveRequest({
                 empId: newRequest.empId,
                 name: emp.name,
@@ -207,6 +271,24 @@ export default function LeaveRequests() {
                 priority: 'Medium',
                 category: 'Attendance'
             });
+            
+            // Create approval workflow
+            createApprovalRequest({
+                requestId: newId,
+                requestType: 'Leave',
+                requesterId: newRequest.empId,
+                requesterName: emp.name,
+                requesterDept: emp.dept,
+                metadata: {
+                    type: newRequest.type,
+                    dates: `${newRequest.startDate} – ${newRequest.endDate}`,
+                    days: diffDays,
+                    reason: newRequest.reason,
+                },
+                peerId: newRequest.relieverId,
+                peerName: reliever.name,
+            });
+            
             setIsModalOpen(false);
             setNewRequest({ empId: '', type: 'Casual', startDate: '', endDate: '', relieverId: '', reason: '', hasCert: false, isAdminOverride: false });
             setCertFileName(null);
@@ -294,7 +376,7 @@ export default function LeaveRequests() {
                                 <span className="material-symbols-outlined text-[18px]">download</span>
                                 <span>Export CSV</span>
                             </button>
-                            <button onClick={() => setIsModalOpen(true)} className="flex items-center gap-2 px-4 py-2 text-white text-xs font-bold rounded-lg hover:opacity-90 transition-all shadow-sm bg-[#4F46E5]">
+                            <button onClick={() => { setErrorMsg(null); setIsModalOpen(true); }} className="flex items-center gap-2 px-4 py-2 text-white text-xs font-bold rounded-lg hover:opacity-90 transition-all shadow-sm bg-[#4F46E5]">
                                 <span className="material-symbols-outlined text-[18px]">add</span>
                                 <span>Request Leave</span>
                             </button>
@@ -391,7 +473,7 @@ export default function LeaveRequests() {
                                                 checked={filteredRequests.length > 0 && selectedIds.length === filteredRequests.length}
                                             />
                                         </th>
-                                        <th className="px-6 py-4 text-xs font-bold text-slate-500 uppercase tracking-wider sticky left-[62px] z-20 bg-slate-50 shadow-[4px_0_10px_-4px_rgba(0,0,0,0.1)]">Employee</th>
+                                        <th className="px-6 py-4 text-xs font-bold text-slate-500 uppercase tracking-wider sticky left-[62px] z-20 bg-slate-50 dark:bg-slate-800/50 shadow-[4px_0_10px_-4px_rgba(0,0,0,0.1)] min-w-[200px]">Employee</th>
                                         <th className="px-6 py-4 text-xs font-bold text-slate-500 uppercase tracking-wider">Request Details</th>
                                         <th className="px-6 py-4 text-xs font-bold text-slate-500 uppercase tracking-wider">Leave Type</th>
                                         <th className="px-6 py-4 text-xs font-bold text-slate-500 uppercase tracking-wider">Duration</th>
@@ -405,7 +487,7 @@ export default function LeaveRequests() {
                                         const hasConflict = checkConflict(req);
                                         return (
                                         <tr key={req.id} className={`hover:bg-slate-50 transition-colors ${selectedIds.includes(req.id) ? 'bg-indigo-50/50' : ''} ${hasConflict && req.status === 'Pending' ? 'border-l-4 border-l-red-500 bg-red-50/30' : ''}`}>
-                                            <td className="px-6 py-4 sticky left-0 z-10 bg-inherit sticky-col">
+                                            <td className="px-6 py-4 sticky left-0 z-10 bg-white dark:bg-slate-900 sticky-col">
                                                 <input
                                                     className="rounded border-slate-300 text-[#4F46E5] focus:ring-[#4F46E5] cursor-pointer"
                                                     type="checkbox"
@@ -413,7 +495,7 @@ export default function LeaveRequests() {
                                                     onChange={() => handleSelectRow(req.id)}
                                                 />
                                             </td>
-                                            <td className="px-6 py-4 sticky left-[62px] z-10 bg-inherit shadow-[4px_0_10px_-4px_rgba(0,0,0,0.1)]">
+                                            <td className="px-6 py-4 sticky left-[62px] z-10 bg-white dark:bg-slate-900 shadow-[4px_0_10px_-4px_rgba(0,0,0,0.1)] min-w-[200px]">
                                                 <div className="flex items-center gap-3">
                                                     {req.avatar ? (
                                                         <div className="h-10 w-10 rounded-full bg-slate-200 bg-cover bg-center" style={{ backgroundImage: `url('${req.avatar}')` }}></div>
@@ -559,37 +641,78 @@ export default function LeaveRequests() {
                             </button>
                         </div>
                         <div className="p-6 space-y-4 max-h-[60vh] overflow-y-auto custom-scrollbar text-left text-slate-900 dark:text-slate-100">
+                            {errorMsg && (
+                                <div className="bg-red-50 border border-red-200 rounded-lg p-3 flex items-start gap-2 animate-shake">
+                                    <span className="material-symbols-outlined text-red-600 text-[18px]">error</span>
+                                    <p className="text-xs text-red-800 font-bold flex-1">{errorMsg}</p>
+                                    <button onClick={() => setErrorMsg(null)} className="text-red-400 hover:text-red-700">
+                                        <span className="material-symbols-outlined text-[16px]">close</span>
+                                    </button>
+                                </div>
+                            )}
                             <div className="grid grid-cols-2 gap-4 text-slate-900 dark:text-slate-100">
                                 <div className="space-y-1">
                                     <label className="text-[10px] font-bold uppercase text-slate-500">Applicant ID</label>
                                     <input value={newRequest.empId} onChange={e => setNewRequest({...newRequest, empId: e.target.value})} type="text" className="w-full text-sm p-2 border border-slate-200 rounded text-slate-900" placeholder="EMP-001" />
                                 </div>
-                                <div className="space-y-1">
+                                <div className="space-y-1 relative">
                                     <label className="text-[10px] font-bold uppercase text-slate-500">Reliever</label>
-                                    <input
-                                        type="text"
-                                        value={relieverSearch}
-                                        onChange={e => setRelieverSearch(e.target.value)}
-                                        className="w-full text-sm p-2 border border-slate-200 rounded text-slate-900"
-                                        placeholder="Search by name or ID..."
-                                    />
-                                    <select
-                                        value={newRequest.relieverId}
-                                        onChange={e => setNewRequest({...newRequest, relieverId: e.target.value})}
-                                        size={4}
-                                        className="w-full text-sm border border-slate-200 rounded text-slate-900 overflow-y-auto"
-                                    >
-                                        <option value="">— Select a reliever —</option>
-                                        {employees
+                                    {(() => {
+                                        const selectedReliever = employees.find(e => e.id === newRequest.relieverId);
+                                        const filtered = employees
                                             .filter(e => e.id !== newRequest.empId && e.status === 'Active' && (
                                                 !relieverSearch ||
                                                 e.name.toLowerCase().includes(relieverSearch.toLowerCase()) ||
                                                 e.id.toLowerCase().includes(relieverSearch.toLowerCase())
                                             ))
                                             .sort((a, b) => a.name.localeCompare(b.name))
-                                            .map(e => <option key={e.id} value={e.id}>{e.name} ({e.id}) — {e.dept}</option>)
-                                        }
-                                    </select>
+                                            .slice(0, 50);
+                                        return (
+                                            <>
+                                                <div className="relative">
+                                                    <input
+                                                        type="text"
+                                                        value={relieverDropdownOpen ? relieverSearch : (selectedReliever ? `${selectedReliever.name} (${selectedReliever.id})` : relieverSearch)}
+                                                        onChange={e => { setRelieverSearch(e.target.value); setRelieverDropdownOpen(true); }}
+                                                        onFocus={() => setRelieverDropdownOpen(true)}
+                                                        onBlur={() => setTimeout(() => setRelieverDropdownOpen(false), 150)}
+                                                        className="w-full text-sm p-2 pr-8 border border-slate-200 rounded text-slate-900"
+                                                        placeholder="Search by name or ID..."
+                                                    />
+                                                    {selectedReliever && !relieverDropdownOpen && (
+                                                        <button
+                                                            type="button"
+                                                            onMouseDown={(e) => { e.preventDefault(); setNewRequest(prev => ({...prev, relieverId: ''})); setRelieverSearch(''); }}
+                                                            className="absolute right-2 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600"
+                                                        >
+                                                            <span className="material-symbols-outlined text-[16px]">close</span>
+                                                        </button>
+                                                    )}
+                                                </div>
+                                                {relieverDropdownOpen && (
+                                                    <div className="absolute left-0 right-0 top-full mt-1 z-20 bg-white border border-slate-200 rounded shadow-lg max-h-48 overflow-y-auto">
+                                                        {filtered.length === 0 ? (
+                                                            <div className="px-3 py-2 text-xs text-slate-400">No employees match.</div>
+                                                        ) : filtered.map(e => (
+                                                            <button
+                                                                key={e.id}
+                                                                type="button"
+                                                                onMouseDown={(ev) => {
+                                                                    ev.preventDefault();
+                                                                    setNewRequest(prev => ({...prev, relieverId: e.id}));
+                                                                    setRelieverSearch('');
+                                                                    setRelieverDropdownOpen(false);
+                                                                }}
+                                                                className={`w-full text-left px-3 py-1.5 text-xs hover:bg-indigo-50 ${newRequest.relieverId === e.id ? 'bg-indigo-50 font-bold' : ''}`}
+                                                            >
+                                                                {e.name} <span className="text-slate-400">({e.id})</span> — <span className="text-slate-500">{e.dept}</span>
+                                                            </button>
+                                                        ))}
+                                                    </div>
+                                                )}
+                                            </>
+                                        );
+                                    })()}
                                 </div>
                             </div>
                             <div className="space-y-1">
@@ -604,7 +727,7 @@ export default function LeaveRequests() {
                                         return <span className={`text-[10px] font-bold ${bal === 0 ? 'text-red-500' : 'text-emerald-600'}`}>Available: {bal} day{bal !== 1 ? 's' : ''}</span>;
                                     })()}
                                 </div>
-                                <select value={newRequest.type} onChange={e => setNewRequest({...newRequest, type: e.target.value})} className="w-full text-sm p-2 border border-slate-200 rounded text-slate-900">
+                                <select value={newRequest.type} onChange={e => { setNewRequest({...newRequest, type: e.target.value}); setErrorMsg(null); }} className="w-full text-sm p-2 border border-slate-200 rounded text-slate-900">
                                     <option>Casual</option>
                                     <option>Medical</option>
                                     <option>Earned</option>

@@ -26,28 +26,63 @@ export default function LandingPage() {
     return (
         <div className="bg-slate-50 text-slate-900 font-sans selection:bg-indigo-100 selection:text-indigo-700 min-h-screen">
             <style>{`
+                @import url('https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;600;800&display=swap');
+                
+                :root {
+                    --brand-primary: #4F46E5;
+                    --brand-secondary: #818CF8;
+                    --glass: rgba(255, 255, 255, 0.7);
+                }
+
+                body {
+                    font-family: 'Outfit', sans-serif;
+                }
+
+                .mesh-bg {
+                    background-color: #f8fafc;
+                    background-image: 
+                        radial-gradient(at 0% 0%, hsla(253,16%,7%,1) 0, transparent 50%), 
+                        radial-gradient(at 50% 0%, hsla(225,39%,30%,1) 0, transparent 50%), 
+                        radial-gradient(at 100% 0%, hsla(339,49%,30%,1) 0, transparent 50%);
+                    background-attachment: fixed;
+                }
+
                 .reveal {
                     opacity: 0;
-                    transform: translateY(30px);
-                    transition: all 0.8s ease-out;
+                    transform: translateY(40px);
+                    transition: all 1s cubic-bezier(0.22, 1, 0.36, 1);
                 }
                 .reveal.active {
                     opacity: 1;
                     transform: translateY(0);
                 }
                 .marquee {
-                    animation: marquee 25s linear infinite;
+                    animation: marquee 40s linear infinite;
                 }
                 .float {
-                    animation: float 6s ease-in-out infinite;
+                    animation: float 8s ease-in-out infinite;
+                }
+                .glass {
+                    background: var(--glass);
+                    backdrop-filter: blur(12px);
+                    -webkit-backdrop-filter: blur(12px);
+                    border: 1px solid rgba(255, 255, 255, 0.3);
+                }
+                .text-gradient {
+                    background: linear-gradient(135deg, #4F46E5 0%, #EC4899 100%);
+                    -webkit-background-clip: text;
+                    -webkit-text-fill-color: transparent;
                 }
                 @keyframes marquee {
                     0% { transform: translateX(0%); }
-                    100% { transform: translateX(-100%); }
+                    100% { transform: translateX(-50%); }
                 }
                 @keyframes float {
-                    0%, 100% { transform: translateY(0); }
-                    50% { transform: translateY(-20px); }
+                    0%, 100% { transform: translateY(0) rotate(0deg); }
+                    50% { transform: translateY(-20px) rotate(2deg); }
+                }
+                .glow-shadow {
+                    box-shadow: 0 0 20px rgba(79, 70, 229, 0.2);
                 }
             `}</style>
             {/* BEGIN: Navigation */}
@@ -74,95 +109,122 @@ export default function LandingPage() {
 
             {/* BEGIN: HeroSection */}
             <section className="relative pt-32 pb-20 overflow-hidden lg:min-h-screen flex items-center">
+                {/* Dynamic Background Elements */}
+                <div className="absolute top-0 right-0 -z-10 w-[600px] h-[600px] bg-indigo-100/30 rounded-full blur-[120px] -translate-y-1/2 translate-x-1/3"></div>
+                <div className="absolute bottom-0 left-0 -z-10 w-[400px] h-[400px] bg-pink-100/20 rounded-full blur-[100px] translate-y-1/2 -translate-x-1/4"></div>
+
                 <div className="max-w-7xl mx-auto px-6 grid lg:grid-cols-2 gap-16 items-center w-full">
                     <div className="space-y-8">
-                        <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-indigo-50 border border-indigo-100 text-indigo-600 text-xs font-bold tracking-widest uppercase">
+                        <div className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full glass border border-indigo-100 text-indigo-600 text-[10px] font-bold tracking-[0.2em] uppercase shadow-sm">
                             <span className="relative flex h-2 w-2">
                                 <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-indigo-400 opacity-75"></span>
-                                <span className="relative inline-flex rounded-full h-2 w-2 bg-indigo-500"></span>
+                                <span className="relative inline-flex rounded-full h-2 w-2 bg-indigo-600"></span>
                             </span>
-                            AI-First HR Solution
+                            AI-First Governance Hub
                         </div>
-                        <h1 className="text-5xl lg:text-7xl font-extrabold tracking-tight text-slate-900 leading-[1.1]">
-                            HR that <span className="text-transparent bg-clip-text bg-gradient-to-r from-indigo-600 to-indigo-400">Thinks.</span><br />Compliance that <span className="text-transparent bg-clip-text bg-gradient-to-r from-indigo-600 to-indigo-400">Works.</span>
+                        <h1 className="text-6xl lg:text-8xl font-extrabold tracking-[-0.03em] text-slate-900 leading-[0.95]">
+                            Manage <span className="text-gradient">Truth.</span><br />Empower <span className="text-gradient">People.</span>
                         </h1>
-                        <p className="text-xl text-slate-500 max-w-lg leading-relaxed">
-                            Stop chasing paperwork and start leading people. The region’s first AI-driven HRMS designed for the complexities of Singapore and Myanmar.
+                        <p className="text-xl text-slate-500 max-w-lg leading-relaxed font-light">
+                            The region’s first **Governance-Anchored** HRMS. Bridging high-performance operations with automated Singapore & Myanmar compliance.
                         </p>
                         <div className="flex flex-col sm:flex-row gap-4 pt-4">
-                            <Link to="/signup" className="px-8 py-4 bg-indigo-600 text-white font-bold rounded-2xl hover:bg-indigo-700 hover:-translate-y-1 transition-all shadow-xl shadow-indigo-200 text-center">
-                                Get Started for Free
+                            <Link to="/signup" className="px-10 py-5 bg-indigo-600 text-white font-bold rounded-2xl hover:bg-indigo-700 hover:scale-[1.02] active:scale-[0.98] transition-all shadow-2xl shadow-indigo-200 text-center flex items-center justify-center gap-2">
+                                Get Started Free
+                                <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 7l5 5m0 0l-5 5m5-5H6" /></svg>
                             </Link>
-                            <button className="px-8 py-4 bg-white border border-slate-200 text-slate-700 font-bold rounded-2xl hover:bg-slate-50 hover:border-slate-300 transition-all">
-                                Book a Demo
+                            <button className="px-10 py-5 bg-white border border-slate-200 text-slate-700 font-bold rounded-2xl hover:bg-slate-50 hover:border-slate-300 transition-all flex items-center justify-center gap-2">
+                                View Demo
                             </button>
                         </div>
-                        <div className="flex items-center gap-4 text-sm text-slate-400 pt-2">
-                            <div className="flex -space-x-2">
-                                <div className="w-8 h-8 rounded-full bg-slate-200 border-2 border-white"></div>
-                                <div className="w-8 h-8 rounded-full bg-slate-300 border-2 border-white"></div>
-                                <div className="w-8 h-8 rounded-full bg-slate-400 border-2 border-white"></div>
+                        <div className="flex items-center gap-6 text-sm text-slate-400 pt-4">
+                            <div className="flex -space-x-3">
+                                {[1,2,3].map(i => (
+                                    <div key={i} className="w-10 h-10 rounded-full border-4 border-white glass overflow-hidden shadow-sm">
+                                        <div className={`w-full h-full bg-indigo-${i}00`}></div>
+                                    </div>
+                                ))}
                             </div>
-                            <span>Trusted by 500+ Regional Enterprises</span>
+                            <span className="font-medium">Trusted by <span className="text-slate-900 font-bold">1,200+</span> teams across SE-Asia</span>
                         </div>
                     </div>
                     {/* Right Side Visual: Dashboard Mockup */}
-                    <div className="relative lg:h-[600px] flex items-center justify-center lg:justify-end hidden lg:flex">
+                    <div className="relative lg:h-[650px] flex items-center justify-center lg:justify-end hidden lg:flex">
                         {/* Floating KPI Card 1 */}
-                        <div className="absolute top-0 right-10 z-10 w-64 p-6 bg-white rounded-2xl shadow-2xl border border-slate-100 float" style={{ animationDelay: '0s' }}>
-                            <p className="text-slate-400 text-xs font-bold uppercase tracking-wider mb-1">Total Employees</p>
-                            <h3 className="text-3xl font-bold text-slate-900">1,284</h3>
-                            <div className="mt-4 flex items-center gap-2 text-emerald-500 text-sm font-medium">
-                                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M13 7h8m0 0v8m0-8l-8 8-4-4-6 6"></path></svg>
-                                +12% this month
+                        <div className="absolute top-4 right-12 z-20 w-64 p-6 glass rounded-[2rem] shadow-[0_20px_50px_rgba(0,0,0,0.1)] float" style={{ animationDelay: '0s' }}>
+                            <div className="w-10 h-10 bg-indigo-600 rounded-xl flex items-center justify-center mb-4 shadow-lg shadow-indigo-200">
+                                <svg className="w-6 h-6 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z" /></svg>
+                            </div>
+                            <p className="text-slate-400 text-[10px] font-bold uppercase tracking-widest mb-1">Regional Staff</p>
+                            <h3 className="text-3xl font-bold text-slate-900 tracking-tight">1,284</h3>
+                            <div className="mt-4 flex items-center gap-2 text-emerald-500 text-xs font-bold bg-emerald-50/50 w-fit px-2 py-1 rounded-full">
+                                <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="3" d="M5 10l7-7m0 0l7 7m-7-7v18"></path></svg>
+                                12% GROWTH
                             </div>
                         </div>
-                        {/* Floating KPI Card 2 */}
-                        <div className="absolute bottom-10 left-0 z-20 w-72 p-6 bg-white rounded-2xl shadow-2xl border border-slate-100 float" style={{ animationDelay: '2s' }}>
-                            <div className="flex justify-between items-start mb-6">
-                                <p className="text-slate-400 text-xs font-bold uppercase tracking-wider">Attendance Rate</p>
-                                <span className="px-2 py-1 bg-emerald-50 text-emerald-600 text-[10px] font-bold rounded uppercase">Real-time</span>
-                            </div>
-                            <div className="flex items-end gap-2 h-28">
-                                <div className="w-3 h-12 bg-indigo-100 rounded-full"></div>
-                                <div className="w-3 h-16 bg-indigo-100 rounded-full"></div>
-                                <div className="w-3 h-24 bg-indigo-600 rounded-full"></div>
-                                <div className="w-3 h-20 bg-indigo-100 rounded-full"></div>
-                                <div className="w-3 h-28 bg-indigo-100 rounded-full"></div>
-                            </div>
-                            <p className="mt-4 text-2xl font-bold">98.4% <span className="text-sm font-normal text-slate-400">today</span></p>
-                        </div>
+                        
                         {/* Main Dashboard Ghost Mockup */}
-                        <div className="w-full lg:w-[480px] h-[540px] bg-white rounded-3xl shadow-[0_32px_64px_-16px_rgba(0,0,0,0.1)] border border-slate-100 overflow-hidden relative p-8">
-                            <div className="space-y-6">
-                                <div className="flex items-center gap-4">
-                                    <div className="w-10 h-10 rounded-full bg-slate-100"></div>
-                                    <div className="space-y-2">
-                                        <div className="w-32 h-3 bg-slate-100 rounded"></div>
-                                        <div className="w-20 h-2 bg-slate-50 rounded"></div>
-                                    </div>
-                                </div>
-                                <div className="h-[1px] bg-slate-100 w-full"></div>
-                                <div className="space-y-4">
-                                    <div className="w-full h-8 bg-slate-50 rounded-lg"></div>
-                                    <div className="w-full h-8 bg-slate-50 rounded-lg"></div>
-                                    <div className="w-full h-8 bg-indigo-50 rounded-lg border border-indigo-100"></div>
-                                    <div className="w-full h-8 bg-slate-50 rounded-lg"></div>
-                                </div>
-                                <div className="mt-10">
-                                    <p className="text-xs font-bold text-slate-400 uppercase tracking-widest mb-4">Pending Approvals</p>
-                                    <div className="space-y-3">
-                                        <div className="flex items-center justify-between p-3 bg-slate-50 rounded-xl">
-                                            <div className="flex items-center gap-3">
-                                                <div className="w-8 h-8 rounded-full bg-indigo-200"></div>
-                                                <span className="text-xs font-semibold">Annual Leave (MM)</span>
-                                            </div>
-                                            <div className="flex gap-1">
-                                                <div className="w-5 h-5 bg-white rounded-full border border-slate-200"></div>
-                                                <div className="w-5 h-5 bg-white rounded-full border border-slate-200"></div>
-                                            </div>
+                        <div className="w-full lg:w-[540px] h-[600px] glass rounded-[3rem] shadow-[0_40px_100px_-20px_rgba(79,70,229,0.15)] border border-white/50 overflow-hidden relative p-10 transform scale-110 lg:-mr-12">
+                            <div className="space-y-8">
+                                <div className="flex items-center justify-between">
+                                    <div className="flex items-center gap-4">
+                                        <div className="w-12 h-12 rounded-2xl bg-indigo-600/10 border border-indigo-600/20 flex items-center justify-center">
+                                            <div className="w-6 h-6 bg-indigo-600 rounded-lg"></div>
+                                        </div>
+                                        <div className="space-y-1.5">
+                                            <div className="w-32 h-3 bg-slate-900 rounded-full"></div>
+                                            <div className="w-20 h-2 bg-slate-400/20 rounded-full"></div>
                                         </div>
                                     </div>
+                                    <div className="w-10 h-10 rounded-full bg-slate-100 border border-slate-200"></div>
+                                </div>
+                                
+                                <div className="grid grid-cols-3 gap-4">
+                                    {[1, 2, 3].map(i => (
+                                        <div key={i} className="h-24 bg-white/40 border border-white rounded-2xl"></div>
+                                    ))}
+                                </div>
+
+                                <div className="space-y-5">
+                                    <h4 className="text-xs font-bold text-slate-400 uppercase tracking-widest">Active Payroll Bridge</h4>
+                                    <div className="space-y-3">
+                                        {[1, 2, 3].map(i => (
+                                            <div key={i} className="w-full h-12 bg-white/60 border border-white rounded-2xl px-4 flex items-center justify-between">
+                                                <div className="flex items-center gap-3">
+                                                    <div className="w-6 h-6 rounded-lg bg-slate-200"></div>
+                                                    <div className="w-24 h-2 bg-slate-300/40 rounded-full"></div>
+                                                </div>
+                                                <div className="w-12 h-2 bg-indigo-200 rounded-full"></div>
+                                            </div>
+                                        ))}
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        {/* Floating KPI Card 2 */}
+                        <div className="absolute -bottom-6 left-0 z-30 w-80 p-8 glass rounded-[2.5rem] shadow-[0_30px_60px_rgba(0,0,0,0.12)] border border-white/60 float" style={{ animationDelay: '3s' }}>
+                            <div className="flex justify-between items-start mb-8">
+                                <div className="space-y-1">
+                                    <h4 className="text-xl font-bold text-slate-900">Attendance</h4>
+                                    <p className="text-slate-400 text-[10px] font-bold uppercase tracking-widest">Across 5 Locations</p>
+                                </div>
+                                <span className="px-3 py-1.5 bg-indigo-600 text-white text-[9px] font-black rounded-full shadow-lg shadow-indigo-100">LIVE</span>
+                            </div>
+                            <div className="flex items-end justify-between gap-2 h-24 mb-6">
+                                {[40, 60, 100, 70, 90, 80, 95].map((h, i) => (
+                                    <div key={i} className="flex-1 rounded-full bg-slate-100 relative group overflow-hidden">
+                                        <div 
+                                            className={`absolute bottom-0 w-full rounded-full transition-all duration-1000 ${i === 6 ? 'bg-indigo-600' : 'bg-indigo-100'}`} 
+                                            style={{ height: `${h}%` }}
+                                        ></div>
+                                    </div>
+                                ))}
+                            </div>
+                            <div className="flex items-center justify-between pt-4 border-t border-slate-100">
+                                <p className="text-3xl font-black tracking-tight text-slate-900">98.4%</p>
+                                <div className="flex -space-x-2">
+                                    {[1,2,3].map(i => <div key={i} className="w-6 h-6 rounded-full bg-slate-200 border-2 border-white"></div>)}
                                 </div>
                             </div>
                         </div>
@@ -198,66 +260,42 @@ export default function LandingPage() {
             {/* END: TrustSection */}
 
             {/* BEGIN: FeatureGrid */}
-            <section className="py-24 bg-slate-50" id="features">
+            <section className="py-32 bg-slate-50 relative overflow-hidden" id="features">
                 <div className="max-w-7xl mx-auto px-6">
-                    <div className="text-center max-w-2xl mx-auto mb-20 reveal">
-                        <h2 className="text-3xl md:text-5xl font-bold text-slate-900 mb-6 tracking-tight">Everything you need to lead.</h2>
-                        <p className="text-lg text-slate-500">Powerful AI tools built for HR professionals who value precision and compliance over paperwork.</p>
+                    <div className="text-center max-w-3xl mx-auto mb-24 reveal">
+                        <h2 className="text-4xl md:text-6xl font-extrabold text-slate-900 mb-8 tracking-tight">Everything you need to <span className="text-gradient">lead.</span></h2>
+                        <p className="text-xl text-slate-500 font-light leading-relaxed">Powerful governance tools built for HR professionals who value precision and compliance over paperwork. Built for the modern SE-Asian enterprise.</p>
                     </div>
-                    <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-8">
+                    <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-10">
                         {/* Feature 1 */}
-                        <div className="group p-8 bg-white rounded-[2rem] border border-slate-100 shadow-sm hover:shadow-xl hover:-translate-y-2 transition-all duration-300 reveal">
-                            <div className="w-14 h-14 bg-indigo-50 rounded-2xl flex items-center justify-center mb-6 group-hover:bg-indigo-600 transition-colors">
-                                <svg className="w-8 h-8 text-indigo-600 group-hover:text-white transition-colors" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor">
+                        <div className="group p-10 bg-white rounded-[3rem] border border-slate-100 shadow-sm hover:shadow-[0_40px_80px_-20px_rgba(79,70,229,0.15)] hover:-translate-y-3 transition-all duration-500 reveal">
+                            <div className="w-16 h-16 bg-indigo-50 rounded-2xl flex items-center justify-center mb-8 group-hover:bg-indigo-600 transition-all group-hover:rotate-6">
+                                <svg className="w-8 h-8 text-indigo-600 group-hover:text-white transition-colors" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor">
                                     <path strokeLinecap="round" strokeLinejoin="round" d="M9 12.75L11.25 15 15 11.25m-3 7.068A9.733 9.733 0 0112 21.75c-4.563-1.127-8.25-5.328-8.25-10.375V6.028c0-.68.468-1.284 1.135-1.428l7.115-1.53c.69-.15 1.402-.15 2.092 0l7.115 1.53c.667.144 1.135.748 1.135 1.428V11.375c0 5.047-3.687 9.248-8.25 10.375a9.733 9.733 0 01-.75-2.057" />
                                 </svg>
                             </div>
-                            <h3 className="text-xl font-bold mb-3 text-slate-900">Localized Compliance</h3>
-                            <p className="text-slate-500 leading-relaxed mb-4">Automated SSB, PIT, and Patakha filings updated for 2026 regulations. Zero errors, zero stress.</p>
+                            <h3 className="text-2xl font-bold mb-4 text-slate-900">Localized Compliance</h3>
+                            <p className="text-slate-500 leading-relaxed mb-6 font-light">Automated SSB, PIT, and Patakha filings updated for 2026 regional tax codes. Zero errors, zero stress.</p>
                             <div className="flex gap-2">
-                                <span className="px-2 py-1 bg-slate-100 rounded text-[10px] font-bold uppercase tracking-widest text-slate-500">MM</span>
-                                <span className="px-2 py-1 bg-slate-100 rounded text-[10px] font-bold uppercase tracking-widest text-slate-500">SG</span>
+                                <span className="px-3 py-1 bg-slate-50 border border-slate-100 rounded-full text-[9px] font-black uppercase tracking-widest text-slate-400">MM-SUPPORTED</span>
+                                <span className="px-3 py-1 bg-slate-50 border border-slate-100 rounded-full text-[9px] font-black uppercase tracking-widest text-slate-400">SG-READY</span>
                             </div>
                         </div>
                         {/* Feature 2 */}
-                        <div className="group p-8 bg-white rounded-[2rem] border border-slate-100 shadow-sm hover:shadow-xl hover:-translate-y-2 transition-all duration-300 reveal" style={{ transitionDelay: '0.1s' }}>
-                            <div className="w-14 h-14 bg-indigo-50 rounded-2xl flex items-center justify-center mb-6 group-hover:bg-indigo-600 transition-colors">
-                                <svg className="w-8 h-8 text-indigo-600 group-hover:text-white transition-colors" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M13 10V3L4 14h7v7l9-11h-7z"></path></svg>
+                        <div className="group p-10 bg-white rounded-[3rem] border border-slate-100 shadow-sm hover:shadow-[0_40px_80px_-20px_rgba(79,70,229,0.15)] hover:-translate-y-3 transition-all duration-500 reveal" style={{ transitionDelay: '0.1s' }}>
+                            <div className="w-16 h-16 bg-pink-50 rounded-2xl flex items-center justify-center mb-8 group-hover:bg-pink-600 transition-all group-hover:rotate-6">
+                                <svg className="w-8 h-8 text-pink-600 group-hover:text-white transition-colors" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M13 10V3L4 14h7v7l9-11h-7z"></path></svg>
                             </div>
-                            <h3 className="text-xl font-bold mb-3 text-slate-900">AI Assistant</h3>
-                            <p className="text-slate-500 leading-relaxed">Ask our Assistant anything. 'Who is hitting OT limits?' 'What’s our retention risk?' Get answers in seconds, not spreadsheets.</p>
+                            <h3 className="text-2xl font-bold mb-4 text-slate-900">Truth Assistant</h3>
+                            <p className="text-slate-500 leading-relaxed font-light">Ask anything. 'Who is hitting OT limits?' 'What’s our payroll burn this month?' Get answers in seconds, not spreadsheets.</p>
                         </div>
                         {/* Feature 3 */}
-                        <div className="group p-8 bg-white rounded-[2rem] border border-slate-100 shadow-sm hover:shadow-xl hover:-translate-y-2 transition-all duration-300 reveal" style={{ transitionDelay: '0.2s' }}>
-                            <div className="w-14 h-14 bg-indigo-50 rounded-2xl flex items-center justify-center mb-6 group-hover:bg-indigo-600 transition-colors">
-                                <svg className="w-8 h-8 text-indigo-600 group-hover:text-white transition-colors" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z"></path><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15 11a3 3 0 11-6 0 3 3 0 016 0z"></path></svg>
+                        <div className="group p-10 bg-white rounded-[3rem] border border-slate-100 shadow-sm hover:shadow-[0_40px_80px_-20px_rgba(79,70,229,0.15)] hover:-translate-y-3 transition-all duration-500 reveal" style={{ transitionDelay: '0.2s' }}>
+                            <div className="w-16 h-16 bg-emerald-50 rounded-2xl flex items-center justify-center mb-8 group-hover:bg-emerald-600 transition-all group-hover:rotate-6">
+                                <svg className="w-8 h-8 text-emerald-600 group-hover:text-white transition-colors" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z"></path><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15 11a3 3 0 11-6 0 3 3 0 016 0z"></path></svg>
                             </div>
-                            <h3 className="text-xl font-bold mb-3 text-slate-900">GPS Field Force</h3>
-                            <p className="text-slate-500 leading-relaxed">Secure your remote workforce with anti-fake GPS tracking and real-time movement alerts.</p>
-                        </div>
-                        {/* Feature 4 */}
-                        <div className="group p-8 bg-white rounded-[2rem] border border-slate-100 shadow-sm hover:shadow-xl hover:-translate-y-2 transition-all duration-300 reveal">
-                            <div className="w-14 h-14 bg-indigo-50 rounded-2xl flex items-center justify-center mb-6 group-hover:bg-indigo-600 transition-colors">
-                                <svg className="w-8 h-8 text-indigo-600 group-hover:text-white transition-colors" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
-                            </div>
-                            <h3 className="text-xl font-bold mb-3 text-slate-900">Global Payroll</h3>
-                            <p className="text-slate-500 leading-relaxed">Multi-currency processing with automated bank file generation for leading regional banks (KBZ, AYA, CB, and more).</p>
-                        </div>
-                        {/* Feature 5 */}
-                        <div className="group p-8 bg-white rounded-[2rem] border border-slate-100 shadow-sm hover:shadow-xl hover:-translate-y-2 transition-all duration-300 reveal" style={{ transitionDelay: '0.1s' }}>
-                            <div className="w-14 h-14 bg-indigo-50 rounded-2xl flex items-center justify-center mb-6 group-hover:bg-indigo-600 transition-colors">
-                                <svg className="w-8 h-8 text-indigo-600 group-hover:text-white transition-colors" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"></path></svg>
-                            </div>
-                            <h3 className="text-xl font-bold mb-3 text-slate-900">Smart Scheduling</h3>
-                            <p className="text-slate-500 leading-relaxed">AI-optimized rostering that respects labor laws and employee availability automatically.</p>
-                        </div>
-                        {/* Feature 6 */}
-                        <div className="group p-8 bg-white rounded-[2rem] border border-slate-100 shadow-sm hover:shadow-xl hover:-translate-y-2 transition-all duration-300 reveal" style={{ transitionDelay: '0.2s' }}>
-                            <div className="w-14 h-14 bg-indigo-50 rounded-2xl flex items-center justify-center mb-6 group-hover:bg-indigo-600 transition-colors">
-                                <svg className="w-8 h-8 text-indigo-600 group-hover:text-white transition-colors" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"></path></svg>
-                            </div>
-                            <h3 className="text-xl font-bold mb-3 text-slate-900">Mobile-First ESS</h3>
-                            <p className="text-slate-500 leading-relaxed">Native mobile apps for employees to apply for leave, view payslips, and update personal data.</p>
+                            <h3 className="text-2xl font-bold mb-4 text-slate-900">Geofence Pro</h3>
+                            <p className="text-slate-500 leading-relaxed font-light">Secure your remote workforce with military-grade anti-fake GPS tracking and real-time movement telemetry.</p>
                         </div>
                     </div>
                 </div>
@@ -265,54 +303,57 @@ export default function LandingPage() {
             {/* END: FeatureGrid */}
 
             {/* BEGIN: PricingMatrix */}
-            <section className="py-24 bg-white" id="pricing">
+            <section className="py-32 bg-white" id="pricing">
                 <div className="max-w-7xl mx-auto px-6">
-                    <div className="text-center mb-20 reveal">
-                        <h2 className="text-4xl font-bold text-slate-900 mb-4">Pricing that scales with you.</h2>
-                        <p className="text-slate-500">Transparent billing, no hidden fees, local support.</p>
+                    <div className="text-center mb-24 reveal">
+                        <h2 className="text-4xl md:text-6xl font-extrabold text-slate-900 mb-6 font-display tracking-tight">Pricing that <span className="text-gradient">scales</span> with you.</h2>
+                        <p className="text-xl text-slate-500 font-light">Transparent regional billing, localized support, zero hidden costs.</p>
                     </div>
-                    <div className="grid lg:grid-cols-3 gap-8 items-end">
-                        {/* Basic */}
-                        <div className="p-8 bg-slate-50 rounded-3xl border border-slate-100 reveal">
-                            <p className="text-sm font-bold text-slate-400 uppercase tracking-widest mb-4">Basic</p>
-                            <div className="flex items-baseline gap-1 mb-8">
-                                <span className="text-4xl font-bold text-slate-900">$2</span>
-                                <span className="text-slate-500">/employee/mo</span>
+                    <div className="grid lg:grid-cols-3 gap-10 items-stretch">
+                        {/* Standard */}
+                        <div className="lg:col-span-1 p-12 bg-white rounded-[3rem] border border-slate-100 shadow-xl reveal relative overflow-hidden group">
+                           <div className="absolute top-0 right-0 w-32 h-32 bg-indigo-50 rounded-full blur-3xl -translate-y-1/2 translate-x-1/2 group-hover:bg-indigo-100 transition-colors"></div>
+                            <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-6">Standard</p>
+                            <div className="flex items-baseline gap-2 mb-10">
+                                <span className="text-5xl font-black text-slate-900">$2</span>
+                                <span className="text-slate-400 font-medium">/employee/mo</span>
                             </div>
-                            <ul className="space-y-4 mb-8 text-sm text-slate-600">
-                                <li className="flex items-center gap-3"><svg className="w-5 h-5 text-indigo-600" fill="currentColor" viewBox="0 0 20 20"><path d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z"></path></svg> Basic Attendance</li>
-                                <li className="flex items-center gap-3"><svg className="w-5 h-5 text-indigo-600" fill="currentColor" viewBox="0 0 20 20"><path d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z"></path></svg> Leave Management</li>
-                                <li className="flex items-center gap-3"><svg className="w-5 h-5 text-indigo-600" fill="currentColor" viewBox="0 0 20 20"><path d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z"></path></svg> Standard Reporting</li>
+                            <ul className="space-y-5 mb-12 text-slate-600">
+                                <li className="flex items-center gap-4 text-sm font-medium"><div className="w-5 h-5 rounded-full bg-indigo-50 flex items-center justify-center"><svg className="w-3 h-3 text-indigo-600" fill="currentColor" viewBox="0 0 20 20"><path d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z"></path></svg></div> Core Attendance & Leave</li>
+                                <li className="flex items-center gap-4 text-sm font-medium"><div className="w-5 h-5 rounded-full bg-indigo-50 flex items-center justify-center"><svg className="w-3 h-3 text-indigo-600" fill="currentColor" viewBox="0 0 20 20"><path d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z"></path></svg></div> Basic Reporting</li>
+                                <li className="flex items-center gap-4 text-sm font-medium"><div className="w-5 h-5 rounded-full bg-indigo-50 flex items-center justify-center"><svg className="w-3 h-3 text-indigo-600" fill="currentColor" viewBox="0 0 20 20"><path d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z"></path></svg></div> Employee Directory</li>
                             </ul>
-                            <button className="w-full py-4 bg-white border border-slate-200 rounded-2xl font-bold hover:bg-slate-100 transition-colors">Choose Basic</button>
+                            <button className="w-full py-5 bg-slate-900 text-white rounded-2xl font-bold hover:bg-slate-800 transition-all shadow-lg active:scale-95">Select Standard</button>
                         </div>
-                        {/* Growth */}
-                        <div className="p-8 bg-indigo-600 rounded-[2.5rem] text-white shadow-2xl shadow-indigo-200 transform scale-105 reveal" style={{ transitionDelay: '0.1s' }}>
-                            <div className="inline-block px-3 py-1 bg-indigo-500 rounded-full text-[10px] font-bold tracking-widest uppercase mb-6">Most Popular</div>
-                            <p className="text-sm font-bold opacity-80 uppercase tracking-widest mb-4">Growth</p>
-                            <div className="flex items-baseline gap-1 mb-8">
-                                <span className="text-4xl font-bold">$5</span>
-                                <span className="opacity-80">/employee/mo</span>
+
+                        {/* Growth Pro */}
+                        <div className="lg:col-span-1 p-12 bg-indigo-600 rounded-[3rem] text-white shadow-[0_40px_80px_-15px_rgba(79,70,229,0.4)] transform scale-105 active:scale-100 transition-all duration-500 reveal z-10" style={{ transitionDelay: '0.1s' }}>
+                            <div className="inline-block px-4 py-2 bg-indigo-500/50 backdrop-blur-md rounded-full text-[10px] font-black tracking-widest uppercase mb-10 border border-white/20">Recommended</div>
+                            <p className="text-[10px] font-black opacity-60 uppercase tracking-widest mb-6">Growth Pro</p>
+                            <div className="flex items-baseline gap-2 mb-10">
+                                <span className="text-6xl font-black text-white leading-none">$5</span>
+                                <span className="text-indigo-200 font-medium font-display">/employee/mo</span>
                             </div>
-                            <ul className="space-y-4 mb-8 text-sm">
-                                <li className="flex items-center gap-3"><svg className="w-5 h-5" fill="currentColor" viewBox="0 0 20 20"><path d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z"></path></svg> AI HR Assistant</li>
-                                <li className="flex items-center gap-3"><svg className="w-5 h-5" fill="currentColor" viewBox="0 0 20 20"><path d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z"></path></svg> Local Payroll Engine</li>
-                                <li className="flex items-center gap-3"><svg className="w-5 h-5" fill="currentColor" viewBox="0 0 20 20"><path d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z"></path></svg> GPS Location Checks</li>
+                            <ul className="space-y-5 mb-12">
+                                <li className="flex items-center gap-4 text-sm font-bold"><div className="w-6 h-6 rounded-full bg-white/20 flex items-center justify-center"><svg className="w-4 h-4 text-white" fill="currentColor" viewBox="0 0 20 20"><path d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z"></path></svg></div> Truth-Anchored Audit</li>
+                                <li className="flex items-center gap-4 text-sm font-bold"><div className="w-6 h-6 rounded-full bg-white/20 flex items-center justify-center"><svg className="w-4 h-4 text-white" fill="currentColor" viewBox="0 0 20 20"><path d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z"></path></svg></div> Regional Payroll Engine</li>
+                                <li className="flex items-center gap-4 text-sm font-bold"><div className="w-6 h-6 rounded-full bg-white/20 flex items-center justify-center"><svg className="w-4 h-4 text-white" fill="currentColor" viewBox="0 0 20 20"><path d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z"></path></svg></div> GPS Telemetry & Shifts</li>
                             </ul>
-                            <button className="w-full py-4 bg-white text-indigo-600 rounded-2xl font-extrabold hover:bg-slate-50 transition-colors">Start Free Trial</button>
+                            <button className="w-full py-6 bg-white text-indigo-600 rounded-[2rem] font-black hover:bg-slate-50 transition-all shadow-xl hover:shadow-[0_20px_40px_rgba(255,255,255,0.2)] active:scale-95">Get Started Free</button>
                         </div>
+
                         {/* Enterprise */}
-                        <div className="p-8 bg-slate-50 rounded-3xl border border-slate-100 reveal" style={{ transitionDelay: '0.2s' }}>
-                            <p className="text-sm font-bold text-slate-400 uppercase tracking-widest mb-4">Enterprise</p>
-                            <div className="flex items-baseline gap-1 mb-8">
-                                <span className="text-4xl font-bold text-slate-900">Custom</span>
+                        <div className="lg:col-span-1 p-12 bg-slate-900 rounded-[3rem] text-white reveal border border-slate-800" style={{ transitionDelay: '0.2s' }}>
+                            <p className="text-[10px] font-black text-slate-500 uppercase tracking-widest mb-6">Enterprise</p>
+                            <div className="flex items-baseline gap-2 mb-10">
+                                <span className="text-5xl font-black text-white">Custom</span>
                             </div>
-                            <ul className="space-y-4 mb-8 text-sm text-slate-600">
-                                <li className="flex items-center gap-3"><svg className="w-5 h-5 text-indigo-600" fill="currentColor" viewBox="0 0 20 20"><path d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z"></path></svg> Multi-entity Management</li>
-                                <li className="flex items-center gap-3"><svg className="w-5 h-5 text-indigo-600" fill="currentColor" viewBox="0 0 20 20"><path d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z"></path></svg> Dedicated Account Lead</li>
-                                <li className="flex items-center gap-3"><svg className="w-5 h-5 text-indigo-600" fill="currentColor" viewBox="0 0 20 20"><path d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z"></path></svg> On-premise Options</li>
+                            <ul className="space-y-5 mb-12 text-slate-400">
+                                <li className="flex items-center gap-4 text-sm font-medium"><div className="w-5 h-5 rounded-full bg-white/5 flex items-center justify-center"><svg className="w-3 h-3 text-white" fill="currentColor" viewBox="0 0 20 20"><path d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z"></path></svg></div> Multi-entity Consolidation</li>
+                                <li className="flex items-center gap-4 text-sm font-medium"><div className="w-5 h-5 rounded-full bg-white/5 flex items-center justify-center"><svg className="w-3 h-3 text-white" fill="currentColor" viewBox="0 0 20 20"><path d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z"></path></svg></div> Dedicated Compliance Lead</li>
+                                <li className="flex items-center gap-4 text-sm font-medium"><div className="w-5 h-5 rounded-full bg-white/5 flex items-center justify-center"><svg className="w-3 h-3 text-white" fill="currentColor" viewBox="0 0 20 20"><path d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z"></path></svg></div> SIEM Integration</li>
                             </ul>
-                            <button className="w-full py-4 bg-white border border-slate-200 rounded-2xl font-bold hover:bg-slate-100 transition-colors">Contact Sales</button>
+                            <button className="w-full py-5 bg-white/10 backdrop-blur-md border border-white/20 rounded-2xl font-bold hover:bg-white/20 transition-all active:scale-95">Contact Sales</button>
                         </div>
                     </div>
                 </div>

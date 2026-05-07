@@ -1,9 +1,19 @@
-import React, { useState, useMemo, useEffect } from 'react';
-import { Link } from 'react-router-dom';
+import React, { useState, useMemo, useEffect, Fragment } from 'react';
+import { Link, useLocation } from 'react-router-dom';
 import Sidebar from '../components/Sidebar';
 import Header from '../components/Header';
 import { useAppData } from '../context/AppDataContext';
 import { useSystemCalendar } from '../context/SystemCalendarContext';
+
+const generateAuditHash = async (adminId: string, timestamp: string, dataLength: number): Promise<string> => {
+    const rawString = `${adminId}-${timestamp}-${dataLength}`;
+    const encoder = new TextEncoder();
+    const data = encoder.encode(rawString);
+    const hashBuffer = await crypto.subtle.digest('SHA-256', data);
+    const hashArray = Array.from(new Uint8Array(hashBuffer));
+    const hashHex = hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
+    return `[AUDIT-${hashHex.substring(0, 16).toUpperCase()}]`;
+};
 
 interface ActionItem {
     id: string;
@@ -21,20 +31,39 @@ interface ActionItem {
     isContextAlert?: boolean;
 }
 
-export default function InsightsDashboard() {
+export default function HomeDashboard() {
     const {
         employees, leaveRequests, otRequests, loans, adjustments, projectPayments,
         locationSnapshots, jobActivityChanges, recruitmentActions,
         attendanceRequests, expenses, systemSettings, handleInboxAction, resolveOTConflict, lastPayrollStatus, lastPayrollTotal,
         alerts, setAlerts, addAuditLog, auditLogs, announcements, createAnnouncement,
-        attendanceLogs, shiftAssignments, holidays, shifts, securityAuditLogs, subscriptionTier
+        attendanceLogs, shiftAssignments, holidays, shifts, securityAuditLogs, subscriptionTier, gpsLogs, addDocumentToLibrary
     } = useAppData();
     const { getFormattedDate, parseGregorianDate, getCurrentDateISO } = useSystemCalendar();
 
-    // Admin ID for local simulation (Htet Aung)
-    const currentAdminId = 'ADM-001';
+    const currentAdminId = 'EMP-001';
 
-    // Admin ID for local simulation (Htet Aung)
+    // RBAC: Derive access scope from the current user's employee record
+    const currentUser = employees.find(e => e.id === currentAdminId) ?? null;
+    const isCompanyWideAdmin = !currentUser ||
+        ['Admin', 'HR Director', 'CEO', 'Director', 'HR Manager'].some(r => (currentUser.role || '').includes(r));
+    const scopedDept: string | null = isCompanyWideAdmin ? null : (currentUser?.dept ?? null);
+
+    // Real-time shift-buffer clock — replaces hardcoded MOCK_NOW_TIME = '10:00'
+    const [liveNowTime, setLiveNowTime] = useState(() => {
+        const n = new Date();
+        return `${String(n.getHours()).padStart(2, '0')}:${String(n.getMinutes()).padStart(2, '0')}`;
+    });
+    const [lastUpdated, setLastUpdated] = useState(() => new Date().toLocaleTimeString());
+    useEffect(() => {
+        const tick = setInterval(() => {
+            const n = new Date();
+            setLiveNowTime(`${String(n.getHours()).padStart(2, '0')}:${String(n.getMinutes()).padStart(2, '0')}`);
+            setLastUpdated(n.toLocaleTimeString());
+        }, 60_000);
+        return () => clearInterval(tick);
+    }, []);
+
     const [isExporting, setIsExporting] = useState(false);
 
     // Announcement Dispatcher UI State
@@ -60,6 +89,24 @@ export default function InsightsDashboard() {
     // Conflict Triage State
     const [triageItem, setTriageItem] = useState<any | null>(null);
     const [isTriageModalOpen, setIsTriageModalOpen] = useState(false);
+    // ── GOVERNANCE GUARD: Denied Route Notification ──────────────────────────
+    const location = useLocation();
+    useEffect(() => {
+        if (location.state?.denied) {
+            const deniedAlert = {
+                id: `DENIED-${Date.now()}`,
+                type: 'error' as const,
+                message: `ACCESS DENIED: Your account lacks the "${location.state.requiredPermission}" permission required for that module. Support ticket logged in security trails.`,
+                timestamp: new Date().toLocaleTimeString('en-GB'),
+                isRead: false
+            };
+            setAlerts(prev => [deniedAlert, ...prev]);
+            
+            // Clean up state manually if possible or via navigate replacement
+            // require('react-router-dom').useNavigate()({ ...location, state: {} }, { replace: true });
+        }
+    }, [location.state]);
+
     const INBOX_TYPES = ['All', 'Leave', 'OT', 'Loan', 'Adjustment', 'ProjectPayment', 'JobActivity', 'LocationSnapshot', 'Recruitment', 'Attendance', 'Expense'];
     const INBOX_TYPE_LABELS: Record<string, string> = {
         All: 'All Types', Leave: 'Leave', OT: 'Overtime', Loan: 'Loan',
@@ -124,7 +171,7 @@ export default function InsightsDashboard() {
                 ...r,
                 inboxType: 'Loan',
                 inboxTitle: 'Loan Request',
-                inboxSubtitle: `${r.name} • ${(r as any).loanAmount?.toLocaleString()} MMK`,
+                inboxSubtitle: `${r.name} • ${(r as any).loanAmount?.toLocaleString()} ${systemSettings.compliance.currency}`,
                 inboxIcon: 'payments',
                 inboxIconColor: 'text-amber-600 bg-amber-100 dark:bg-amber-900/40',
                 inboxBarColor: 'bg-amber-500',
@@ -252,11 +299,17 @@ export default function InsightsDashboard() {
                 priority: isLimitExceeded ? 'High' : (r.priority || 'Medium'),
                 category: 'Financial',
                 isLimitExceeded,
-                limitWarning: isLimitExceeded ? `Exceeds Monthly Limit of ${categoryLimit?.toLocaleString()} MMK` : null
+                limitWarning: isLimitExceeded ? `Exceeds Monthly Limit of ${categoryLimit?.toLocaleString()} ${systemSettings.compliance.currency}` : null
             });
         });
 
         return items
+            // RBAC: Dept managers only see their own team's pending items
+            .filter(item => {
+                if (!scopedDept) return true;
+                const emp = employees.find(e => e.id === (item.empId || ''));
+                return emp?.dept === scopedDept;
+            })
             .filter(item => inboxFilter === 'All' || item.inboxType === inboxFilter)
             .filter(item => !inboxSearch || item.name?.toLowerCase().includes(inboxSearch.toLowerCase()) || item.employeeName?.toLowerCase().includes(inboxSearch.toLowerCase()))
             .filter(item => !highValueOnly || item.priority === 'High')
@@ -267,11 +320,10 @@ export default function InsightsDashboard() {
                 const dateB = parseGregorianDate(b.submittedDate || b.date || b.timestamp || '2000-01-01').getTime();
                 return scoreRef || (dateB - dateA);
             });
-    }, [leaveRequests, otRequests, loans, adjustments, projectPayments, locationSnapshots, jobActivityChanges, recruitmentActions, attendanceRequests, expenses, systemSettings, employees, inboxFilter, inboxSearch, highValueOnly, parseGregorianDate]);
+    }, [leaveRequests, otRequests, loans, adjustments, projectPayments, locationSnapshots, jobActivityChanges, recruitmentActions, attendanceRequests, expenses, systemSettings, employees, inboxFilter, inboxSearch, highValueOnly, parseGregorianDate, scopedDept]);
 
     // Phase 9: Absence Analytics Aggregation Engine (Shift-Aware)
     const MOCK_TODAY = getCurrentDateISO();
-    const MOCK_NOW_TIME = '10:00'; // 10:00 AM for demonstration
 
     const todayHoliday = useMemo(() => {
         return holidays.find(h => h.date === MOCK_TODAY);
@@ -291,8 +343,14 @@ export default function InsightsDashboard() {
             onLeaveNames: string[];
         }> = {};
 
-        // 1. Identify all employees scheduled for today
-        const scheduledAssignments = shiftAssignments.filter(sa => sa.date === MOCK_TODAY);
+        // 1. Identify all employees scheduled for today (Filtered at source for RBAC)
+        const scheduledAssignments = shiftAssignments
+            .filter(sa => sa.date === MOCK_TODAY)
+            .filter(sa => {
+                if (!scopedDept) return true;
+                const emp = employees.find(e => e.id === sa.empId);
+                return emp?.dept === scopedDept;
+            });
         
         scheduledAssignments.forEach(sa => {
             const emp = employees.find(e => e.id === sa.empId);
@@ -341,13 +399,13 @@ export default function InsightsDashboard() {
                     breakdown[key].onLeave++;
                     breakdown[key].onLeaveNames.push(emp.name);
                 } else {
-                    // Shift-Aware Check: 30 min buffer
-                    const [nowH, nowM] = MOCK_NOW_TIME.split(':').map(Number);
+                    // Shift-Aware Check: Dynamic Grace Period (uses live real-time clock)
+                    const [nowH, nowM] = liveNowTime.split(':').map(Number);
                     const [shiftH, shiftM] = (shift?.start || '09:00').split(':').map(Number);
                     
                     const nowTotalM = nowH * 60 + nowM;
                     const shiftStartM = shiftH * 60 + shiftM;
-                    const thresholdM = shiftStartM + 30;
+                    const thresholdM = shiftStartM + (systemSettings.compliance.attendanceGracePeriod || 15);
 
                     if (nowTotalM > thresholdM) {
                         breakdown[key].absent++;
@@ -375,7 +433,7 @@ export default function InsightsDashboard() {
         });
 
         return Object.values(breakdown).sort((a, b) => b.absent - a.absent);
-    }, [shiftAssignments, employees, attendanceLogs, leaveRequests, shifts, holidays, MOCK_TODAY]);
+    }, [shiftAssignments, employees, attendanceLogs, leaveRequests, shifts, holidays, MOCK_TODAY, liveNowTime, systemSettings]);
 
     const dashboardTotals = useMemo(() => {
         return absenteeBreakdown.reduce((acc, curr) => ({
@@ -386,6 +444,77 @@ export default function InsightsDashboard() {
             pending: acc.pending + curr.pending
         }), { expected: 0, present: 0, absent: 0, onLeave: 0, pending: 0 });
     }, [absenteeBreakdown]);
+
+    // ── Live Headcount — replaces hardcoded 1,240 ────────────────────────────
+    const activeHeadcount = useMemo(() =>
+        employees.filter(e => e.status === 'Active').length,
+    [employees]);
+
+    // ── Department Breakdown — replaces hardcoded "850 (68%)" ────────────────
+    const deptBreakdown = useMemo(() => {
+        const active = employees.filter(e => e.status === 'Active');
+        const total = active.length;
+        const groups: Record<string, number> = {};
+        active.forEach(e => { const d = e.dept || 'Other'; groups[d] = (groups[d] || 0) + 1; });
+        return Object.entries(groups)
+            .map(([dept, count]) => ({ dept, count, pct: total > 0 ? Math.round((count / total) * 100) : 0 }))
+            .sort((a, b) => b.count - a.count)
+            .slice(0, 3);
+    }, [employees]);
+
+    // ── OT Monitor — replaces hardcoded 80/82 hrs ────────────────────────────
+    const otMonitorData = useMemo(() => {
+        const now = new Date();
+        const ym = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
+        const scoped = scopedDept
+            ? otRequests.filter(r => employees.find(e => e.id === r.empId)?.dept === scopedDept)
+            : otRequests;
+        const approved = scoped
+            .filter(r => r.status === 'Approved' && r.date?.startsWith(ym))
+            .reduce((s, r) => s + (r.otHours || 0), 0);
+        const pending = scoped
+            .filter(r => r.status === 'Pending' && r.date?.startsWith(ym))
+            .reduce((s, r) => s + (r.otHours || 0), 0);
+        const budget = (systemSettings as any).otBudgetHours ?? 80;
+        const pct = budget > 0 ? Math.min(Math.round((approved / budget) * 100), 120) : 0;
+        return { approved, pending, budget, overBudget: approved > budget, pct };
+    }, [otRequests, employees, scopedDept, systemSettings]);
+
+    // ── Visit Success Rate — geofence compliance for field agents today ───────
+    const visitSuccessData = useMemo(() => {
+        const todayLogs = attendanceLogs.filter(l => l.date === MOCK_TODAY);
+        const fieldLogs = todayLogs.filter(l =>
+            l.location === 'Customer Site' ||
+            l.checkInMethod === 'GPS' ||
+            l.checkInMethod === 'Mobile App'
+        );
+        const total = fieldLogs.length;
+        const success = fieldLogs.filter(l => l.geofenceStatus !== 'Violation').length;
+        return { total, success, pct: total > 0 ? Math.round((success / total) * 100) : null };
+    }, [attendanceLogs, MOCK_TODAY]);
+
+    // ── Pending counts — replace hardcoded 4 / 2 ────────────────────────────
+    const pendingLeaveCount = useMemo(() =>
+        pendingInboxItems.filter(i => i.inboxType === 'Leave').length,
+    [pendingInboxItems]);
+    const pendingLoanCount = useMemo(() =>
+        pendingInboxItems.filter(i => i.inboxType === 'Loan').length,
+    [pendingInboxItems]);
+    const highPriorityLeaveCount = useMemo(() =>
+        pendingInboxItems.filter(i => i.inboxType === 'Leave' && i.priority === 'High').length,
+    [pendingInboxItems]);
+    const totalLoanValueLabel = useMemo(() => {
+        const total = pendingInboxItems
+            .filter(i => i.inboxType === 'Loan')
+            .reduce((s, i) => s + ((i as any).loanAmount || 0), 0);
+        return total >= 100_000 && systemSettings.compliance.currency === 'MMK' 
+            ? `${Math.round(total / 100_000)} Lakhs` 
+            : `${total.toLocaleString()} ${systemSettings.compliance.currency}`;
+    }, [pendingInboxItems]);
+
+    const unacknowledgedAnnouncementsCount = useMemo(() => 
+        announcements.filter(a => a.status === 'Published' && a.requiresAcknowledgement).length,
+    [announcements]);
 
     const handlePostAnnouncement = () => {
         setIsAnnouncementModalOpen(true);
@@ -402,7 +531,7 @@ export default function InsightsDashboard() {
                 location: newAnnTargetLoc === 'All' ? undefined : newAnnTargetLoc,
                 empType: newAnnTargetEmpType === 'All' ? undefined : newAnnTargetEmpType
             },
-            acknowledgmentRequired: newAnnAckRequired,
+            requiresAcknowledgement: newAnnAckRequired,
             isHoliday,
             holidayDate: isHoliday ? holidayDate : undefined
         } as any);
@@ -421,7 +550,7 @@ export default function InsightsDashboard() {
         }
     };
 
-    const handleExportByGroups = () => {
+    const handleExportByGroups = async () => {
         setIsExporting(true);
         try {
             const BOM = "\uFEFF";
@@ -442,8 +571,11 @@ export default function InsightsDashboard() {
                     const rule = systemSettings.penaltyRules?.find((r:any) => r.id === i.penaltyRuleId);
                     if (rule) subType = `Penalty: ${rule.name}`;
                 }
-                csvContent += `"${i.id}","${i.name || i.employeeName}","${i.category}","${subType}","${amount}","${i.currency || 'MMK'}"\r\n`;
+                csvContent += `"${i.id}","${i.name || i.employeeName}","${i.category}","${subType}","${amount}","${i.currency || systemSettings.compliance.currency}"\r\n`;
             });
+
+            const reportHash = await generateAuditHash(currentAdminId, new Date().toISOString(), csvContent.length);
+            csvContent += `\r\n# AUDIT HASH: ${reportHash}\r\n`;
 
             const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
             const url = URL.createObjectURL(blob);
@@ -453,6 +585,20 @@ export default function InsightsDashboard() {
             document.body.appendChild(link);
             link.click();
             document.body.removeChild(link);
+
+            addDocumentToLibrary({
+                title: `Executive Snapshot: Security & Financial`,
+                description: `Board-level audit report containing security logs and pending financial items. Hash: ${reportHash}`,
+                category: 'Payroll Summary',
+                sourceModule: 'Home',
+                fileContent: csvContent,
+                period: getCurrentDateISO().slice(0, 7),
+                generatedBy: currentAdminId,
+                isMandatory: true,
+                tags: ['Board Audit', 'Compliance', 'Security'],
+                relatedRecordId: reportHash
+            } as any, currentAdminId);
+
         } catch (e) {
             console.error("Export failed", e);
         } finally {
@@ -470,13 +616,18 @@ export default function InsightsDashboard() {
 
     return (
         <div className="flex h-screen w-full font-display text-slate-900 dark:text-white antialiased overflow-hidden bg-background-light dark:bg-background-dark">
-            <Sidebar activeTab="Insights" />
+            <Sidebar activeTab="Home" />
 
             <main className="flex-1 flex flex-col h-full overflow-hidden relative ml-[280px]">
                 <Header
                     title="Good Morning, Htet Aung"
                     subtitle="Visualize workforce trends, monitor real-time metrics, and leverage AI to optimize your HR strategy"
-                />
+                >
+                    <div className="hidden md:flex items-center gap-2 bg-emerald-50 dark:bg-emerald-900/20 text-emerald-700 dark:text-emerald-400 px-4 py-1.5 rounded-full border border-emerald-200 dark:border-emerald-800 shadow-sm mt-1">
+                        <span className="size-2 bg-emerald-500 rounded-full animate-pulse"></span>
+                        <span className="text-[10px] font-bold tracking-wide uppercase">● System Live | Last Sync: {lastUpdated}</span>
+                    </div>
+                </Header>
                 <div className="flex-1 overflow-y-auto p-6 md:pt-8 md:pb-10 px-8 bg-[#F8FAFC]">
                     <div className="max-w-7xl mx-auto space-y-8">
                             
@@ -511,25 +662,19 @@ export default function InsightsDashboard() {
                                     </div>
                                 </div>
                                 <div className="flex flex-col items-start gap-1 w-full mt-auto">
-                                    <h3 className="text-3xl font-bold text-slate-900 dark:text-white leading-none mb-1">1,240</h3>
+                                    <h3 className="text-3xl font-bold text-slate-900 dark:text-white leading-none mb-1">{activeHeadcount.toLocaleString()}</h3>
                                     <div className="flex items-center gap-2 mb-3">
-                                        <p className="text-xs text-slate-400">10 new this week</p>
-                                        <span className="flex items-center text-emerald-600 dark:text-emerald-400 text-[10px] font-bold bg-emerald-50 dark:bg-emerald-900/20 px-1.5 py-0.5 rounded-full">
-                                            +1.2%
-                                            <span className="material-symbols-outlined text-[12px] ml-0.5">trending_up</span>
-                                        </span>
+                                        <p className="text-xs text-slate-400">{employees.length} total records</p>
                                     </div>
                                     <div className="w-full pt-3 border-t border-slate-100 dark:border-slate-800">
                                         <p className="text-[11px] text-slate-500 dark:text-slate-400 font-medium mb-1">Department Split</p>
                                         <div className="flex flex-col gap-1 text-[11px] text-slate-500 dark:text-slate-400">
-                                            <div className="flex justify-between items-center">
-                                                <span>Production:</span>
-                                                <span className="font-semibold text-slate-700 dark:text-slate-200">850 (68%)</span>
-                                            </div>
-                                            <div className="flex justify-between items-center">
-                                                <span>HQ/Admin:</span>
-                                                <span className="font-semibold text-slate-700 dark:text-slate-200">100 (9%)</span>
-                                            </div>
+                                            {deptBreakdown.map(d => (
+                                                <div key={d.dept} className="flex justify-between items-center">
+                                                    <span>{d.dept}:</span>
+                                                    <span className="font-semibold text-slate-700 dark:text-slate-200">{d.count} ({d.pct}%)</span>
+                                                </div>
+                                            ))}
                                         </div>
                                     </div>
                                 </div>
@@ -581,172 +726,131 @@ export default function InsightsDashboard() {
                                     </div>
                                 </div>
                             </div>
-                            <div className="bg-white dark:bg-[#182130] p-4 rounded-xl border border-slate-100 dark:border-slate-800 shadow-sm flex flex-col items-start min-h-[280px] h-full group hover:border-primary/40 hover:shadow-md transition-all relative">
+                            <div className={`p-4 rounded-xl border ${pendingInboxItems.some(i => i.priority === 'High') ? 'border-red-500 bg-red-50/10 dark:bg-red-900/10' : 'border-slate-100 dark:border-slate-800 bg-white dark:bg-[#182130]'} shadow-sm flex flex-col items-start min-h-[280px] h-full group hover:border-primary/40 hover:shadow-md transition-all relative`}>
                                 <p className="text-slate-500 dark:text-slate-400 text-sm font-medium mb-4 text-left w-full">Pending Approvals</p>
                                 <ul className="space-y-3 flex-1 flex flex-col w-full">
                                     <li className="flex items-center justify-between text-base h-8">
                                         <span className="flex items-center text-slate-700 dark:text-slate-300">
                                             <span className="size-2 rounded-full bg-amber-400 shrink-0 mr-2"></span>
                                             <span>Leaves</span>
-                                            <span className="inline-flex items-center justify-center text-[10px] font-bold text-red-600 bg-red-50 dark:bg-red-900/20 dark:text-red-400 border border-red-100 dark:border-red-900/30 px-2 py-0.5 rounded ml-2 h-5">1 Emergency</span>
+                                            {highPriorityLeaveCount > 0 && (
+                                                <span className="inline-flex items-center justify-center text-[10px] font-bold text-white bg-red-600 border border-red-500 px-2 py-0.5 rounded ml-2 h-5 animate-pulse">
+                                                    <span className="material-symbols-outlined text-[12px] mr-1">priority_high</span>
+                                                    CRITICAL
+                                                </span>
+                                            )}
                                         </span>
-                                        <span className="font-bold text-slate-900 dark:text-white tabular-nums">4</span>
+                                        <span className="font-bold text-slate-900 dark:text-white tabular-nums">{pendingLeaveCount}</span>
                                     </li>
                                     <li className="flex items-center justify-between text-base h-8">
                                         <span className="flex items-center text-slate-700 dark:text-slate-300">
                                             <span className="size-2 rounded-full bg-blue-400 shrink-0 mr-2"></span>
                                             <span>Loans</span>
-                                            <span className="inline-flex items-center justify-center text-[10px] font-bold text-slate-500 dark:text-slate-400 bg-slate-100 dark:bg-slate-700 border border-slate-200 dark:border-slate-600 px-2 py-0.5 rounded ml-2 h-5">5 Lakhs</span>
+                                            {pendingLoanCount > 0 && (
+                                                <span className={`inline-flex items-center justify-center text-[10px] font-bold ${pendingInboxItems.some(i => i.inboxType === 'Loan' && i.priority === 'High') ? 'text-white bg-red-600 border border-red-500 animate-pulse' : 'text-slate-500 dark:text-slate-400 bg-slate-100 dark:bg-slate-700 border border-slate-200 dark:border-slate-600'} px-2 py-0.5 rounded ml-2 h-5`}>
+                                                    {pendingInboxItems.some(i => i.inboxType === 'Loan' && i.priority === 'High') ? (
+                                                        <>
+                                                            <span className="material-symbols-outlined text-[12px] mr-1">warning</span>
+                                                            URGENT
+                                                        </>
+                                                    ) : totalLoanValueLabel}
+                                                </span>
+                                            )}
                                         </span>
-                                        <span className="font-bold text-slate-900 dark:text-white tabular-nums">2</span>
+                                        <span className="font-bold text-slate-900 dark:text-white tabular-nums">{pendingLoanCount}</span>
                                     </li>
+                                    {unacknowledgedAnnouncementsCount > 0 && (
+                                        <li className="flex items-center justify-between text-base h-8">
+                                            <span className="flex items-center text-slate-700 dark:text-slate-300">
+                                                <span className="size-2 rounded-full bg-amber-400 shrink-0 mr-2"></span>
+                                                <span>Ack. Required</span>
+                                                <span className="inline-flex items-center justify-center text-[10px] font-bold text-white bg-amber-600 border border-amber-500 px-2 py-0.5 rounded ml-2 h-5 animate-pulse">
+                                                    PENDING
+                                                </span>
+                                            </span>
+                                            <span className="font-bold text-slate-900 dark:text-white tabular-nums">{unacknowledgedAnnouncementsCount}</span>
+                                        </li>
+                                    )}
                                 </ul>
                             </div>
-                            <div className="bg-white dark:bg-[#182130] p-4 rounded-xl border border-slate-100 dark:border-slate-800 shadow-sm flex flex-col items-start min-h-[280px] h-full group hover:border-primary/40 hover:shadow-md transition-all relative">
-                                <div className="w-full flex flex-col items-start gap-3 mb-2">
-                                    <p className="text-slate-500 dark:text-slate-400 text-sm font-medium text-left underline decoration-primary/30 underline-offset-4">Last Payroll (Oct 30)</p>
-                                </div>
-                                <div className="flex flex-col items-start gap-1 w-full mt-auto">
-                                    <h3 className="text-[32px] font-bold text-slate-900 dark:text-white leading-none mb-1 whitespace-nowrap">
-                                        {lastPayrollTotal.toFixed(1)} L
-                                    </h3>
-                                    <p className="text-xs text-slate-400 mb-4 flex items-center gap-1.5">
-                                        Status:
-                                        <span className={`font-bold uppercase text-[10px] px-1.5 py-0.5 rounded ${lastPayrollStatus === 'Disbursed'
-                                                ? 'bg-emerald-100 text-emerald-700'
-                                                : lastPayrollStatus === 'Approved'
-                                                    ? 'bg-blue-100 text-blue-700'
-                                                    : 'bg-amber-100 text-amber-700'
-                                            }`}>
-                                            {lastPayrollStatus}
-                                        </span>
-                                    </p>
-                                    <div className="w-full pt-3 border-t border-slate-100 dark:border-slate-800 flex items-center justify-between gap-2 h-[42px]">
-                                        <span className="text-slate-500 dark:text-slate-400 text-[10px] font-semibold whitespace-nowrap flex items-center gap-1">
-                                            <span className="material-symbols-outlined text-[14px]">account_balance</span> KBZ: Ready
-                                        </span>
-                                        <button className="px-2.5 py-1 rounded bg-[#4F46E5] text-white text-[10px] font-bold shadow-sm hover:translate-y-[-1px] transition-transform">Details</button>
+                            {isCompanyWideAdmin && (
+                                <div className="bg-white dark:bg-[#182130] p-4 rounded-xl border border-slate-100 dark:border-slate-800 shadow-sm flex flex-col items-start min-h-[280px] h-full group hover:border-primary/40 hover:shadow-md transition-all relative">
+                                    <div className="w-full flex flex-col items-start gap-3 mb-2">
+                                        <p className="text-slate-500 dark:text-slate-400 text-sm font-medium text-left underline decoration-primary/30 underline-offset-4">Last Payroll (Oct 30)</p>
+                                    </div>
+                                    <div className="flex flex-col items-start gap-1 w-full mt-auto">
+                                        <h3 className="text-[32px] font-bold text-slate-900 dark:text-white leading-none mb-1 whitespace-nowrap">
+                                            {lastPayrollTotal.toFixed(1)} L
+                                        </h3>
+                                        <p className="text-xs text-slate-400 mb-4 flex items-center gap-1.5">
+                                            Status:
+                                            <span className={`font-bold uppercase text-[10px] px-1.5 py-0.5 rounded ${lastPayrollStatus === 'Disbursed'
+                                                    ? 'bg-emerald-100 text-emerald-700'
+                                                    : lastPayrollStatus === 'Approved'
+                                                        ? 'bg-blue-100 text-blue-700'
+                                                        : 'bg-amber-100 text-amber-700'
+                                                }`}>
+                                                {lastPayrollStatus}
+                                            </span>
+                                        </p>
+                                        <div className="w-full pt-3 border-t border-slate-100 dark:border-slate-800 flex items-center justify-between gap-2 h-[42px]">
+                                            <span className="text-slate-500 dark:text-slate-400 text-[10px] font-semibold whitespace-nowrap flex items-center gap-1">
+                                                <span className="material-symbols-outlined text-[14px]">account_balance</span> KBZ: Ready
+                                            </span>
+                                            <button className="px-2.5 py-1 rounded bg-[#4F46E5] text-white text-[10px] font-bold shadow-sm hover:translate-y-[-1px] transition-transform">Details</button>
+                                        </div>
                                     </div>
                                 </div>
-                            </div>
-                        </div>
+                            )}
 
-                        {/* Phase 9: Daily Absences by Location & Department Breakdown */}
-                        <div className="bg-white dark:bg-[#182130] rounded-xl border border-slate-100 dark:border-slate-800 shadow-sm overflow-hidden animate-fade-in-up" style={{ animationDelay: '0.2s' }}>
-                            <div className="px-6 py-4 border-b border-slate-50 dark:border-slate-800 flex items-center justify-between">
-                                <div className="flex items-center gap-3">
-                                    <div className="bg-orange-50 dark:bg-orange-900/20 p-2 rounded-lg">
-                                        <span className="material-symbols-outlined text-orange-600 text-xl">person_off</span>
+                            {!isCompanyWideAdmin && (
+                                <div className="bg-white dark:bg-[#182130] p-4 rounded-xl border border-slate-100 dark:border-slate-800 shadow-sm flex flex-col items-start min-h-[280px] h-full group hover:border-primary/40 hover:shadow-md transition-all relative">
+                                    <div className="w-full flex flex-col items-start gap-3 mb-2">
+                                        <p className="text-slate-500 dark:text-slate-400 text-sm font-medium whitespace-nowrap">Team Attendance Rate</p>
+                                        <div className="bg-emerald-50 dark:bg-emerald-900/20 p-2 rounded-lg flex items-center justify-center shadow-sm">
+                                            <span className="material-symbols-outlined text-emerald-600 text-2xl">group_add</span>
+                                        </div>
                                     </div>
-                                    <div>
-                                        <h3 className="text-base font-bold text-slate-900 dark:text-white">Daily Absences by Location & Department</h3>
-                                        <p className="text-xs text-slate-500 font-medium tracking-tight">Real-time staffing visibility based on {MOCK_NOW_TIME} check-in status (30m buffer)</p>
+                                    <div className="flex flex-col items-start gap-1 w-full mt-auto">
+                                        <h3 className="text-[32px] font-bold text-slate-900 dark:text-white leading-none mb-1 whitespace-nowrap">
+                                            {dashboardTotals.expected > 0 ? Math.round(((dashboardTotals.present + dashboardTotals.onLeave) / dashboardTotals.expected) * 100) : 0}%
+                                        </h3>
+                                        <p className="text-xs text-slate-400 mb-4">Coverage this shift</p>
+                                        <div className="w-full pt-3 border-t border-slate-100 dark:border-slate-800 flex items-center justify-between gap-2 h-[42px]">
+                                            <span className="text-slate-500 dark:text-slate-400 text-[10px] font-semibold whitespace-nowrap">
+                                                Team Expected: {dashboardTotals.expected}
+                                            </span>
+                                        </div>
                                     </div>
                                 </div>
-                                <div className="flex items-center gap-2">
-                                    <button 
-                                        onClick={() => {
-                                            alert("Generating Daily Absence Report (PDF)...");
-                                            const exportLog = {
-                                                id: `EXP-ABS-${Date.now()}`,
-                                                type: 'info',
-                                                message: 'Daily Absence Report generated for Bago & Yangon branches.',
-                                                timestamp: getFormattedDate(new Date(), 'time'),
-                                                isRead: false
-                                            };
-                                            setAlerts(prev => [exportLog, ...prev]);
-                                        }}
-                                        className="p-2 hover:bg-slate-50 dark:hover:bg-slate-800 rounded-lg text-slate-400 hover:text-slate-600 transition-colors"
-                                        title="Export Report"
-                                    >
-                                        <span className="material-symbols-outlined text-xl">more_vert</span>
-                                    </button>
+                            )}
+
+                            {!isCompanyWideAdmin && visitSuccessData.pct !== null && (
+                                <div className="bg-white dark:bg-[#182130] p-4 rounded-xl border border-slate-100 dark:border-slate-800 shadow-sm flex flex-col items-start min-h-[280px] h-full group hover:border-primary/40 hover:shadow-md transition-all relative">
+                                    <div className="w-full flex flex-col items-start gap-3 mb-2">
+                                        <p className="text-slate-500 dark:text-slate-400 text-sm font-medium whitespace-nowrap">Field Force Pulse</p>
+                                        <div className="bg-sky-50 dark:bg-sky-900/20 p-2 rounded-lg flex items-center justify-center shadow-sm">
+                                            <span className="material-symbols-outlined text-sky-600 text-2xl">radar</span>
+                                        </div>
+                                    </div>
+                                    <div className="flex flex-col items-start gap-1 w-full mt-auto">
+                                        <h3 className="text-[32px] font-bold text-slate-900 dark:text-white leading-none mb-1 whitespace-nowrap">
+                                            {visitSuccessData.pct}%
+                                        </h3>
+                                        <p className="text-xs text-slate-400 mb-4">Visit Success Rate</p>
+                                        <div className="w-full pt-3 border-t border-slate-100 dark:border-slate-800 flex flex-col gap-1.5 h-[42px]">
+                                            <div className="flex justify-between items-center text-[11px]">
+                                                <span className="text-slate-500">Total Visits:</span>
+                                                <span className="font-bold text-slate-700 dark:text-slate-200">{visitSuccessData.total}</span>
+                                            </div>
+                                            <div className="flex justify-between items-center text-[11px]">
+                                                <span className="text-slate-500">Compliant:</span>
+                                                <span className="font-bold text-emerald-600">{visitSuccessData.success}</span>
+                                            </div>
+                                        </div>
+                                    </div>
                                 </div>
-                            </div>
-                            <div className="overflow-x-auto">
-                                <table className="w-full text-left border-collapse text-sm">
-                                    <thead>
-                                        <tr className="bg-slate-50/50 dark:bg-slate-800/50 text-[10px] uppercase font-bold text-slate-400 tracking-wider">
-                                            <th className="px-6 py-3">Location / Department</th>
-                                            <th className="px-6 py-3 text-center">Expected</th>
-                                            <th className="px-6 py-3 text-center">Present</th>
-                                            <th className="px-6 py-3 text-center">Absent</th>
-                                            <th className="px-6 py-3 text-center">On Leave</th>
-                                            <th className="px-6 py-3 text-center">Coverage</th>
-                                            <th className="px-6 py-3 text-right">Actions</th>
-                                        </tr>
-                                    </thead>
-                                    <tbody className="divide-y divide-slate-50 dark:divide-slate-800">
-                                        {absenteeBreakdown.map((group, idx) => {
-                                            const coveragePerc = group.expected > 0 ? Math.round((group.present / group.expected) * 100) : 0;
-                                            const isUnderstaffed = coveragePerc < 80 && !todayHoliday;
-                                            
-                                            return (
-                                                <tr key={idx} className="group hover:bg-slate-50/80 dark:hover:bg-slate-800/50 transition-colors">
-                                                    <td className="px-6 py-4">
-                                                        <div className="flex flex-col">
-                                                            <span className="font-bold text-slate-900 dark:text-white capitalize">{group.dept}</span>
-                                                            <span className="text-[10px] text-slate-400 font-bold uppercase tracking-widest">{group.location}</span>
-                                                        </div>
-                                                    </td>
-                                                    <td className="px-6 py-4 text-center font-bold text-slate-600 dark:text-slate-400 tabular-nums">
-                                                        {group.expected}
-                                                    </td>
-                                                    <td className="px-6 py-4 text-center font-bold text-emerald-600 dark:text-emerald-400 tabular-nums">
-                                                        {group.present}
-                                                    </td>
-                                                    <td className="px-6 py-4 text-center">
-                                                        <span className={`font-bold tabular-nums ${group.absent > 0 ? 'text-orange-500' : 'text-slate-300'}`}>
-                                                            {group.absent}
-                                                        </span>
-                                                    </td>
-                                                    <td className="px-6 py-4 text-center font-bold text-blue-500 tabular-nums">
-                                                        {group.onLeave}
-                                                    </td>
-                                                    <td className="px-6 py-4 text-center">
-                                                        <div className="flex flex-col items-center gap-1.5">
-                                                            <div className="w-16 bg-slate-100 dark:bg-slate-700 h-1 rounded-full overflow-hidden">
-                                                                <div 
-                                                                    className={`h-full transition-all duration-1000 ${coveragePerc > 90 ? 'bg-emerald-500' : coveragePerc > 75 ? 'bg-amber-500' : 'bg-rose-500'}`}
-                                                                    style={{ width: `${coveragePerc}%` }}
-                                                                ></div>
-                                                            </div>
-                                                            <span className={`text-[10px] font-black ${coveragePerc > 90 ? 'text-emerald-600' : coveragePerc > 75 ? 'text-amber-600' : 'text-rose-600'}`}>
-                                                                {coveragePerc}%
-                                                            </span>
-                                                        </div>
-                                                    </td>
-                                                    <td className="px-6 py-4 text-right">
-                                                        <div className="flex items-center justify-end gap-2">
-                                                            {isUnderstaffed && (
-                                                                <span className="animate-pulse bg-rose-50 text-rose-600 text-[9px] font-black px-1.5 py-0.5 rounded border border-rose-100 uppercase tracking-tighter mr-2">
-                                                                    Understaffed
-                                                                </span>
-                                                            )}
-                                                            <button 
-                                                                onClick={() => {
-                                                                    setSelectedAbsenteeGroup({ dept: group.dept, location: group.location, type: 'Absent' });
-                                                                    setIsAbsenteeModalOpen(true);
-                                                                }}
-                                                                className="px-3 py-1.5 rounded-lg border border-slate-200 dark:border-slate-700 text-xs font-bold text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800 transition-all shadow-sm"
-                                                            >
-                                                                View Absentees
-                                                            </button>
-                                                        </div>
-                                                    </td>
-                                                </tr>
-                                            );
-                                        })}
-                                        {absenteeBreakdown.length === 0 && (
-                                            <tr>
-                                                <td colSpan={7} className="px-6 py-12 text-center text-slate-400 italic">
-                                                    No active shifts found for this reporting cycle.
-                                                </td>
-                                            </tr>
-                                        )}
-                                    </tbody>
-                                </table>
-                            </div>
+                            )}
                         </div>
 
                         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
@@ -828,9 +932,10 @@ export default function InsightsDashboard() {
                                         </div>
                                     )}
                                     {pendingInboxItems.length === 0 && (
-                                        <div className="text-center py-8 text-sm text-slate-500 flex flex-col items-center gap-2">
-                                            <span className="material-symbols-outlined text-4xl text-slate-300">task_alt</span>
-                                            <p>All actions complete!</p>
+                                        <div className="text-center py-12 text-sm text-slate-500 flex flex-col items-center gap-2 border-2 border-dashed border-slate-200 dark:border-slate-800 rounded-xl">
+                                            <span className="material-symbols-outlined text-[48px] text-emerald-400 mb-2">check_circle</span>
+                                            <p className="text-base font-bold text-slate-700 dark:text-slate-300">Compliance Clear</p>
+                                            <p className="text-xs text-slate-400">Total operational alignment achieved. No pending requests.</p>
                                         </div>
                                     )}
                                     {pendingInboxItems.map(item => (
@@ -1047,8 +1152,8 @@ export default function InsightsDashboard() {
                                     <div className="p-6 flex flex-col justify-center gap-4 h-full">
                                         <div>
                                             <div className="flex justify-between text-xs mb-2">
-                                                <span className="text-slate-500">Budget (Oct)</span>
-                                                <span className="font-medium text-slate-900 dark:text-white">80 hrs</span>
+                                                <span className="text-slate-500">Budget (This Month)</span>
+                                                <span className="font-medium text-slate-900 dark:text-white">{otMonitorData.budget} hrs</span>
                                             </div>
                                             <div className="w-full h-2 bg-slate-100 dark:bg-slate-700 rounded-full overflow-hidden">
                                                 <div className="h-full bg-slate-300 dark:bg-slate-500" style={{ width: '100%' }}></div>
@@ -1056,18 +1161,172 @@ export default function InsightsDashboard() {
                                         </div>
                                         <div>
                                             <div className="flex justify-between text-xs mb-2">
-                                                <span className="text-slate-500">Actual (Oct 24)</span>
-                                                <span className="font-medium text-rose-600">82 hrs</span>
+                                                <span className="text-slate-500">Actual Approved</span>
+                                                <span className={`font-medium ${otMonitorData.overBudget ? 'text-rose-600' : 'text-emerald-600'}`}>
+                                                    {otMonitorData.approved} hrs
+                                                </span>
                                             </div>
                                             <div className="w-full h-2 bg-slate-100 dark:bg-slate-700 rounded-full overflow-hidden">
-                                                <div className="h-full bg-rose-500" style={{ width: '102%' }}></div>
+                                                <div className={`h-full ${otMonitorData.overBudget ? 'bg-rose-500' : 'bg-emerald-500'}`} style={{ width: `${otMonitorData.pct}%` }}></div>
                                             </div>
-                                            <p className="text-[11px] font-medium text-rose-600 mt-2 flex items-center gap-1.5 bg-rose-50 dark:bg-rose-900/20 px-2 py-1 rounded border border-rose-100 dark:border-rose-900/30 w-fit">
-                                                ⚠️ Production Dept is 15% over budget
-                                            </p>
+                                            {otMonitorData.overBudget && (
+                                                <p className="text-[11px] font-medium text-rose-600 mt-2 flex items-center gap-1.5 bg-rose-50 dark:bg-rose-900/20 px-2 py-1 rounded border border-rose-100 dark:border-rose-900/30 w-fit">
+                                                    ⚠️ {scopedDept || 'Organization'} is {otMonitorData.pct - 100}% over budget
+                                                </p>
+                                            )}
                                         </div>
                                     </div>
                                 </div>
+                            </div>
+                        </div>
+
+                        {/* Phase 9: Daily Absences by Location & Department Breakdown */}
+                        <div className="bg-white dark:bg-[#182130] rounded-xl border border-slate-100 dark:border-slate-800 shadow-sm overflow-hidden animate-fade-in-up" style={{ animationDelay: '0.2s' }}>
+                            <div className="px-6 py-4 border-b border-slate-50 dark:border-slate-800 flex items-center justify-between">
+                                <div className="flex items-center gap-3">
+                                    <div className="bg-orange-50 dark:bg-orange-900/20 p-2 rounded-lg">
+                                        <span className="material-symbols-outlined text-orange-600 text-xl">person_off</span>
+                                    </div>
+                                    <div>
+                                        <h3 className="text-base font-bold text-slate-900 dark:text-white">Daily Absences by Location & Department</h3>
+                                        <p className="text-xs text-slate-500 font-medium tracking-tight">Real-time staffing visibility based on {liveNowTime} check-in status ({systemSettings.compliance.attendanceGracePeriod}m grace)</p>
+                                    </div>
+                                </div>
+                                <div className="flex items-center gap-2">
+                                    <button 
+                                        onClick={async () => {
+                                            const BOM = "\uFEFF";
+                                            let csv = BOM + "Department,Location,Expected,Present,Absent,OnLeave,CoveragePct\r\n";
+                                            absenteeBreakdown.forEach(g => {
+                                                const cov = g.expected > 0 ? Math.round((g.present / g.expected) * 100) : 0;
+                                                csv += `"${g.dept}","${g.location}",${g.expected},${g.present},${g.absent},${g.onLeave},${cov}%\r\n`;
+                                            });
+
+                                            const reportHash = await generateAuditHash(currentAdminId, new Date().toISOString(), csv.length);
+                                            csv += `\r\n# AUDIT HASH: ${reportHash}\r\n`;
+
+                                            const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+                                            const link = document.createElement("a");
+                                            link.href = URL.createObjectURL(blob);
+                                            link.download = `Daily_Absences_${MOCK_TODAY}.csv`;
+                                            document.body.appendChild(link);
+                                            link.click();
+                                            document.body.removeChild(link);
+                                            
+                                            addDocumentToLibrary({
+                                                title: `Daily Absence Report (${MOCK_TODAY})`,
+                                                description: `Automated export of Daily Absences. Hash: ${reportHash}`,
+                                                category: 'Attendance Report',
+                                                sourceModule: 'Home',
+                                                fileContent: csv,
+                                                relatedRecordId: reportHash,
+                                                permissions: ['Admin']
+                                            } as any, currentAdminId);
+
+                                            const exportLog = {
+                                                id: `EXP-ABS-${Date.now()}`,
+                                                type: 'info' as const,
+                                                message: 'Daily Absence CSV Export generated successfully.',
+                                                timestamp: getFormattedDate(new Date(), 'time'),
+                                                isRead: false
+                                            };
+                                            setAlerts(prev => [exportLog, ...prev]);
+                                        }}
+                                        className="p-2 hover:bg-slate-50 dark:hover:bg-slate-800 rounded-lg text-slate-400 hover:text-slate-600 transition-colors"
+                                        title="Export Report"
+                                    >
+                                        <span className="material-symbols-outlined text-xl">more_vert</span>
+                                    </button>
+                                </div>
+                            </div>
+                            <div className="overflow-x-auto">
+                                <table className="w-full text-left border-collapse text-sm">
+                                    <thead>
+                                        <tr className="bg-slate-50/50 dark:bg-slate-800/50 text-[10px] uppercase font-bold text-slate-400 tracking-wider">
+                                            <th className="px-6 py-3">Location / Department</th>
+                                            <th className="px-6 py-3 text-center">Expected</th>
+                                            <th className="px-6 py-3 text-center">Present</th>
+                                            <th className="px-6 py-3 text-center">Absent</th>
+                                            <th className="px-6 py-3 text-center">On Leave</th>
+                                            <th className="px-6 py-3 text-center">Coverage</th>
+                                            <th className="px-6 py-3 text-right">Actions</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody className="divide-y divide-slate-50 dark:divide-slate-800">
+                                        {absenteeBreakdown.every(g => g.absent === 0) ? (
+                                            <tr>
+                                                <td colSpan={7} className="px-6 py-12 text-center">
+                                                    <div className="flex flex-col items-center justify-center text-slate-400">
+                                                                        <p className="text-xs mt-1">Zero unverified absences detected across all locations.</p>
+                                                    </div>
+                                                </td>
+                                            </tr>
+                                        ) : (
+                                            <Fragment>
+                                                {absenteeBreakdown.map((group, idx) => {
+                                                    const coveragePerc = group.expected > 0 ? Math.round((group.present / group.expected) * 100) : 0;
+                                                    const isUnderstaffed = coveragePerc < 80 && !todayHoliday;
+
+                                                    return (
+                                                        <tr key={idx} className="group hover:bg-slate-50/80 dark:hover:bg-slate-800/50 transition-colors">
+                                                            <td className="px-6 py-4">
+                                                                <div className="flex flex-col">
+                                                                    <span className="font-bold text-slate-900 dark:text-white capitalize">{group.dept}</span>
+                                                                    <span className="text-[10px] text-slate-400 font-bold uppercase tracking-widest">{group.location}</span>
+                                                                </div>
+                                                            </td>
+                                                            <td className="px-6 py-4 text-center font-bold text-slate-600 dark:text-slate-400 tabular-nums">
+                                                                {group.expected}
+                                                            </td>
+                                                            <td className="px-6 py-4 text-center font-bold text-emerald-600 dark:text-emerald-400 tabular-nums">
+                                                                {group.present}
+                                                            </td>
+                                                            <td className="px-6 py-4 text-center">
+                                                                <span className={`font-bold tabular-nums ${group.absent > 0 ? 'text-orange-500' : 'text-slate-300'}`}>
+                                                                    {group.absent}
+                                                                </span>
+                                                            </td>
+                                                            <td className="px-6 py-4 text-center font-bold text-blue-500 tabular-nums">
+                                                                {group.onLeave}
+                                                            </td>
+                                                            <td className="px-6 py-4 text-center">
+                                                                <div className="flex flex-col items-center gap-1.5">
+                                                                    <div className="w-16 bg-slate-100 dark:bg-slate-700 h-1 rounded-full overflow-hidden">
+                                                                        <div
+                                                                            className={`h-full transition-all duration-1000 ${coveragePerc > 90 ? 'bg-emerald-500' : coveragePerc > 75 ? 'bg-amber-500' : 'bg-rose-500'}`}
+                                                                            style={{ width: `${coveragePerc}%` }}
+                                                                        ></div>
+                                                                    </div>
+                                                                    <span className={`text-[10px] font-black ${coveragePerc > 90 ? 'text-emerald-600' : coveragePerc > 75 ? 'text-amber-600' : 'text-rose-600'}`}>
+                                                                        {coveragePerc}%
+                                                                    </span>
+                                                                </div>
+                                                            </td>
+                                                            <td className="px-6 py-4 text-right">
+                                                                <div className="flex items-center justify-end gap-2">
+                                                                    {isUnderstaffed && (
+                                                                        <span className="animate-pulse bg-rose-50 text-rose-600 text-[9px] font-black px-1.5 py-0.5 rounded border border-rose-100 uppercase tracking-tighter mr-2">
+                                                                            Understaffed
+                                                                        </span>
+                                                                    )}
+                                                                    <button
+                                                                        onClick={() => {
+                                                                            setSelectedAbsenteeGroup({ dept: group.dept, location: group.location, type: 'Absent' });
+                                                                            setIsAbsenteeModalOpen(true);
+                                                                        }}
+                                                                        className="px-3 py-1.5 rounded-lg border border-slate-200 dark:border-slate-700 text-xs font-bold text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800 transition-all shadow-sm"
+                                                                    >
+                                                                        View Absentees
+                                                                    </button>
+                                                                </div>
+                                                            </td>
+                                                        </tr>
+                                                    );
+                                                })}
+                                            </Fragment>
+                                        )}
+                                    </tbody>
+                                </table>
                             </div>
                         </div>
                     </div>

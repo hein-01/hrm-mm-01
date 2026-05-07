@@ -8,6 +8,7 @@ import { useAppData } from '../context/AppDataContext';
 // ─── Types ───────────────────────────────────────────────────────────────────
 type StatusFilter = 'All' | 'Pending' | 'Approved' | 'Rejected' | 'Processed';
 type CategoryFilter = 'All' | 'Addition' | 'Deduction';
+type SourceFilter = 'All' | 'Manual' | 'System-Expense' | 'System-OT' | 'System-Performance' | 'System-Attendance' | 'System-Asset';
 interface Toast { id: string; message: string; type: 'success' | 'error' | 'warning'; }
 
 // ─── Toast Component ──────────────────────────────────────────────────────────
@@ -42,6 +43,7 @@ export default function Adjustments() {
     const [searchQuery, setSearchQuery] = useState('');
     const [categoryFilter, setCategoryFilter] = useState<CategoryFilter>('All');
     const [statusFilter, setStatusFilter] = useState<StatusFilter>('All');
+    const [sourceFilter, setSourceFilter] = useState<SourceFilter>('All');
     const [deptFilter, setDeptFilter] = useState('All');
     const [adminId, setAdminId] = useState('ADM-001');
 
@@ -124,7 +126,7 @@ export default function Adjustments() {
 
     const handleApprove = (id: string) => {
         if (!isAdmin(adminId)) {
-            addToast(`Security Violation: '${adminId}' is not an Administrator. Incident reported to Insights Dashboard.`, 'error', 5000);
+            addToast(`Security Violation: '${adminId}' is not an Administrator. Incident reported to Home Dashboard.`, 'error', 5000);
             approveAdjustment(id, adminId); // still call to trigger the context alert
             return;
         }
@@ -134,7 +136,7 @@ export default function Adjustments() {
 
     const handleReject = (id: string) => {
         if (!isAdmin(adminId)) {
-            addToast(`Security Violation: '${adminId}' is not an Administrator. Incident reported to Insights Dashboard.`, 'error', 5000);
+            addToast(`Security Violation: '${adminId}' is not an Administrator. Incident reported to Home Dashboard.`, 'error', 5000);
             rejectAdjustment(id, adminId);
             return;
         }
@@ -155,15 +157,18 @@ export default function Adjustments() {
             const matchesCategory = categoryFilter === 'All' || adj.category === categoryFilter;
             const matchesStatus   = statusFilter   === 'All' || adj.status   === statusFilter;
             const matchesDept     = deptFilter     === 'All' || adj.dept     === deptFilter;
-            return matchesSearch && matchesCategory && matchesStatus && matchesDept;
+            const matchesSource   = sourceFilter   === 'All' || adj.source   === sourceFilter;
+            return matchesSearch && matchesCategory && matchesStatus && matchesDept && matchesSource;
         }),
-    [adjustments, searchQuery, categoryFilter, statusFilter, deptFilter]);
+    [adjustments, searchQuery, categoryFilter, statusFilter, deptFilter, sourceFilter]);
 
     const stats = useMemo(() => ({
         net: adjustments.reduce((s, a) => s + (a.category === 'Addition' ? a.amount : -a.amount), 0),
         additions: adjustments.filter(a => a.category === 'Addition' && a.status !== 'Rejected').reduce((s, a) => s + a.amount, 0),
         deductions: adjustments.filter(a => a.category === 'Deduction' && a.status !== 'Rejected').reduce((s, a) => s + a.amount, 0),
-        pending: adjustments.filter(a => a.status === 'Pending').length
+        pending: adjustments.filter(a => a.status === 'Pending').length,
+        expenseReimbursed: adjustments.filter(a => a.source === 'System-Expense' && a.status === 'Approved').reduce((s, a) => s + a.amount, 0),
+        expenseCount: adjustments.filter(a => a.source === 'System-Expense').length
     }), [adjustments]);
 
     const statusBadge = (status: string, isImmutable: boolean) => {
@@ -183,6 +188,7 @@ export default function Adjustments() {
             'System-OT':          '/ot-approvals',
             'System-Performance': '/performance',
             'System-Attendance':  '/attendance',
+            'System-Expense':     '/expenses',
         };
         const target = routes[adj.source];
         if (target) navigate(target, { state: { searchQuery: adj.sourceLink } });
@@ -212,12 +218,13 @@ export default function Adjustments() {
                 <div className="flex-1 overflow-y-auto p-8 space-y-6 bg-slate-50 dark:bg-background-dark relative">
 
                     {/* KPI Cards */}
-                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-5">
+                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-5">
                         {[
                             { label: 'Net Adjustments', value: `${(stats.net / 100000).toFixed(2)} L`, sub: 'Current Cycle', icon: 'calculate', color: 'text-primary bg-primary/10' },
                             { label: 'Monthly Bonuses', value: `+${(stats.additions / 100000).toFixed(2)} L`, sub: 'Addition Pillar', icon: 'payments', color: 'text-emerald-600 bg-emerald-50 dark:bg-emerald-900/30' },
                             { label: 'Fines & Deductions', value: `-${(stats.deductions / 100000).toFixed(2)} L`, sub: 'Compliance Leakage', icon: 'priority_high', color: 'text-red-600 bg-red-50 dark:bg-red-900/30' },
-                            { label: 'Pending Approval', value: `${stats.pending} Requests`, sub: isAdminUser ? 'You can approve' : '⚠ Admin required', icon: 'pending_actions', color: 'text-amber-600 bg-amber-50 dark:bg-amber-900/30' }
+                            { label: 'Pending Approval', value: `${stats.pending} Requests`, sub: isAdminUser ? 'You can approve' : '⚠ Admin required', icon: 'pending_actions', color: 'text-amber-600 bg-amber-50 dark:bg-amber-900/30' },
+                            { label: 'Expense Reimbursements', value: `${(stats.expenseReimbursed / 100000).toFixed(2)} L`, sub: `${stats.expenseCount} claim(s) total`, icon: 'receipt_long', color: 'text-violet-600 bg-violet-50 dark:bg-violet-900/30' },
                         ].map(k => (
                             <div key={k.label} className="bg-white dark:bg-slate-900 p-6 rounded-xl border border-slate-200 dark:border-slate-800 shadow-sm hover:shadow-md transition-shadow">
                                 <div className="flex items-center justify-between mb-3">
@@ -254,6 +261,28 @@ export default function Adjustments() {
                                                 className={`px-2.5 py-1 rounded-md text-[10px] font-bold transition-all uppercase tracking-wide ${
                                                     statusFilter === s ? 'bg-white dark:bg-slate-700 shadow-sm text-primary' : 'text-slate-400 hover:text-slate-600'
                                                 }`}>{s}
+                                            </button>
+                                        ))}
+                                    </div>
+                                    {/* Source Filter */}
+                                    <div className="flex bg-slate-100 dark:bg-slate-800 p-1 rounded-lg gap-0.5">
+                                        {([
+                                            { key: 'All', label: 'All Sources' },
+                                            { key: 'Manual', label: 'Manual' },
+                                            { key: 'System-Expense', label: '🧾 Expense' },
+                                            { key: 'System-OT', label: 'OT' },
+                                            { key: 'System-Performance', label: 'Performance' },
+                                            { key: 'System-Attendance', label: 'Attendance' },
+                                            { key: 'System-Asset', label: 'Asset' },
+                                        ] as { key: SourceFilter; label: string }[]).map(s => (
+                                            <button key={s.key} onClick={() => setSourceFilter(s.key)}
+                                                className={`px-2.5 py-1 rounded-md text-[10px] font-bold transition-all whitespace-nowrap ${
+                                                    sourceFilter === s.key
+                                                        ? s.key === 'System-Expense'
+                                                            ? 'bg-violet-600 text-white shadow-sm'
+                                                            : 'bg-white dark:bg-slate-700 shadow-sm text-primary'
+                                                        : 'text-slate-400 hover:text-slate-600'
+                                                }`}>{s.label}
                                             </button>
                                         ))}
                                     </div>
@@ -319,12 +348,21 @@ export default function Adjustments() {
                                                     </div>
                                                 </td>
                                                 <td className="px-6 py-4">
-                                                    <p className="text-[10px] font-bold text-slate-400 uppercase tracking-tight">{adj.source}</p>
+                                                    <div className="flex items-center gap-1.5 mb-1">
+                                                        <p className="text-[10px] font-bold text-slate-400 uppercase tracking-tight">{adj.source.replace('System-', '')}</p>
+                                                        {adj.source === 'System-Expense' && (
+                                                            <span className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded text-[9px] font-black bg-violet-50 text-violet-700 border border-violet-200 uppercase tracking-tight">
+                                                                <span className="material-symbols-outlined text-[10px]">receipt_long</span>Expense
+                                                            </span>
+                                                        )}
+                                                    </div>
                                                     {adj.source !== 'Manual' ? (
                                                         <button onClick={() => handleSourceClick(adj)}
                                                             title={`Open in ${adj.source.replace('System-', '')} module`}
-                                                            className="text-xs text-primary font-bold flex items-center gap-1 hover:text-indigo-700 hover:underline transition-colors">
-                                                            <span className="material-symbols-outlined text-[12px]">open_in_new</span>{adj.sourceLink}
+                                                            className={`text-xs font-bold flex items-center gap-1 hover:underline transition-colors ${
+                                                                adj.source === 'System-Expense' ? 'text-violet-600 hover:text-violet-800' : 'text-primary hover:text-indigo-700'
+                                                            }`}>
+                                                            <span className="material-symbols-outlined text-[12px]">{adj.source === 'System-Expense' ? 'receipt_long' : 'open_in_new'}</span>{adj.sourceLink}
                                                         </button>
                                                     ) : (
                                                         <p className="text-xs text-slate-400 font-medium flex items-center gap-1">

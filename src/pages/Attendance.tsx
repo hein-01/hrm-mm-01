@@ -1,10 +1,12 @@
 import React, { useState, useMemo } from 'react';
+import { TableVirtuoso } from 'react-virtuoso';
 import DropdownMenu from '../components/DropdownMenu';
 import Sidebar from '../components/Sidebar';
 import Header from '../components/Header';
 import { useAppData } from '../context/AppDataContext';
 import { safeEval } from '../utils/safeEval';
 import { useDebounce } from '../hooks/useDebounce';
+import * as XLSX from 'xlsx';
 
 export default function Attendance() {
     const { 
@@ -17,7 +19,8 @@ export default function Attendance() {
         systemSettings,
         shifts,
         employees,
-        bulkImportAttendance
+        bulkImportAttendance,
+        addDocumentToLibrary
     } = useAppData();
 
     const [locationFilter, setLocationFilter] = useState('All Locations');
@@ -38,7 +41,7 @@ export default function Attendance() {
     const [isDevModeOverride, setIsDevModeOverride] = useState(false);
     const [isPunching, setIsPunching] = useState(false);
     const [punchSuccess, setPunchSuccess] = useState(false);
-    const [dateFilter, setDateFilter] = useState('2023-10-23');
+    const [dateFilter, setDateFilter] = useState(new Date().toISOString().split('T')[0]);
     const debouncedSearch = useDebounce(searchQuery, 300);
 
     const isDevelopment = import.meta.env.MODE === 'development';
@@ -85,12 +88,96 @@ export default function Attendance() {
     const handleRegularizeSave = () => {
         if (activeRecord) {
             regularizeAttendance(activeRecord.id, manualCheckoutTime, activeAdminId, regularizeReason);
+            setActiveRecord(null);
             setActiveModal(null);
         }
     };
 
+    const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+        const file = e.target.files?.[0];
+        if (file) {
+            const reader = new FileReader();
+            reader.onload = (event) => {
+                const text = event.target?.result as string;
+                if (text) {
+                    const res = bulkImportAttendance(activeAdminId, text);
+                    alert(res.message);
+                }
+            };
+            reader.onerror = () => alert("Error reading file.");
+            reader.readAsText(file);
+        }
+    };
+
+    const handleExportReport = () => {
+        const hash = `[SECURE-${Math.random().toString(36).substring(2, 8).toUpperCase()}]`;
+        // Build CSV content from filtered logs
+        const BOM = "\uFEFF";
+        let csvContent = BOM + "Employee,ID,Dept,Date,Check-In,Check-Out,Status,Total Hours,Location,Method,Penalty (MMK)\r\n";
+        filteredLogs.forEach(log => {
+            csvContent += `"${log.name}","${log.empId}","${log.dept}","${log.date}","${log.checkIn}","${log.checkOut}","${log.status}","${log.totalHours}","${log.location}","${log.checkInMethod}","${getPenalty(log.id)}"\r\n`;
+        });
+        csvContent += `\r\n# Records: ${filteredLogs.length} | Hash: ${hash}\r\n`;
+
+        // Trigger browser download
+        const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+        const url = URL.createObjectURL(blob);
+        const link = document.createElement('a');
+        link.setAttribute('href', url);
+        link.setAttribute('download', `Attendance_${dateFilter}.csv`);
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+
+        const reportYear = dateFilter ? dateFilter.substring(0, 4) : new Date().getFullYear().toString();
+        const res = addDocumentToLibrary({
+            title: `Attendance_Report_${dateFilter}`,
+            category: 'Payroll Support Document',
+            sourceModule: 'Payroll',
+            description: 'Automated monthly Time-Registry system extraction for Payroll.',
+            fileContent: csvContent,
+            fileName: `Attendance_${dateFilter}.csv`,
+            period: reportYear,
+            generatedBy: activeAdminId
+        }, activeAdminId);
+        
+        if (res.success) {
+            alert(`CSV downloaded & pushed to Forms Library. Verify hash ${hash} for labor audit compliance.`);
+        }
+    };
+
+    const handleExportXLSX = () => {
+        const data = filteredLogs.map(log => ({
+            'Employee': log.name,
+            'ID': log.empId,
+            'Department': log.dept,
+            'Date': log.date,
+            'Check-In': log.checkIn,
+            'Check-Out': log.checkOut,
+            'Status': log.status,
+            'Total Hours': log.totalHours,
+            'Location': log.location,
+            'Method': log.checkInMethod,
+            'Penalty (MMK)': getPenalty(log.id),
+            'Geofence': log.geofenceStatus,
+            'Project': log.project || ''
+        }));
+
+        const ws = XLSX.utils.json_to_sheet(data);
+        const wb = XLSX.utils.book_new();
+        XLSX.utils.book_append_sheet(wb, ws, 'Attendance');
+
+        const colWidths = [
+            { wch: 20 }, { wch: 12 }, { wch: 15 }, { wch: 12 },
+            { wch: 12 }, { wch: 12 }, { wch: 12 }, { wch: 10 },
+            { wch: 20 }, { wch: 12 }, { wch: 12 }, { wch: 12 }, { wch: 20 }
+        ];
+        ws['!cols'] = colWidths;
+
+        XLSX.writeFile(wb, `Attendance_${dateFilter}.xlsx`);
+    };
+
     const filteredLogs = useMemo(() => {
-        setCurrentPage(1);
         let logs = attendanceLogs;
         if (dateFilter) {
             logs = logs.filter(log => log.date === dateFilter);
@@ -115,6 +202,14 @@ export default function Attendance() {
         }
         return logs;
     }, [attendanceLogs, dateFilter, locationFilter, statusFilter, debouncedSearch]);
+
+    // Reset to page 1 whenever filters change
+    const prevFilterKey = `${dateFilter}|${locationFilter}|${statusFilter}|${debouncedSearch}`;
+    const [lastFilterKey, setLastFilterKey] = useState(prevFilterKey);
+    if (prevFilterKey !== lastFilterKey) {
+        setLastFilterKey(prevFilterKey);
+        if (currentPage !== 1) setCurrentPage(1);
+    }
 
     const totalPages = Math.max(1, Math.ceil(filteredLogs.length / pageSize));
     const pagedLogs = filteredLogs.slice((currentPage - 1) * pageSize, currentPage * pageSize);
@@ -146,13 +241,28 @@ export default function Attendance() {
 
             let LateMinutes = 0;
             if (log.status === 'Late' && log.checkIn) {
-                const [time, modifier] = log.checkIn.split(' ');
-                const [hours, minutes] = time.split(':');
-                let hr = parseInt(hours, 10);
-                if (hr === 12) hr = 0;
-                if (modifier === 'PM') hr += 12;
-                const checkInMins = hr * 60 + parseInt(minutes, 10);
-                LateMinutes = Math.max(0, checkInMins - (9 * 60));
+                const shift = shifts.find(s => s.id === emp?.shiftId) || shifts[0];
+                const [targetH, targetM] = shift.start.split(':').map(Number);
+                const targetMins = targetH * 60 + targetM;
+                const GRACE_PERIOD = complianceSettings.attendanceGracePeriod;
+
+                // Parse checkIn time — supports both "09:05 AM" (12h) and "14:30:00" (24h)
+                const parts = log.checkIn.trim().split(' ');
+                const timePart = parts[0];
+                const modifier = parts[1]; // 'AM'|'PM' or undefined for 24h
+                const timeSplit = timePart.split(':');
+                let hr = parseInt(timeSplit[0], 10);
+                const min = parseInt(timeSplit[1], 10);
+                if (modifier) {
+                    // 12-hour format
+                    if (hr === 12) hr = 0;
+                    if (modifier === 'PM') hr += 12;
+                }
+                const checkInMins = hr * 60 + min;
+
+                if (checkInMins > targetMins + GRACE_PERIOD) {
+                    LateMinutes = checkInMins - targetMins;
+                }
             }
 
             const isConditionMet = safeEval(rule.condition, { LateMinutes });
@@ -164,7 +274,7 @@ export default function Attendance() {
             }
         }
         return map;
-    }, [filteredLogs, systemSettings.penaltyRules, employees]);
+    }, [filteredLogs, systemSettings.penaltyRules, employees, shifts]);
 
     const getPenalty = (logId: string) => penaltyMap.get(logId) ?? 0;
 
@@ -176,9 +286,20 @@ export default function Attendance() {
     const kpiOnLeave = kpiBase.filter(l => l.status === 'On Leave').length;
 
     const renderMethodBadge = (method: string) => {
-        if (method === '🤖 Auto') return <span className="mr-1" title="System Generated (Auto Attendance)">🤖</span>;
-        const icon = method === 'Web Portal' ? '🖥️' : method === 'Mobile App' ? '📱' : '📟';
-        return <span className="mr-1" title={method}>{icon}</span>;
+        const configs: Record<string, { icon: string; label: string; cls: string }> = {
+            'QR':         { icon: 'qr_code_scanner', label: 'QR Scan',   cls: 'bg-blue-50 text-blue-600 border-blue-200 dark:bg-blue-900/20 dark:text-blue-400 dark:border-blue-900/30' },
+            'Mobile App': { icon: 'smartphone',      label: 'Mobile',    cls: 'bg-indigo-50 text-indigo-600 border-indigo-200 dark:bg-indigo-900/20 dark:text-indigo-400' },
+            'Web Portal': { icon: 'computer',        label: 'Web',       cls: 'bg-slate-100 text-slate-600 border-slate-200 dark:bg-slate-800 dark:text-slate-400' },
+            'Biometric':  { icon: 'fingerprint',     label: 'Biometric', cls: 'bg-violet-50 text-violet-600 border-violet-200 dark:bg-violet-900/20 dark:text-violet-400' },
+            '🤖 Auto':    { icon: 'smart_toy',       label: 'Auto',      cls: 'bg-emerald-50 text-emerald-600 border-emerald-200 dark:bg-emerald-900/20 dark:text-emerald-400' },
+            'CSV':        { icon: 'table',           label: 'CSV Import', cls: 'bg-amber-50 text-amber-600 border-amber-200 dark:bg-amber-900/20 dark:text-amber-400' },
+        };
+        const cfg = configs[method] || { icon: 'device_unknown', label: method, cls: 'bg-slate-50 text-slate-500 border-slate-200' };
+        return (
+            <span className={`${cfg.cls.split(' ').filter(c => c.startsWith('text-') && !c.startsWith('text-[')).join(' ')}`} title={cfg.label}>
+                <span className="material-symbols-outlined text-[16px] leading-none">{cfg.icon}</span>
+            </span>
+        );
     };
 
     const renderStatusBadge = (log: any) => {
@@ -254,7 +375,7 @@ export default function Attendance() {
                             <div className="absolute right-0 top-0 bottom-0 w-80 bg-slate-50 dark:bg-slate-900/50 border-l border-slate-200 dark:border-slate-800 rounded-r-xl p-4 pb-5 hidden xl:flex flex-col justify-center gap-3">
 
                                 <div className="flex items-center justify-between">
-                                    <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Admin Override</span>
+                                    <span className="text-xs font-black text-slate-400 uppercase tracking-widest">Admin Override</span>
                                     {isDevelopment && (
                                         <button
                                             onClick={() => setShowDevSettings(s => !s)}
@@ -323,19 +444,6 @@ export default function Attendance() {
                             <div className="flex-1 flex flex-col gap-2">
                                 {/* Row 1 — all controls on a single h-9 baseline */}
                                 <div className="flex items-center gap-2 h-9">
-                                    {/* Search — far left, stretches */}
-                                    <div className="flex-1 relative min-w-[160px] h-full">
-                                        <div className="absolute inset-y-0 left-0 pl-2.5 flex items-center pointer-events-none">
-                                            <span className="material-symbols-outlined text-slate-400 text-[18px]">search</span>
-                                        </div>
-                                        <input
-                                            className="w-full h-full pl-9 pr-3 text-sm font-medium text-slate-700 dark:text-slate-200 bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 rounded-md focus:ring-[#4F46E5] focus:border-[#4F46E5] shadow-sm transition-all outline-none"
-                                            placeholder="Search employee, ID, dept… (⌘K)"
-                                            type="text"
-                                            value={searchQuery}
-                                            onChange={(e) => setSearchQuery(e.target.value)}
-                                        />
-                                    </div>
                                     {/* Date picker */}
                                     <div className="relative h-full">
                                         <div className="absolute inset-y-0 left-0 pl-2.5 flex items-center pointer-events-none">
@@ -349,9 +457,12 @@ export default function Attendance() {
                                         />
                                     </div>
                                     {/* Location filter */}
+                                    <div className="flex-1 h-full">
                                     <DropdownMenu
                                         value={locationFilter}
                                         onChange={setLocationFilter}
+                                        className="w-full h-full"
+                                        triggerClassName="w-full justify-between h-full"
                                         options={[
                                             { value: 'All Locations', label: 'All Locations' },
                                             ...systemSettings.officeLocations.map(loc => ({
@@ -361,60 +472,158 @@ export default function Attendance() {
                                             }))
                                         ]}
                                     />
+                                    </div>
                                     {/* Import + Sync grouped right */}
                                     <div className="flex items-center gap-1.5 ml-auto h-full">
                                         <button
-                                            onClick={() => {
-                                                const res = bulkImportAttendance(activeAdminId);
-                                                alert(res.message);
-                                            }}
-                                            className="h-full flex items-center gap-1.5 px-3 rounded-md text-slate-600 dark:text-slate-400 border border-slate-300 dark:border-slate-600 text-[13px] font-semibold hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors bg-transparent shadow-sm"
+                                            onClick={() => window.print()}
+                                            className="h-full flex items-center gap-1.5 px-3 rounded-md text-slate-600 dark:text-slate-400 border border-slate-300 dark:border-slate-600 text-[13px] font-semibold hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors bg-transparent shadow-sm whitespace-nowrap"
+                                            title="Print Attendance Report"
                                         >
-                                            <span className="material-symbols-outlined text-[18px]">upload</span>
-                                            Import
+                                            <span className="material-symbols-outlined text-[18px]">print</span>
+                                            Print
                                         </button>
                                         <button
                                             onClick={() => {
-                                                if (isSyncing) return;
-                                                setIsSyncing(true);
-                                                setTimeout(() => {
-                                                    syncAttendance();
-                                                    setIsSyncing(false);
-                                                    setLastSyncTime('Just now');
-                                                }, 1500);
+                                                const printWindow = window.open('', '_blank');
+                                                if (!printWindow) return;
+                                                const tableRows = filteredLogs.map(log => `
+                                                    <tr>
+                                                        <td>${log.name}<br><small>${log.empId} - ${log.dept}</small></td>
+                                                        <td>${log.checkIn}</td>
+                                                        <td>${log.checkOut}</td>
+                                                        <td>${log.project || '-'}</td>
+                                                        <td>${log.totalHours > 0 ? log.totalHours + 'h' : '-'}</td>
+                                                        <td>${log.status}</td>
+                                                        <td>${getPenalty(log.id) > 0 ? getPenalty(log.id).toLocaleString() + ' MMK' : '-'}</td>
+                                                    </tr>
+                                                `).join('');
+                                                printWindow.document.write(`
+                                                    <html>
+                                                        <head>
+                                                            <title>Attendance Report - ${dateFilter}</title>
+                                                            <style>
+                                                                body { font-family: Arial, sans-serif; padding: 20px; }
+                                                                table { width: 100%; border-collapse: collapse; margin-top: 20px; }
+                                                                th, td { border: 1px solid #ddd; padding: 8px; text-align: left; font-size: 11px; }
+                                                                th { background-color: #4F46E5; color: white; }
+                                                                tr:nth-child(even) { background-color: #f9f9f9; }
+                                                                .header { text-align: center; margin-bottom: 20px; }
+                                                                .kpi-row { margin-bottom: 20px; }
+                                                                .kpi { display: inline-block; margin: 5px 15px; padding: 8px 15px; background: #f0f0f0; border-radius: 4px; }
+                                                                @media print { body { -webkit-print-color-adjust: exact; } }
+                                                            </style>
+                                                        </head>
+                                                        <body>
+                                                            <div class="header">
+                                                                <h1>Attendance Report</h1>
+                                                                <p>Date: ${dateFilter}</p>
+                                                                <div class="kpi-row">
+                                                                    <span class="kpi"><strong>Present:</strong> ${kpiPresent}</span>
+                                                                    <span class="kpi"><strong>Late:</strong> ${kpiLate}</span>
+                                                                    <span class="kpi"><strong>Missing:</strong> ${kpiMissing}</span>
+                                                                    <span class="kpi"><strong>On Leave:</strong> ${kpiOnLeave}</span>
+                                                                </div>
+                                                            </div>
+                                                            <table>
+                                                                <thead>
+                                                                    <tr>
+                                                                        <th>Employee</th>
+                                                                        <th>Check-In</th>
+                                                                        <th>Check-Out</th>
+                                                                        <th>Project</th>
+                                                                        <th>Hours</th>
+                                                                        <th>Status</th>
+                                                                        <th>Penalty</th>
+                                                                    </tr>
+                                                                </thead>
+                                                                <tbody>
+                                                                    ${tableRows}
+                                                                </tbody>
+                                                            </table>
+                                                            <p style="margin-top:20px; font-size:10px; color:#888;">Generated on ${new Date().toLocaleString()}</p>
+                                                        </body>
+                                                    </html>
+                                                `);
+                                                printWindow.document.close();
+                                                printWindow.print();
                                             }}
-                                            disabled={isSyncing}
-                                            className="h-full flex items-center gap-1.5 px-3 rounded-md text-white border-none text-sm font-semibold hover:opacity-90 disabled:opacity-70 transition-all shadow-sm"
-                                            style={{ backgroundColor: '#4F46E5' }}
+                                            className="h-full flex items-center gap-1.5 px-3 rounded-md text-slate-600 dark:text-slate-400 border border-slate-300 dark:border-slate-600 text-[13px] font-semibold hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors bg-transparent shadow-sm whitespace-nowrap"
+                                            title="Export as PDF (via Print)"
                                         >
-                                            <span className={`material-symbols-outlined text-[18px] ${isSyncing ? 'animate-spin' : ''}`}>sync</span>
-                                            {isSyncing ? 'Syncing...' : 'Sync Devices'}
+                                            <span className="material-symbols-outlined text-[18px]">picture_as_pdf</span>
+                                            PDF
                                         </button>
+                                        <button
+                                            onClick={handleExportXLSX}
+                                            className="h-full flex items-center gap-1.5 px-3 rounded-md text-slate-600 dark:text-slate-400 border border-slate-300 dark:border-slate-600 text-[13px] font-semibold hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors bg-transparent shadow-sm whitespace-nowrap"
+                                            title="Export as Excel"
+                                        >
+                                            <span className="material-symbols-outlined text-[18px]">table_view</span>
+                                            Excel
+                                        </button>
+                                        <button
+                                            onClick={handleExportReport}
+                                            className="h-full flex items-center gap-1.5 px-3 rounded-md text-slate-600 dark:text-slate-400 border border-slate-300 dark:border-slate-600 text-[13px] font-semibold hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors bg-transparent shadow-sm whitespace-nowrap"
+                                        >
+                                            <span className="material-symbols-outlined text-[18px]">download</span>
+                                            CSV
+                                        </button>
+                                        <label className="h-full flex items-center justify-center gap-1.5 px-3 rounded-md text-slate-600 dark:text-slate-400 border border-slate-300 dark:border-slate-600 text-[13px] font-semibold hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors bg-transparent shadow-sm cursor-pointer whitespace-nowrap">
+                                            <span className="material-symbols-outlined text-[18px]">upload</span>
+                                            Import
+                                            <input type="file" accept=".csv" className="hidden" onChange={handleFileUpload} />
+                                        </label>
                                     </div>
                                 </div>
-                                {/* Row 2 — status aligned right under Import/Sync; clear filters on left */}
-                                <div className="flex items-center justify-between">
-                                    <div className="flex items-center gap-2">
-                                        {(statusFilter || searchQuery) && (
-                                            <button onClick={() => { setStatusFilter(null); setSearchQuery(''); }} className="text-[11px] text-indigo-600 font-bold flex items-center gap-1 border-none bg-transparent cursor-pointer hover:underline">
-                                                <span className="material-symbols-outlined text-[14px]">filter_alt_off</span>
-                                                Clear filters
-                                            </button>
-                                        )}
-                                    </div>
-                                    <div className="flex items-center gap-4 ml-auto">
-                                        <span className="flex items-center gap-1.5 text-[11px] text-slate-400 font-medium">
-                                            <span className={`h-1.5 w-1.5 rounded-full ${isSyncing ? 'bg-amber-400 animate-pulse' : 'bg-emerald-500 animate-pulse'}`}></span>
-                                            Last Sync: {lastSyncTime}
-                                        </span>
-                                        <div className="flex items-center gap-3 border-l border-slate-200 dark:border-slate-700 pl-4">
-                                            {systemSettings.officeLocations.map(loc => (
-                                                <div key={loc.id} className="flex items-center gap-1.5">
-                                                    <span className={`h-1.5 w-1.5 rounded-full ${loc.id === 'LOC-HQ' ? 'bg-emerald-500' : 'bg-blue-500'}`}></span>
-                                                    <span className="text-[10px] font-bold text-slate-500 uppercase tracking-tight">{loc.name.split(' ')[0]}</span>
-                                                </div>
-                                            ))}
+                                {/* Row 2 — Search + Sync Devices + status aligned right; clear filters on left */}
+                                <div className="flex items-center gap-3 h-9">
+                                    {(statusFilter || searchQuery) && (
+                                        <button onClick={() => { setStatusFilter(null); setSearchQuery(''); }} className="text-xs text-indigo-600 font-bold flex items-center gap-1 border-none bg-transparent cursor-pointer hover:underline shrink-0">
+                                            <span className="material-symbols-outlined text-[14px]">filter_alt_off</span>
+                                            Clear filters
+                                        </button>
+                                    )}
+                                    <div className="relative flex-1 h-full">
+                                        <div className="absolute inset-y-0 left-0 pl-2.5 flex items-center pointer-events-none">
+                                            <span className="material-symbols-outlined text-slate-400 text-[18px]">search</span>
                                         </div>
+                                        <input
+                                            className="w-full h-full pl-9 pr-3 text-sm font-medium text-slate-700 dark:text-slate-200 bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 rounded-md focus:ring-[#4F46E5] focus:border-[#4F46E5] shadow-sm transition-all outline-none"
+                                            placeholder="Search employee, ID, dept…"
+                                            type="text"
+                                            value={searchQuery}
+                                            onChange={(e) => setSearchQuery(e.target.value)}
+                                        />
+                                    </div>
+                                    <button
+                                        onClick={() => {
+                                            if (isSyncing) return;
+                                            setIsSyncing(true);
+                                            setTimeout(() => {
+                                                syncAttendance();
+                                                setIsSyncing(false);
+                                                setLastSyncTime('Just now');
+                                            }, 1500);
+                                        }}
+                                        disabled={isSyncing}
+                                        className="h-full flex items-center gap-1.5 px-3 rounded-md text-white border-none text-sm font-semibold hover:opacity-90 disabled:opacity-70 transition-all shadow-sm shrink-0"
+                                        style={{ backgroundColor: '#4F46E5' }}
+                                    >
+                                        <span className={`material-symbols-outlined text-[18px] ${isSyncing ? 'animate-spin' : ''}`}>sync</span>
+                                        {isSyncing ? 'Syncing...' : 'Sync Devices'}
+                                    </button>
+                                    <span className="flex items-center gap-1.5 text-xs text-slate-400 font-medium shrink-0">
+                                        <span className={`h-1.5 w-1.5 rounded-full ${isSyncing ? 'bg-amber-400 animate-pulse' : 'bg-emerald-500 animate-pulse'}`}></span>
+                                        Last Sync: {lastSyncTime}
+                                    </span>
+                                    <div className="flex items-center gap-3 border-l border-slate-200 dark:border-slate-700 pl-4 shrink-0">
+                                        {systemSettings.officeLocations.map(loc => (
+                                            <div key={loc.id} className="flex items-center gap-1.5">
+                                                <span className={`h-1.5 w-1.5 rounded-full ${loc.id === 'LOC-HQ' ? 'bg-emerald-500' : 'bg-blue-500'}`}></span>
+                                                <span className="text-xs font-bold text-slate-500 uppercase tracking-tight">{loc.name.split(' ')[0]}</span>
+                                            </div>
+                                        ))}
                                     </div>
                                 </div>
                             </div>
@@ -433,9 +642,9 @@ export default function Attendance() {
                                     <span className="text-xs font-semibold text-emerald-600 bg-emerald-50 dark:bg-emerald-900/20 px-2 py-0.5 rounded-full whitespace-nowrap">On Time</span>
                                 </div>
                                 <p className="text-[11px] text-slate-400 mt-1.5">
-                                    {kpiPresent} / {attendanceLogs.length} total&nbsp;
+                                    {kpiPresent} / {kpiBase.length} total&nbsp;
                                     <span className="font-bold text-emerald-600">
-                                        ({attendanceLogs.length > 0 ? Math.round(kpiPresent / attendanceLogs.length * 100) : 0}%)
+                                        ({kpiBase.length > 0 ? Math.round(kpiPresent / kpiBase.length * 100) : 0}%)
                                     </span>
                                 </p>
                             </div>
@@ -486,30 +695,39 @@ export default function Attendance() {
                                     <span className="text-xs font-semibold text-blue-600 bg-blue-50 dark:bg-blue-900/20 px-2 py-0.5 rounded-full whitespace-nowrap">Approved</span>
                                 </div>
                                 <p className="text-[11px] text-slate-400 mt-1.5">
-                                    {attendanceLogs.length > 0 ? Math.round(kpiOnLeave / attendanceLogs.length * 100) : 0}% of workforce
+                                    {kpiBase.length > 0 ? Math.round(kpiOnLeave / kpiBase.length * 100) : 0}% of workforce
                                 </p>
                             </div>
                         </div>
 
-                        {/* Interactive Data Table — Paginated for scalability */}
-                        <div className="bg-white dark:bg-[#182130] border border-slate-200 dark:border-slate-800 rounded-xl shadow-sm overflow-hidden transition-all">
-                            <div className="overflow-x-auto">
-                                <table className="w-full text-left border-collapse">
-                                    <thead className="sticky top-0 z-10">
-                                        <tr className="border-b border-slate-200 dark:border-slate-700 bg-white dark:bg-[#182130] text-xs uppercase font-semibold text-slate-500 dark:text-slate-400">
-                                            <th className="px-6 py-4 whitespace-nowrap text-left">Employee</th>
-                                            <th className="px-6 py-4 text-right whitespace-nowrap min-w-[120px]">Check-In</th>
-                                            <th className="px-6 py-4 text-right whitespace-nowrap min-w-[120px]">Check-Out</th>
-                                            <th className="px-6 py-4 whitespace-nowrap">Project / Task</th>
-                                            <th className="px-6 py-4 text-right whitespace-nowrap">Total Hours</th>
-                                            <th className="px-6 py-4 whitespace-nowrap text-left">Status & Penalty</th>
-                                            <th className="px-6 py-4 text-right whitespace-nowrap">Actions</th>
-                                        </tr>
-                                    </thead>
-                                    <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
-                                        {pagedLogs.map(log => (
-                                            <tr key={log.id} className="hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-colors">
-                                                <td className="px-6 py-4 align-top">
+                        {/* Interactive Data Table — Virtualized for scalability */}
+                        <div className="bg-white dark:bg-[#182130] border border-slate-200 dark:border-slate-800 rounded-xl shadow-sm overflow-hidden transition-all h-[650px] flex flex-col">
+                            <div className="flex-1 overflow-hidden" id="attendance-report-content">
+                                {filteredLogs.length === 0 ? (
+                                    <div className="text-center text-sm text-slate-400 py-12">No attendance records found.</div>
+                                ) : (
+                                    <TableVirtuoso
+                                        data={filteredLogs}
+                                        components={{
+                                            Table: (props) => <table {...props} className="w-full text-left border-collapse" />,
+                                            TableHead: React.forwardRef((props, ref) => <thead {...props} ref={ref as React.Ref<HTMLTableSectionElement>} className="sticky top-0 z-10 shadow-sm" />),
+                                            TableRow: (props) => <tr {...props} className="hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-colors" />,
+                                            TableBody: React.forwardRef((props, ref) => <tbody {...props} ref={ref as React.Ref<HTMLTableSectionElement>} className="divide-y divide-slate-100 dark:divide-slate-800" />)
+                                        }}
+                                        fixedHeaderContent={() => (
+                                            <tr className="border-b border-slate-200 dark:border-slate-700 bg-white dark:bg-[#182130] text-xs uppercase font-semibold text-slate-500 dark:text-slate-400">
+                                                <th className="px-6 py-4 whitespace-nowrap text-left bg-white dark:bg-[#182130]">Employee</th>
+                                                <th className="px-6 py-4 text-right whitespace-nowrap min-w-[120px] bg-white dark:bg-[#182130]">Check-In</th>
+                                                <th className="px-6 py-4 text-right whitespace-nowrap min-w-[120px] bg-white dark:bg-[#182130]">Check-Out</th>
+                                                <th className="px-6 py-4 whitespace-nowrap bg-white dark:bg-[#182130]">Project / Task</th>
+                                                <th className="px-6 py-4 text-right whitespace-nowrap bg-white dark:bg-[#182130]">Total Hours</th>
+                                                <th className="px-6 py-4 whitespace-nowrap text-left bg-white dark:bg-[#182130]">Status & Penalty</th>
+                                                <th className="px-6 py-4 text-right whitespace-nowrap bg-white dark:bg-[#182130]">Actions</th>
+                                            </tr>
+                                        )}
+                                        itemContent={(_, log) => (
+                                            <>
+                                                <td className="px-6 py-4 align-top border-b border-slate-100 dark:border-slate-800">
                                                     <div className="flex items-center gap-3">
                                                         <div className="size-10 rounded-full flex items-center justify-center font-bold shrink-0 bg-slate-100 text-slate-600">{log.name.charAt(0)}</div>
                                                         <div className="flex flex-col gap-0.5">
@@ -523,19 +741,20 @@ export default function Attendance() {
                                                         </div>
                                                     </div>
                                                 </td>
-                                                <td className="px-6 py-4 text-right align-top">
-                                                    <div className="flex flex-col items-end">
-                                                        <span className={`font-bold whitespace-nowrap ${log.status === 'Late' ? 'text-red-600' : 'text-slate-700'}`}>{log.checkIn}</span>
-                                                        <div className="flex items-center gap-1 mt-0.5 text-[10px] text-slate-400 whitespace-nowrap font-bold uppercase tracking-widest">
+                                                <td className="px-5 py-4 text-right align-top border-b border-slate-100 dark:border-slate-800">
+                                                    <div className="flex flex-col items-end gap-1.5">
+                                                        <span className={`inline-flex items-center gap-1.5 text-sm font-bold tabular-nums whitespace-nowrap ${log.status === 'Late' ? 'text-red-600' : 'text-slate-800 dark:text-slate-200'}`}>
                                                             {renderMethodBadge(log.checkInMethod)}
-                                                            <span>{log.location}</span>
-                                                        </div>
-                                                        <div className="mt-1 text-[9px] font-black text-slate-400 bg-slate-100 px-1.5 py-0.5 rounded">
-                                                            TARGET: {shifts.find(s => s.id === employees.find(e => e.id === log.empId)?.shiftId)?.start || '09:00'}
-                                                        </div>
+                                                            {log.checkIn}
+                                                        </span>
+                                                        <span className="text-[10px] font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wide whitespace-nowrap">{log.location}</span>
+                                                        <span className="inline-flex items-center gap-1 text-[9px] font-semibold text-slate-400 dark:text-slate-500 bg-slate-50 dark:bg-slate-800 px-2 py-0.5 rounded-full">
+                                                            <span className="material-symbols-outlined text-[10px]">schedule</span>
+                                                            {shifts.find(s => s.id === employees.find(e => e.id === log.empId)?.shiftId)?.start || '09:00'}
+                                                        </span>
                                                     </div>
                                                 </td>
-                                                <td className="px-6 py-4 text-right align-top">
+                                                <td className="px-6 py-4 text-right align-top border-b border-slate-100 dark:border-slate-800">
                                                     {log.checkOut === '-- : --' ? (
                                                         <span className="font-bold text-slate-400 tracking-wider whitespace-nowrap">{log.checkOut}</span>
                                                     ) : (
@@ -547,7 +766,7 @@ export default function Attendance() {
                                                         </div>
                                                     )}
                                                 </td>
-                                                <td className="px-6 py-4 align-top">
+                                                <td className="px-6 py-4 align-top border-b border-slate-100 dark:border-slate-800">
                                                     {log.checkOut === '-- : --' ? (
                                                         <span className="text-slate-400 text-xs italic">{log.project}</span>
                                                     ) : (
@@ -556,10 +775,10 @@ export default function Attendance() {
                                                         </span>
                                                     )}
                                                 </td>
-                                                <td className="px-6 py-4 text-right font-mono text-slate-700 dark:text-slate-300 align-top font-bold">
+                                                <td className="px-6 py-4 text-right font-mono text-slate-700 dark:text-slate-300 align-top font-bold border-b border-slate-100 dark:border-slate-800">
                                                     {log.totalHours > 0 ? `${log.totalHours}h` : '--'}
                                                 </td>
-                                                <td className="px-6 py-4 align-top">
+                                                <td className="px-6 py-4 align-top border-b border-slate-100 dark:border-slate-800">
                                                     <div className="flex flex-col gap-1">
                                                         {renderStatusBadge(log)}
                                                         {getPenalty(log.id) > 0 && (
@@ -582,58 +801,24 @@ export default function Attendance() {
                                                         )}
                                                     </div>
                                                 </td>
-                                                <td className="px-6 py-4 text-right align-top">
+                                                <td className="px-6 py-4 text-right align-top border-b border-slate-100 dark:border-slate-800">
                                                     {renderActionButton(log)}
                                                 </td>
-                                            </tr>
-                                        ))}
-                                        {pagedLogs.length === 0 && (
-                                            <tr>
-                                                <td colSpan={7} className="px-6 py-12 text-center text-sm text-slate-400">
-                                                    No attendance records found.
-                                                </td>
-                                            </tr>
+                                            </>
                                         )}
-                                    </tbody>
-                                </table>
+                                    />
+                                )}
                             </div>
                             {/* Pagination Footer */}
-                            <div className="flex items-center justify-between px-6 py-4 border-t border-slate-100 dark:border-slate-800 bg-white dark:bg-[#182130]">
+                            <div className="flex items-center justify-between px-6 py-4 border-t border-slate-100 dark:border-slate-800 bg-slate-50 dark:bg-slate-900/50 shrink-0">
                                 <p className="text-xs text-slate-500 dark:text-slate-400">
-                                    Showing <span className="font-bold text-slate-700 dark:text-slate-200">{filteredLogs.length === 0 ? 0 : (currentPage - 1) * pageSize + 1}–{Math.min(currentPage * pageSize, filteredLogs.length)}</span> of <span className="font-bold text-slate-700 dark:text-slate-200">{filteredLogs.length}</span> records
+                                    Displaying a live virtualized scan of <span className="font-bold text-slate-700 dark:text-slate-200">{filteredLogs.length}</span> registry records
                                 </p>
-                                <div className="flex items-center gap-1">
-                                    <button
-                                        onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
-                                        disabled={currentPage === 1}
-                                        className="h-8 w-8 flex items-center justify-center rounded-lg border border-slate-200 dark:border-slate-700 text-slate-500 disabled:opacity-40 hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors"
-                                    >
-                                        <span className="material-symbols-outlined text-[18px]">chevron_left</span>
-                                    </button>
-                                    {getPageNumbers().map((page, idx) =>
-                                        page === '...' ? (
-                                            <span key={`ellipsis-${idx}`} className="h-8 w-8 flex items-center justify-center text-xs text-slate-400">…</span>
-                                        ) : (
-                                            <button
-                                                key={page}
-                                                onClick={() => setCurrentPage(page as number)}
-                                                className={`h-8 w-8 flex items-center justify-center rounded-lg text-xs font-bold transition-colors ${
-                                                    currentPage === page
-                                                        ? 'bg-indigo-600 text-white shadow-sm'
-                                                        : 'border border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800'
-                                                }`}
-                                            >
-                                                {page}
-                                            </button>
-                                        )
-                                    )}
-                                    <button
-                                        onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))}
-                                        disabled={currentPage === totalPages}
-                                        className="h-8 w-8 flex items-center justify-center rounded-lg border border-slate-200 dark:border-slate-700 text-slate-500 disabled:opacity-40 hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors"
-                                    >
-                                        <span className="material-symbols-outlined text-[18px]">chevron_right</span>
-                                    </button>
+                                <div className="flex items-center gap-3">
+                                    <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md bg-emerald-50 text-emerald-700 border border-emerald-100 text-[10px] font-bold tracking-wider uppercase">
+                                        <span className="size-1.5 rounded-full bg-emerald-500 animate-pulse"></span>
+                                        60 FPS Stream
+                                    </span>
                                 </div>
                             </div>
                         </div>
