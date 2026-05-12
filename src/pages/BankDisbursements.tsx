@@ -46,6 +46,7 @@ export default function BankDisbursements() {
     const [exportedBanks, setExportedBanks] = useState<Set<string>>(new Set());
     const [selectedRows, setSelectedRows]   = useState<Set<string>>(new Set());
     const [deptFilter, setDeptFilter]       = useState('All');
+    const [autoNotify, setAutoNotify]       = useState(true);
 
     // Toast
     const [toasts, setToasts] = useState<Toast[]>([]);
@@ -321,6 +322,51 @@ export default function BankDisbursements() {
                 actionRoute: '/bank-disbursements', actionLabel: 'View Disbursement',
                 badge: 'Disbursed', badgeColor: 'emerald',
             });
+
+            // Handle auto-notification dispatch using active contextual disbursement scope
+            if (autoNotify) {
+                const notifyScope = selectedRows.size > 0
+                    ? disbursementData.filter(item => selectedRows.has(item.empId))
+                    : disbursementData;
+                
+                if (notifyScope.length > 0) {
+                    (setAlerts as any)((prev: any[]) => [
+                        ...notifyScope.map(rec => ({
+                            id: `PAID-${rec.empId}-${Date.now()}`,
+                            type: 'success',
+                            message: `💰 Salary Disbursed: Your payment for ${period} has been sent to ${(rec as any).bankName ?? 'your account'}. Check your bank account for ${Math.round(rec.netPay).toLocaleString()} MMK.`,
+                            timestamp: new Date().toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' }),
+                            isRead: false,
+                        })),
+                        ...prev
+                    ]);
+
+                    if (notifyScope.length <= 5) {
+                        notifyScope.forEach(rec => {
+                            pushNotification({
+                                title: `Payslip Ready — ${period}`,
+                                body: `${rec.name}'s salary of ${Math.round(rec.netPay).toLocaleString()} MMK has been disbursed to ${(rec as any).bankName ?? 'cash'}.`,
+                                category: 'Financial', priority: 'high',
+                                icon: 'payments',
+                                iconBg: 'bg-emerald-100 dark:bg-emerald-900/30', iconColor: 'text-emerald-600 dark:text-emerald-400',
+                                actionRoute: '/bank-disbursements', actionLabel: 'View Payslip',
+                                badge: 'Paid', badgeColor: 'emerald', empId: rec.empId,
+                            });
+                        });
+                    } else {
+                        const total = notifyScope.reduce((s, r) => s + Math.round(r.netPay), 0);
+                        pushNotification({
+                            title: `Payslips Published — ${period}`,
+                            body: `${notifyScope.length} employees notified. Total disbursed: ${total.toLocaleString()} MMK across all channels.`,
+                            category: 'Financial', priority: 'high',
+                            icon: 'payments',
+                            iconBg: 'bg-emerald-100 dark:bg-emerald-900/30', iconColor: 'text-emerald-600 dark:text-emerald-400',
+                            actionRoute: '/bank-disbursements', actionLabel: 'View Disbursement',
+                            badge: `${notifyScope.length} Paid`, badgeColor: 'emerald',
+                        });
+                    }
+                }
+            }
         } else {
             addToast(result.message, 'error', 5000);
         }
@@ -642,6 +688,20 @@ export default function BankDisbursements() {
                                     onChange={(e) => setApproverId(e.target.value)}
                                     className="w-full text-sm font-bold p-4 border border-slate-200 dark:border-slate-700 rounded-xl bg-slate-50 dark:bg-slate-800 focus:ring-2 focus:ring-[#4F46E5]/20 focus:border-[#4F46E5] outline-none transition-all shadow-sm"
                                 />
+                            </div>
+
+                            {/* Auto-Notify Toggle Option */}
+                            <div className="flex items-center gap-3 pt-2">
+                                <input
+                                    type="checkbox"
+                                    id="autoNotifyToggle"
+                                    checked={autoNotify}
+                                    onChange={(e) => setAutoNotify(e.target.checked)}
+                                    className="size-5 rounded accent-[#4F46E5] cursor-pointer shrink-0"
+                                />
+                                <label htmlFor="autoNotifyToggle" className="text-xs font-bold text-slate-700 dark:text-slate-300 cursor-pointer select-none leading-relaxed">
+                                    Automatically notify staff via mobile push alerts upon release
+                                </label>
                             </div>
                         </div>
                         <div className="p-6 border-t border-slate-100 dark:border-slate-800 flex flex-col gap-3">
