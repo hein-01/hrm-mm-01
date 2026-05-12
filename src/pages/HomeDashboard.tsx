@@ -230,18 +230,28 @@ export default function HomeDashboard() {
             const emp = employees.find(e => e.id === r.empId);
             const assetsHeld = (emp?.assets || []).filter(a => a.status === 'Active').length;
             
+            // Determine category based on type
+            const categoryMap: Record<string, string> = {
+                'Adjustment': 'Financial',
+                'Promotion': 'HR',
+                'Transfer': 'HR',
+                'Resignation': 'HR'
+            };
+            
             items.push({
                 ...r,
                 inboxType: 'JobActivity',
-                inboxTitle: r.type === 'Resignation' ? 'Resignation Request' : `${r.type} Request`,
+                inboxTitle: r.type === 'Resignation' ? 'Resignation Request' : r.type === 'Adjustment' ? 'Salary Adjustment' : `${r.type} Request`,
                 inboxSubtitle: r.type === 'Resignation' 
                     ? `${r.name} • Final Day: ${r.finalWorkingDate || 'Not set'}`
-                    : `${r.name} • ${r.detail}${r.announcementTitle ? ` • 📢 ${r.announcementTitle}` : ''}`,
+                    : r.type === 'Adjustment' && r.newSalary
+                        ? `${r.name} • ${(r.oldSalary || 0).toLocaleString()} → ${r.newSalary.toLocaleString()} MMK`
+                        : `${r.name} • ${r.detail}${r.announcementTitle ? ` • 📢 ${r.announcementTitle}` : ''}`,
                 inboxIcon: r.type === 'Resignation' ? 'exit_to_app' : (r.type === 'Adjustment' ? 'payments' : 'trending_up'),
-                inboxIconColor: r.type === 'Resignation' ? 'text-amber-600 bg-amber-50' : 'text-indigo-600 bg-indigo-100',
-                inboxBarColor: r.type === 'Resignation' ? 'bg-amber-500' : 'bg-indigo-500',
+                inboxIconColor: r.type === 'Resignation' ? 'text-amber-600 bg-amber-50' : (r.type === 'Adjustment' ? 'text-emerald-600 bg-emerald-100' : 'text-indigo-600 bg-indigo-100'),
+                inboxBarColor: r.type === 'Resignation' ? 'bg-amber-500' : (r.type === 'Adjustment' ? 'bg-emerald-500' : 'bg-indigo-500'),
                 priority: r.priority || (r.type === 'Resignation' ? 'High' : 'Medium'),
-                category: 'Staffing',
+                category: categoryMap[r.type] || 'HR',
                 assetsHeld,
                 resignationReason: r.resignationReason,
                 announcementTitle: r.announcementTitle

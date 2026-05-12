@@ -1,18 +1,22 @@
 -- ============================================================
 -- Tickets (Help Desk) table for HRMS
 -- ============================================================
+-- Drop old camelCase table if it exists, then recreate with snake_case
+-- (Supabase/PostgREST requires snake_case for reliable REST mapping)
 
-CREATE TABLE IF NOT EXISTS tickets (
+DROP TABLE IF EXISTS tickets CASCADE;
+
+CREATE TABLE tickets (
     id TEXT PRIMARY KEY,
-    "empId" TEXT NOT NULL,
-    "empName" TEXT NOT NULL,
+    emp_id TEXT NOT NULL,
+    emp_name TEXT NOT NULL,
     category TEXT NOT NULL CHECK (category IN ('payroll', 'leave', 'it', 'facilities', 'benefits', 'document', 'other')),
     subject TEXT NOT NULL,
     description TEXT,
     priority TEXT NOT NULL DEFAULT 'Medium' CHECK (priority IN ('High', 'Medium', 'Low')),
-    status TEXT NOT NULL DEFAULT 'Open' CHECK (status IN ('Open', 'Pending', 'Resolved')),
-    "createdAt" TIMESTAMPTZ DEFAULT NOW(),
-    "updatedAt" TIMESTAMPTZ
+    status TEXT NOT NULL DEFAULT 'Open' CHECK (status IN ('Open', 'Pending', 'Resolved', 'On Hold', 'Closed')),
+    created_at TIMESTAMPTZ DEFAULT NOW(),
+    updated_at TIMESTAMPTZ
 );
 
 -- Enable RLS

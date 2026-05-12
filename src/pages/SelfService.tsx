@@ -43,10 +43,9 @@ const CATEGORIES: {
         light: 'bg-indigo-50 border-indigo-200 text-indigo-700',
         fields: [
             { label: 'Mobile', placeholder: '+95 9...' },
+            { label: 'Personal Email', placeholder: 'e.g. personal@gmail.com' },
             { label: 'Township', placeholder: 'e.g. Hlaing, Yangon' },
-            { label: 'NRC Number', placeholder: '12/OKaTa(N)123456' },
-            { label: 'SSB Number', placeholder: 'SSB-...' },
-            { label: 'Tax ID', placeholder: 'Tax ID...' },
+            { label: 'Current Address', placeholder: 'Full residential address' },
         ],
     },
     {
@@ -72,6 +71,18 @@ const CATEGORIES: {
             { label: 'Emergency Contact Name', placeholder: 'Full name' },
             { label: 'Emergency Contact Phone', placeholder: '+95 9...' },
             { label: 'Relationship', placeholder: 'e.g. Spouse, Parent' },
+        ],
+    },
+    {
+        id: 'Tax Relief',
+        icon: 'receipt_long',
+        color: 'text-teal-600',
+        bg: 'bg-teal-600',
+        light: 'bg-teal-50 border-teal-200 text-teal-700',
+        fields: [
+            { label: 'Has Spouse', placeholder: 'Yes/No for tax relief', type: 'checkbox' },
+            { label: 'Parents Count', placeholder: '0/1/2 dependent parents', type: 'number' },
+            { label: 'Children Count', placeholder: 'Number of children', type: 'number' },
         ],
     },
     {
@@ -442,18 +453,19 @@ export default function SelfService() {
         // Build old values snapshot from current employee
         const empFieldMap: Record<string, string> = {
             'Mobile': emp.mobile ?? '',
+            'Personal Email': (emp as any).personalEmail ?? '',
             'Township': emp.township ?? '',
-            'NRC Number': emp.nrcNumber ?? '',
-            'SSB Number': emp.ssbNumber ?? '',
-            'Tax ID': emp.taxId ?? '',
+            'Current Address': (emp as any).currentAddress ?? '',
             'Bank Name': emp.bankName ?? '',
             'Account Number': emp.accountNumber ?? '',
             'Bank Branch': emp.bankBranch ?? '',
             'Branch Code': emp.bankBranchCode ?? '',
-            'Office Location': emp.officeLocation ?? '',
-            'Emergency Contact Name': '',
-            'Emergency Contact Phone': '',
-            'Relationship': '',
+            'Emergency Contact Name': emp.emergencyContact?.name ?? '',
+            'Emergency Contact Phone': emp.emergencyContact?.phone ?? '',
+            'Relationship': emp.emergencyContact?.relationship ?? '',
+            'Has Spouse': String(emp.reliefs?.spouse ?? false),
+            'Parents Count': String(emp.reliefs?.parentsCount ?? 0),
+            'Children Count': String(emp.reliefs?.childrenCount ?? 0),
         };
 
         const changedFields: Record<string, string> = {};
@@ -858,9 +870,10 @@ export default function SelfService() {
                                         <div>
                                             <p className={`text-sm font-black ${selectedCategory === cat.id ? cat.color : 'text-slate-700 dark:text-slate-300'}`}>{cat.id}</p>
                                             <p className="text-[10px] text-slate-400">
-                                                {cat.id === 'Personal Info' && 'Phone, NRC, township, SSB'}
+                                                {cat.id === 'Personal Info' && 'Phone, email, address, township'}
                                                 {cat.id === 'Bank / Financial' && 'Account, branch, bank name'}
                                                 {cat.id === 'Emergency Contact' && 'Name, phone, relationship'}
+                                                {cat.id === 'Tax Relief' && 'Spouse, parents, children'}
                                                 {cat.id === 'Document Upload' && 'NRC, passport, certificates'}
                                             </p>
                                         </div>
@@ -890,14 +903,19 @@ export default function SelfService() {
                                                 {catCfg.fields.slice(0, 4).map(f => {
                                                     const empMap: Record<string, string> = {
                                                         'Mobile': emp.mobile ?? '—',
+                                                        'Personal Email': (emp as any).personalEmail ?? '—',
                                                         'Township': emp.township ?? '—',
-                                                        'NRC Number': emp.nrcNumber ?? '—',
-                                                        'SSB Number': emp.ssbNumber ?? '—',
-                                                        'Tax ID': emp.taxId ?? '—',
+                                                        'Current Address': (emp as any).currentAddress ?? '—',
                                                         'Bank Name': emp.bankName ?? '—',
                                                         'Account Number': emp.accountNumber ?? '—',
                                                         'Bank Branch': emp.bankBranch ?? '—',
                                                         'Branch Code': emp.bankBranchCode ?? '—',
+                                                        'Emergency Contact Name': emp.emergencyContact?.name ?? '—',
+                                                        'Emergency Contact Phone': emp.emergencyContact?.phone ?? '—',
+                                                        'Relationship': emp.emergencyContact?.relationship ?? '—',
+                                                        'Has Spouse': emp.reliefs?.spouse ? 'Yes' : 'No',
+                                                        'Parents Count': String(emp.reliefs?.parentsCount ?? 0),
+                                                        'Children Count': String((emp as any).childrenCount ?? 0),
                                                     };
                                                     return (
                                                         <div key={f.label}>
@@ -915,14 +933,31 @@ export default function SelfService() {
                                         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                                             {catCfg.fields.map(f => (
                                                 <div key={f.label}>
-                                                    <label className="text-[10px] font-black uppercase tracking-widest text-slate-500 block mb-1.5">{f.label}</label>
-                                                    <input
-                                                        type={f.type ?? 'text'}
-                                                        placeholder={f.placeholder}
-                                                        value={fieldValues[f.label] ?? ''}
-                                                        onChange={e => setFieldValues(prev => ({ ...prev, [f.label]: e.target.value }))}
-                                                        className="w-full text-sm px-3 py-2.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 focus:ring-2 focus:ring-indigo-300 focus:border-indigo-400 outline-none transition-all"
-                                                    />
+                                                    {f.type === 'checkbox' ? (
+                                                        <label className="flex items-center gap-3 p-3 bg-slate-50 dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 cursor-pointer hover:bg-slate-100 dark:hover:bg-slate-700/50 transition-all">
+                                                            <input
+                                                                type="checkbox"
+                                                                checked={fieldValues[f.label] === 'true'}
+                                                                onChange={e => setFieldValues(prev => ({ ...prev, [f.label]: e.target.checked ? 'true' : 'false' }))}
+                                                                className="w-5 h-5 text-indigo-600 border-slate-300 rounded focus:ring-indigo-500"
+                                                            />
+                                                            <div>
+                                                                <p className="text-sm font-bold text-slate-700 dark:text-slate-300">{f.label}</p>
+                                                                <p className="text-[10px] text-slate-400">{f.placeholder}</p>
+                                                            </div>
+                                                        </label>
+                                                    ) : (
+                                                        <>
+                                                            <label className="text-[10px] font-black uppercase tracking-widest text-slate-500 block mb-1.5">{f.label}</label>
+                                                            <input
+                                                                type={f.type ?? 'text'}
+                                                                placeholder={f.placeholder}
+                                                                value={fieldValues[f.label] ?? ''}
+                                                                onChange={e => setFieldValues(prev => ({ ...prev, [f.label]: e.target.value }))}
+                                                                className="w-full text-sm px-3 py-2.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 focus:ring-2 focus:ring-indigo-300 focus:border-indigo-400 outline-none transition-all"
+                                                            />
+                                                        </>
+                                                    )}
                                                 </div>
                                             ))}
                                         </div>

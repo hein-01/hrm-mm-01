@@ -89,6 +89,50 @@ export const PayrollProvider: React.FC<PayrollProviderProps> = ({
     const [isPayrollLocked, setIsPayrollLocked] = useState<boolean>(false);
     const [payrunId, setPayrunId] = useState<string | null>(null);
 
+    // Fetch and subscribe to Payroll Groups
+    useEffect(() => {
+        const fetchPayrollGroups = async () => {
+            const { data, error } = await supabase.from('payroll_groups').select('*').order('created_at', { ascending: false }).limit(200);
+            if (!error && data) setPayrollGroups(data as Types.PayrollGroup[]);
+        };
+        fetchPayrollGroups();
+
+        const channel = supabase.channel('payroll-groups-changes')
+            .on('postgres_changes', { event: '*', schema: 'public', table: 'payroll_groups' }, (payload) => {
+                if (payload.eventType === 'INSERT') {
+                    setPayrollGroups(prev => prev.some(g => g.id === payload.new.id) ? prev : [payload.new as Types.PayrollGroup, ...prev]);
+                } else if (payload.eventType === 'UPDATE') {
+                    setPayrollGroups(prev => prev.map(g => g.id === payload.new.id ? payload.new as Types.PayrollGroup : g));
+                } else if (payload.eventType === 'DELETE') {
+                    setPayrollGroups(prev => prev.filter(g => g.id !== payload.old.id));
+                }
+            }).subscribe();
+
+        return () => { supabase.removeChannel(channel); };
+    }, []);
+
+    // Fetch and subscribe to Payroll Records
+    useEffect(() => {
+        const fetchPayrollRecords = async () => {
+            const { data, error } = await supabase.from('payroll_records').select('*').order('created_at', { ascending: false }).limit(500);
+            if (!error && data) setPayrollRecords(data as Types.PayrollRecord[]);
+        };
+        fetchPayrollRecords();
+
+        const channel = supabase.channel('payroll-records-changes')
+            .on('postgres_changes', { event: '*', schema: 'public', table: 'payroll_records' }, (payload) => {
+                if (payload.eventType === 'INSERT') {
+                    setPayrollRecords(prev => prev.some(r => r.id === payload.new.id) ? prev : [payload.new as Types.PayrollRecord, ...prev]);
+                } else if (payload.eventType === 'UPDATE') {
+                    setPayrollRecords(prev => prev.map(r => r.id === payload.new.id ? payload.new as Types.PayrollRecord : r));
+                } else if (payload.eventType === 'DELETE') {
+                    setPayrollRecords(prev => prev.filter(r => r.id !== payload.old.id));
+                }
+            }).subscribe();
+
+        return () => { supabase.removeChannel(channel); };
+    }, []);
+
     // Sync lock state and payrun ID to Supabase
     useEffect(() => {
         supabase.from('payroll_groups')
@@ -663,8 +707,20 @@ export const PayrollProvider: React.FC<PayrollProviderProps> = ({
             records: [],
             createdAt: new Date().toISOString()
         };
-        // Insert into Supabase
-        const { error } = await supabase.from('payroll_groups').insert(newGroup);
+        // Insert into Supabase (use actual column names from table)
+        const { error } = await supabase.from('payroll_groups').insert({
+            id: newGroup.id,
+            name: newGroup.name,
+            period: newGroup.period,
+            type: newGroup.type,
+            status: newGroup.status,
+            "payrollCycle": newGroup.payrollCycle,
+            "proRatingDenominator": newGroup.proRatingDenominator,
+            cutoffs: newGroup.cutoffs,
+            "paymentDate": newGroup.paymentDate,
+            "affectedEmployees": newGroup.affectedEmployees,
+            created_at: newGroup.createdAt
+        });
         if (error) console.error('Failed to create payroll group in Supabase:', error);
         setPayrollGroups(prev => [...prev, newGroup]);
         setActivePayrollGroupId(newGroup.id);
@@ -707,15 +763,18 @@ export const PayrollProvider: React.FC<PayrollProviderProps> = ({
             ? eligibleEmployees.filter(e => employeeIds.includes(e.id))
             : eligibleEmployees;
 
-        // --- Myanmar 2026 tiered annualized PIT (personalized reliefs) ---
+        // --- Myanmar 2026 tiered annualized PIT (20% relief + personalized deductions) ---
         const calcAnnualPIT = (annual: number, exemption: number): number => {
             if (annual <= exemption) return 0;
+            // Official Myanmar PIT brackets (after exemption)
+            // First 2,000,000 MMK is 0%, then progressive rates up to 25%
             const bands = [
-                { from: exemption,              to: exemption + 5200000,  rate: 0.05 },
-                { from: exemption + 5200000,    to: exemption + 15200000, rate: 0.10 },
-                { from: exemption + 15200000,   to: exemption + 25200000, rate: 0.15 },
-                { from: exemption + 25200000,   to: exemption + 35200000, rate: 0.20 },
-                { from: exemption + 35200000,   to: Infinity,             rate: 0.25 }
+                { from: exemption,               to: exemption + 2000000,   rate: 0.00 },  // 0% band
+                { from: exemption + 2000000,     to: exemption + 10000000,  rate: 0.05 },  // 5% band
+                { from: exemption + 10000000,    to: exemption + 20000000,  rate: 0.10 },  // 10% band
+                { from: exemption + 20000000,    to: exemption + 30000000,  rate: 0.15 },  // 15% band
+                { from: exemption + 30000000,    to: exemption + 70000000,  rate: 0.20 },  // 20% band
+                { from: exemption + 70000000,    to: Infinity,              rate: 0.25 }   // 25% band
             ];
             return bands.reduce((tax, b) => annual > b.from ? tax + (Math.min(annual, b.to) - b.from) * b.rate : tax, 0);
         };
@@ -740,6 +799,8 @@ export const PayrollProvider: React.FC<PayrollProviderProps> = ({
             const baseSalary = emp.baseSalary;
             let dynamicAdditions = 0;
             let dynamicDeductions = 0;
+            let unpaidLeaveDeductions = 0;  // Track unpaid leave separately
+            let attendancePenalties = 0;    // Track late/absent penalties separately
             const recordAlerts: string[] = [];
             const detailedBreakdowns: { [configId: string]: string[] } = {};
 
@@ -775,13 +836,20 @@ export const PayrollProvider: React.FC<PayrollProviderProps> = ({
                             return sum + Math.round((new Date(le + 'T00:00:00').getTime() - new Date(ls + 'T00:00:00').getTime()) / 86400000) + 1;
                         }, 0);
                     totalAmount = (baseSalary / workingDaysBase) * unpaidDays;
+                    unpaidLeaveDeductions += totalAmount;  // Track separately for Step 4
                 } else {
                     daysInMonth.forEach(date => {
+                        // Skip weekends (Saturday=6, Sunday=0)
+                        const dayOfWeek = new Date(date + 'T00:00:00').getDay();
+                        if (dayOfWeek === 0 || dayOfWeek === 6) return;
+                        // Skip public holidays
+                        if (holidays.some(h => h.date === date)) return;
                         const hasLeave = leaveRequests.some(r => r.empId === emp.id && r.status === 'Approved' && date >= r.startDate && date <= r.endDate);
                         if (hasLeave) return;
                         const log = attendanceLogs.find(l => l.empId === emp.id && l.date === date);
                         if (config.logic === 'Non-Attendance' && !log) totalAmount += (baseSalary / workingDaysBase);
                     });
+                    attendancePenalties += totalAmount;  // Track separately for Step 3
                 }
                 dynamicDeductions += totalAmount;
             });
@@ -807,10 +875,15 @@ export const PayrollProvider: React.FC<PayrollProviderProps> = ({
             // Employer SSB — independent calculation using dedicated rate & cap
             const employerSsbAmount = Math.min(Math.round((ssbBase * complianceSettings.ssbEmployerPercent) / 100), complianceSettings.ssbEmployerCap);
 
-            // PIT — personalized reliefs: pitExemption + spouse (1M) + parents (1M each)
-            const personalExemption = complianceSettings.pitExemption
+            // PIT — Myanmar compliant calculation:
+            // 1. 20% personal relief on assessable income (capped at 10,000,000 MMK/year)
+            // 2. Additional reliefs: spouse (1M), parents (1M each), children (500K each)
+            const assessableIncome = (baseSalary + dynamicAdditions + taxableManualAdditions) * 12;
+            const basicRelief = Math.min(assessableIncome * 0.20, 10000000);
+            const personalExemption = basicRelief
                 + (emp.reliefs?.spouse ? 1000000 : 0)
-                + ((emp.reliefs?.parentsCount ?? 0) * 1000000);
+                + ((emp.reliefs?.parentsCount ?? 0) * 1000000)
+                + ((emp.reliefs?.childrenCount ?? 0) * 500000);
             const taxableIncome = (baseSalary + dynamicAdditions + taxableManualAdditions) - ssbAmount - totalDeductions;
             const pitAmount     = Math.round(calcAnnualPIT(taxableIncome * 12, personalExemption) / 12);
 
@@ -837,7 +910,12 @@ export const PayrollProvider: React.FC<PayrollProviderProps> = ({
                 netPay: Math.round(netPay),
                 status: 'Draft' as const,
                 alerts: recordAlerts,
-                detailedBreakdowns
+                detailedBreakdowns,
+                // Step-specific breakdowns
+                attendanceDeductions: attendancePenalties,  // Late/absent penalties (Step 3)
+                leaveDeductions: unpaidLeaveDeductions,     // Unpaid leave (Step 4)
+                otherAdditions: manualAdditions,            // OT pay, bonuses (Step 5)
+                otherDeductions: loanDeduction + manualDeductions  // Loans, penalties (Step 5)
             };
         });
 
@@ -857,11 +935,25 @@ export const PayrollProvider: React.FC<PayrollProviderProps> = ({
         setPayrunId(id);
         setIsPayrollLocked(true);
         setLastPayrollStatus('Approved');
-        // Insert payroll records into Supabase
+        // Insert payroll records into Supabase with explicit column mapping
         const recordsToInsert = payrollRecords.map(r => ({
-            ...r,
             id: `REC-${Date.now()}-${Math.random().toString(36).substr(2,4)}`,
             groupId: group?.id ?? '',
+            empId: r.empId,
+            name: r.name,
+            salary: r.salary,
+            additions: r.additions,
+            deductions: r.deductions,
+            ssb: r.ssb,
+            employerSsb: r.employerSsb,
+            pit: r.pit,
+            netPay: r.netPay,
+            status: r.status,
+            alerts: r.alerts ?? [],
+            detailedBreakdowns: r.detailedBreakdowns ?? {},
+            biometricOTHours: r.biometricOTHours ?? 0,
+            biometricAttendanceDays: r.biometricAttendanceDays ?? 0,
+            biometricDeviceId: r.biometricDeviceId ?? null,
             created_at: new Date().toISOString()
         }));
         const { error: recError } = await supabase.from('payroll_records').insert(recordsToInsert);

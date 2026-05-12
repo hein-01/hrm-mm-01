@@ -127,6 +127,7 @@ export type TrainingAnalytic = {
 export type Reliefs = {
     spouse: boolean;
     parentsCount: number;
+    childrenCount: number; // Qualifying children (unmarried, non-earning, under 18 or in full-time education)
 };
 
 export type ComplianceSettings = {
@@ -345,6 +346,11 @@ export type PayrollRecord = {
     biometricOTHours?: number;
     biometricAttendanceDays?: number;
     biometricDeviceId?: string;
+    // Step-specific breakdowns
+    attendanceDeductions?: number;  // Late/absent penalties
+    leaveDeductions?: number;       // Unpaid leave deductions
+    otherAdditions?: number;        // Manual additions (bonuses, OT pay)
+    otherDeductions?: number;       // Manual deductions (loans, penalties)
 };
 
 export type CandidateMessage = {
@@ -636,7 +642,7 @@ export type JobActivityChange = {
     status: 'Pending' | 'Approved' | 'Rejected';
     submittedDate: string;
     priority: 'High' | 'Medium' | 'Low';
-    category: 'Staffing';
+    category?: 'Staffing' | 'HR' | 'Financial';
     newSalary?: number;
     oldSalary?: number;
     newRole?: string;
@@ -821,6 +827,12 @@ export interface SecurityAuditLog {
     detail?: string;
 }
 
+export type EmergencyContact = {
+    name: string;
+    relationship: string;
+    phone: string;
+};
+
 export type Employee = {
     id: string;
     name: string;
@@ -833,9 +845,13 @@ export type Employee = {
     nrcNumber?: string;
     ssbNumber?: string;
     taxId?: string;
+    dateOfBirth?: string;
     initials?: string;
     colorClass?: string;
     mobile?: string | null;
+    personalEmail?: string;
+    currentAddress?: string;
+    childrenCount?: number;
     hasCriticalRiskFlag: boolean;
     criticalRiskCategory?: string;
     documents: DocumentType[];
@@ -847,6 +863,7 @@ export type Employee = {
     accountNumber?: string;
     bankBranch?: string;
     bankBranchCode?: string;
+    emergencyContact?: EmergencyContact;
     enrolledCourses: {
         courseId: string;
         enrollmentDate: string;
@@ -873,7 +890,7 @@ export type Employee = {
 };
 
 // ─── Employee Self-Service Request ────────────────────────────────────────────
-export type ProfileChangeCategory = 'Personal Info' | 'Bank / Financial' | 'Document Upload' | 'Emergency Contact';
+export type ProfileChangeCategory = 'Personal Info' | 'Bank / Financial' | 'Document Upload' | 'Emergency Contact' | 'Tax Relief';
 
 export type ProfileChangeRequest = {
     id: string;
@@ -1046,7 +1063,7 @@ export type Ticket = {
     subject: string;
     description: string;
     priority: 'High' | 'Medium' | 'Low';
-    status: 'Open' | 'Pending' | 'Resolved';
+    status: 'Open' | 'Pending' | 'Resolved' | 'On Hold' | 'Closed';
     createdAt: string;
     updatedAt?: string;
 };

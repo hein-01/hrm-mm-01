@@ -1,10 +1,12 @@
 import React, { useState, useMemo, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import Sidebar from '../components/Sidebar';
 import Header from '../components/Header';
 import { useAppData } from '../context/AppDataContext';
 import { exportSSBForm15CSV, exportPITReportCSV, downloadCSV } from '../utils/taxExport';
 
 export default function PayrollRun() {
+    const navigate = useNavigate();
     const { 
         employees,
         payrollRecords, 
@@ -69,6 +71,14 @@ export default function PayrollRun() {
         }
     // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [adjustments]);
+
+    // Auto-calculate when entering Attendance step with selected employees
+    useEffect(() => {
+        if (currentStep === 3 && selectedEmployeeIds.length > 0) {
+            calculatePayroll(complianceSettings.workingDaysPerMonth || 30, selectedEmployeeIds);
+        }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [currentStep]);
 
     // Wizard Steps Configuration
     const steps = [
@@ -325,7 +335,7 @@ export default function PayrollRun() {
                                                                 </td>
                                                                 <td className="px-4 py-4 text-xs font-bold text-slate-600 dark:text-slate-400 uppercase tracking-tighter">{emp.dept}</td>
                                                                 <td className="px-4 py-4 text-xs font-medium text-slate-500">{emp.joinDate}</td>
-                                                                <td className="px-4 py-4 text-right font-bold text-slate-900 dark:text-white tabular-nums">{emp.baseSalary.toLocaleString()} MMK</td>
+                                                                <td className="px-4 py-4 text-right font-bold text-slate-900 dark:text-white tabular-nums">{(emp.baseSalary || 0).toLocaleString()} MMK</td>
                                                             </tr>
                                                         ))}
                                                     </tbody>
@@ -386,8 +396,8 @@ export default function PayrollRun() {
                                                     <tr className="bg-slate-50/30 text-[10px] font-black text-slate-500 uppercase tracking-widest border-b border-slate-100 dark:border-slate-700">
                                                         <th className="px-8 py-4">Employee</th>
                                                         <th className="px-4 py-4 text-right">Base</th>
-                                                        <th className={`px-4 py-4 text-right transition-colors ${currentStep === 5 ? 'bg-emerald-50 dark:bg-emerald-900/20 text-emerald-700' : ''}`}>Additions {currentStep === 5 ? '▲' : ''}</th>
-                                                        <th className={`px-4 py-4 text-right transition-colors ${currentStep === 4 ? 'bg-rose-50 dark:bg-rose-900/20 text-rose-700' : ''}`}>Deductions {currentStep === 4 ? '▲' : ''}</th>
+                                                        <th className={`px-4 py-4 text-right ${(currentStep === 3 || currentStep === 5) ? 'bg-emerald-100 dark:bg-emerald-900/30 text-emerald-700 border-b-2 border-emerald-400' : ''}`}>Additions {(currentStep === 3 || currentStep === 5) ? '▲' : ''}</th>
+                                                        <th className={`px-4 py-4 text-right ${(currentStep === 3 || currentStep === 4 || currentStep === 5 || currentStep === 6) ? 'bg-rose-100 dark:bg-rose-900/30 text-rose-700 border-b-2 border-rose-400' : ''}`}>Deductions {(currentStep === 3 || currentStep === 4 || currentStep === 5 || currentStep === 6) ? '▲' : ''}</th>
                                                         <th className="px-4 py-4 text-right">Net Take-Home</th>
                                                         <th className="px-8 py-4 text-center">Actions</th>
                                                     </tr>
@@ -429,11 +439,32 @@ export default function PayrollRun() {
                                                                 )}
                                                             </td>
                                                             <td className="px-4 py-4 text-right font-medium text-slate-600 dark:text-slate-400 tabular-nums">{rec.salary.toLocaleString()}</td>
-                                                            <td className={`px-4 py-4 text-right text-emerald-600 font-black tabular-nums transition-colors ${currentStep === 5 ? 'bg-emerald-50/70 dark:bg-emerald-900/10 outline outline-1 outline-emerald-200' : ''}`}>+{rec.additions.toLocaleString()}</td>
-                                                            <td className={`px-4 py-4 text-right text-rose-500 font-black tabular-nums transition-colors ${currentStep === 4 ? 'bg-rose-50/70 dark:bg-rose-900/10 outline outline-1 outline-rose-200' : ''}`}>-{rec.deductions.toLocaleString()}</td>
+                                                            <td className={`px-4 py-4 text-right text-emerald-600 font-black tabular-nums ${(currentStep === 3 || currentStep === 5) ? 'bg-emerald-100 dark:bg-emerald-900/30 border-l-2 border-r-2 border-emerald-300' : ''}`}>
+                                                                +{currentStep === 3
+                                                                    ? 0  // Attendance step: no additions
+                                                                    : currentStep === 5
+                                                                        ? (rec.otherAdditions ?? 0)  // Other Adjustments step
+                                                                        : rec.additions  // Default: total additions
+                                                                .toLocaleString()}
+                                                            </td>
+                                                            <td className={`px-4 py-4 text-right text-rose-500 font-black tabular-nums ${(currentStep === 3 || currentStep === 4 || currentStep === 5 || currentStep === 6) ? 'bg-rose-100 dark:bg-rose-900/30 border-l-2 border-r-2 border-rose-300' : ''}`}>
+                                                                -{currentStep === 3
+                                                                    ? (rec.attendanceDeductions ?? 0)  // Attendance: late/absent penalties
+                                                                    : currentStep === 4
+                                                                        ? (rec.leaveDeductions ?? 0)  // Leaves: unpaid leave
+                                                                        : currentStep === 5
+                                                                            ? (rec.otherDeductions ?? 0)  // Other: loans, penalties
+                                                                            : currentStep === 6
+                                                                                ? (rec.ssb + rec.pit)  // Tax & SSB
+                                                                                : (rec.deductions + rec.ssb + rec.pit)  // Default: total
+                                                                .toLocaleString()}
+                                                            </td>
                                                             <td className="px-4 py-4 text-right">
                                                                 <span className="px-3 py-1 bg-slate-900 dark:bg-indigo-950 text-white rounded-lg font-black text-xs tabular-nums">
-                                                                    {rec.netPay.toLocaleString()}
+                                                                    {(currentStep <= 5
+                                                                        ? rec.salary + (currentStep === 5 ? (rec.otherAdditions ?? 0) - (rec.otherDeductions ?? 0) : 0)
+                                                                        : rec.netPay
+                                                                    ).toLocaleString()}
                                                                 </span>
                                                             </td>
                                                             <td className="px-8 py-4 text-center">
@@ -634,7 +665,19 @@ export default function PayrollRun() {
 
                                     <div className="flex items-center justify-center gap-6 mt-12 pt-12 border-t border-slate-100 dark:border-slate-800">
                                         <button onClick={() => setCurrentStep(1)} className="text-sm font-bold text-slate-500 hover:text-slate-900 transition-colors uppercase tracking-widest">Back to Overview</button>
-                                        <button className="px-10 py-4 bg-[#4F46E5] text-white rounded-2xl text-sm font-black uppercase tracking-[0.1em] shadow-2xl shadow-indigo-200 dark:shadow-indigo-900/20 hover:scale-105 transition-all active:scale-95">Complete Cycle</button>
+                                        <button 
+                                            onClick={async () => {
+                                                await finalizePayroll();
+                                                if (activePayrollGroupId) {
+                                                    updatePayrollGroupStatus(activePayrollGroupId, 'Approved');
+                                                }
+                                                navigate('/bank-disbursements');
+                                            }}
+                                            className="px-10 py-4 bg-[#4F46E5] text-white rounded-2xl text-sm font-black uppercase tracking-[0.1em] shadow-2xl shadow-indigo-200 dark:shadow-indigo-900/20 hover:scale-105 transition-all active:scale-95 flex items-center gap-3"
+                                        >
+                                            <span className="material-symbols-outlined text-[20px]">account_balance</span>
+                                            Finalize & Proceed to Disbursement
+                                        </button>
                                     </div>
                                 </div>
                             )}
@@ -657,7 +700,7 @@ export default function PayrollRun() {
                                     <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Group Name</label>
                                     <input 
                                         type="text" 
-                                        placeholder="e.g., HQ Monthly Team - Oct 2023"
+                                        placeholder="e.g., HQ Monthly Team - May 2026"
                                         className="w-full px-5 py-3 rounded-2xl bg-slate-50 border-2 border-transparent focus:border-[#4F46E5] focus:bg-white transition-all text-sm font-bold text-slate-900"
                                         id="groupName"
                                     />
@@ -666,8 +709,7 @@ export default function PayrollRun() {
                                     <div className="space-y-2">
                                         <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Period</label>
                                         <select id="groupPeriod" className="w-full px-5 py-3 rounded-2xl bg-slate-50 border-2 border-transparent focus:border-[#4F46E5] focus:bg-white transition-all text-sm font-bold text-slate-900 appearance-none">
-                                            <optgroup label="2023"><option>Oct 2023</option><option>Nov 2023</option><option>Dec 2023</option></optgroup>
-                                            <optgroup label="2026"><option>Jan 2026</option><option>Feb 2026</option><option>Mar 2026</option><option>Apr 2026</option><option>May 2026</option><option>Jun 2026</option><option>Jul 2026</option><option>Aug 2026</option><option>Sep 2026</option><option>Oct 2026</option><option>Nov 2026</option><option>Dec 2026</option></optgroup>
+                                            <optgroup label="2026"><option>Jan 2026</option><option>Feb 2026</option><option>Mar 2026</option><option>Apr 2026</option><option selected>May 2026</option><option>Jun 2026</option><option>Jul 2026</option><option>Aug 2026</option><option>Sep 2026</option><option>Oct 2026</option><option>Nov 2026</option><option>Dec 2026</option></optgroup>
                                         </select>
                                     </div>
                                     <div className="space-y-2">
@@ -681,11 +723,11 @@ export default function PayrollRun() {
                                 <div className="grid grid-cols-2 gap-4">
                                     <div className="space-y-2">
                                         <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Cutoff Date</label>
-                                        <input id="groupCutoff" type="date" defaultValue="2023-10-25" className="w-full px-5 py-3 rounded-2xl bg-slate-50 border-2 border-transparent focus:border-[#4F46E5] focus:bg-white transition-all text-sm font-bold text-slate-900" />
+                                        <input id="groupCutoff" type="date" defaultValue="2026-05-25" className="w-full px-5 py-3 rounded-2xl bg-slate-50 border-2 border-transparent focus:border-[#4F46E5] focus:bg-white transition-all text-sm font-bold text-slate-900" />
                                     </div>
                                     <div className="space-y-2">
                                         <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Payment Date</label>
-                                        <input id="groupPayment" type="date" defaultValue="2023-10-31" className="w-full px-5 py-3 rounded-2xl bg-slate-50 border-2 border-transparent focus:border-[#4F46E5] focus:bg-white transition-all text-sm font-bold text-slate-900" />
+                                        <input id="groupPayment" type="date" defaultValue="2026-05-31" className="w-full px-5 py-3 rounded-2xl bg-slate-50 border-2 border-transparent focus:border-[#4F46E5] focus:bg-white transition-all text-sm font-bold text-slate-900" />
                                     </div>
                                 </div>
                             </div>
@@ -697,14 +739,14 @@ export default function PayrollRun() {
                                         const periodSelect = document.getElementById('groupPeriod')  as HTMLSelectElement;
                                         const cutoffInput  = document.getElementById('groupCutoff')  as HTMLInputElement;
                                         const paymentInput = document.getElementById('groupPayment') as HTMLInputElement;
-                                        const period = periodSelect?.value || 'Oct 2023';
+                                        const period = periodSelect?.value || 'May 2026';
                                         createPayrollGroup({
                                             name: nameInput?.value || 'New Payroll Run',
                                             period,
                                             type: 'Monthly',
                                             payrollCycle: period,
-                                            cutoffDate: cutoffInput?.value  || '2023-10-25',
-                                            paymentDate: paymentInput?.value || '2023-10-31',
+                                            cutoffDate: cutoffInput?.value  || '2026-05-25',
+                                            paymentDate: paymentInput?.value || '2026-05-31',
                                             proRatingLogic: 'Working Days'
                                         });
                                         setIsGroupModalOpen(false);

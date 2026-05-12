@@ -921,7 +921,7 @@ export default function Setting() {
                                                 </p>
                                             </div>
                                             <div className="space-y-3">
-                                                <label className="text-xs font-black text-slate-500 uppercase tracking-widest block">PIT Personal Exemption (Annual)</label>
+                                                <label className="text-xs font-black text-slate-500 uppercase tracking-widest block">PIT Threshold (Annual)</label>
                                                 <div className="relative">
                                                     <input 
                                                         type="number"
@@ -932,7 +932,7 @@ export default function Setting() {
                                                     <span className="absolute right-4 top-1/2 -translate-y-1/2 text-sm font-bold text-slate-400">MMK</span>
                                                 </div>
                                                 <p className="text-[11px] text-slate-500 font-medium leading-relaxed">
-                                                    Standard: 4,800,000 MMK. Income below this threshold is non-taxable.
+                                                    <span className="text-emerald-600 font-bold">Myanmar PIT Rules Applied:</span> 20% personal relief (capped at 10M MMK) + spouse (1M) + parents (1M each) + children (500K each). Tax brackets: 0% (first 2M), 5%, 10%, 15%, 20%, 25% (above 70M).
                                                 </p>
                                             </div>
                                             <div className="space-y-3">

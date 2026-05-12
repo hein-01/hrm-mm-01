@@ -1,7 +1,7 @@
-import React, { useState } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { useAppData } from '../context/AppDataContext';
-import { useNotifications } from '../context/NotificationProvider';
-import NotificationCenter from './NotificationCenter';
+import { useUserAccess } from '../context/UserAccessProvider';
 
 type HeaderProps = {
     onSearch?: (query: string) => void;
@@ -12,15 +12,43 @@ type HeaderProps = {
 };
 
 export default function Header({ onSearch, placeholder, title, subtitle, children }: HeaderProps) {
-    const { alerts } = useAppData();
-    const { unreadCount } = useNotifications();
-    const [showNotifications, setShowNotifications] = useState(false);
+    const navigate = useNavigate();
+    const { currentUser, signOut } = useUserAccess();
+    const [showUserMenu, setShowUserMenu] = useState(false);
+    const [avatarError, setAvatarError] = useState(false);
+    const userMenuRef = useRef<HTMLDivElement>(null);
 
-    // Total badge = push notifications + legacy compliance alerts  
-    const totalUnread = unreadCount + alerts.filter(a => !a.isRead).length;
+    // Close menu when clicking outside
+    useEffect(() => {
+        const handleClickOutside = (event: MouseEvent) => {
+            if (userMenuRef.current && !userMenuRef.current.contains(event.target as Node)) {
+                setShowUserMenu(false);
+            }
+        };
+        document.addEventListener('mousedown', handleClickOutside);
+        return () => document.removeEventListener('mousedown', handleClickOutside);
+    }, []);
+
+    const handleSignOut = async () => {
+        setShowUserMenu(false);
+        await signOut();
+        navigate('/');
+    };
+
+    const handleMyProfile = () => {
+        setShowUserMenu(false);
+        if (currentUser?.id) {
+            navigate(`/employees/${currentUser.id}`);
+        }
+    };
+
+    const handleSettings = () => {
+        setShowUserMenu(false);
+        navigate('/settings');
+    };
 
     return (
-        <header className="flex items-center justify-between w-full h-[73.5px] bg-[#F8FAFC] dark:bg-slate-950 border-b border-slate-200 dark:border-slate-800 sticky top-0 z-[1100] px-8">
+        <header className="flex items-center justify-between w-full h-[73.5px] bg-[#F8FAFC]/80 dark:bg-slate-950/80 backdrop-blur-md border-b border-slate-200 dark:border-slate-800 sticky top-0 z-40 px-8">
             {/* Left Side: Title & Children */}
             <div className="flex items-center gap-8 h-full">
                 {(title || subtitle) && (
@@ -34,71 +62,66 @@ export default function Header({ onSearch, placeholder, title, subtitle, childre
 
             {/* Right Side */}
             <div className="flex items-center gap-6 h-full">
-                <div className="flex items-center gap-5 h-full">
-
-                    {/* Notification Bell */}
-                    <div className="relative h-full flex items-center">
-                        <button
-                            id="notification-bell-btn"
-                            onClick={() => setShowNotifications(p => !p)}
-                            className={`relative flex items-center justify-center size-10 rounded-full transition-all ${
-                                showNotifications
-                                    ? 'bg-[#4F46E5]/10 text-[#4F46E5]'
-                                    : 'text-slate-500 hover:bg-slate-100 dark:hover:bg-slate-800'
-                            }`}
-                        >
-                            <span className={`material-symbols-outlined text-[24px] transition-transform ${totalUnread > 0 ? 'animate-[wiggle_1s_ease-in-out_1]' : ''}`}>
-                                notifications
-                            </span>
-
-                            {/* Animated badge */}
-                            {totalUnread > 0 && (
-                                <span className="absolute top-1 right-1 min-w-[18px] h-[18px] bg-rose-500 rounded-full text-[10px] font-black text-white flex items-center justify-center ring-2 ring-[#F8FAFC] dark:ring-slate-950 px-1 animate-in zoom-in duration-300">
-                                    {totalUnread > 99 ? '99+' : totalUnread}
-                                </span>
-                            )}
-
-                            {/* Pulse ring when urgent */}
-                            {totalUnread > 0 && (
-                                <span className="absolute top-1 right-1 min-w-[18px] h-[18px] bg-rose-400 rounded-full opacity-40 animate-ping" />
-                            )}
-                        </button>
-
-                        {/* NotificationCenter Panel */}
-                        <NotificationCenter
-                            isOpen={showNotifications}
-                            onClose={() => setShowNotifications(false)}
-                        />
-                    </div>
-
-                    {/* User Avatar Hub */}
-                    <div className="flex items-center gap-3 pl-4 border-l border-slate-100 dark:border-slate-800 h-8">
+                {/* User Avatar Hub with Dropdown */}
+                <div className="relative" ref={userMenuRef}>
+                    <button
+                        onClick={() => setShowUserMenu(p => !p)}
+                        className="flex items-center gap-3 pl-4 border-l border-slate-100 dark:border-slate-800 h-8 hover:opacity-80 transition-opacity"
+                    >
                         <div className="flex flex-col items-end leading-none">
-                            <p className="text-xs font-bold text-slate-900 dark:text-white">Admin User</p>
-                            <p className="text-[10px] font-medium text-slate-400">HQ Office</p>
+                            <p className="text-xs font-bold text-slate-900 dark:text-white">{currentUser?.name || 'Admin User'}</p>
+                            <p className="text-[10px] font-medium text-slate-400">{currentUser?.role || 'Admin'}</p>
                         </div>
-                        <div className="size-9 rounded-full bg-indigo-100 border-2 border-white ring-1 ring-slate-200 dark:ring-slate-700 overflow-hidden cursor-pointer hover:ring-[#4F46E5]/40 transition-all shadow-sm">
-                            <img
-                                alt="Admin"
-                                className="size-full object-cover"
-                                src="https://lh3.googleusercontent.com/aida-public/AB6AXuBPv3N7DJ1HO5GnNQ4VFZzFDLmbiepKJrVnpRpaacPiL-7ribzgq_dUwyv-Ii7r0NlRYqvE96sJ1MuV5vN319TbU3x97XbNOhouNqTBB945wSReJs5gLsweRh5O5PqLhWmGyTRrCJvBlBDH0z4yGBPCyJo7Z56wvyzI-xk8PIWVYAm5S11kFDBiNvt99RaaRGQL5qErZh_UDP5LEkOcfBFJ0zZ66JX75Lf68HgT8wHdZsfq9-LIUTM_zG3wHD8fXaYT7h5xo_mdc1Af"
-                            />
+                        <div className="size-9 rounded-full bg-indigo-100 border-2 border-white ring-1 ring-slate-200 dark:ring-slate-700 overflow-hidden shadow-sm flex items-center justify-center text-indigo-600 font-bold text-sm">
+                            {currentUser?.avatar && !avatarError ? (
+                                <img
+                                    src={currentUser.avatar}
+                                    alt={currentUser.name || 'User'}
+                                    className="size-full object-cover"
+                                    onError={() => setAvatarError(true)}
+                                />
+                            ) : (
+                                (currentUser?.name || 'A').charAt(0).toUpperCase()
+                            )}
                         </div>
-                    </div>
+                    </button>
+
+                    {/* User Dropdown Menu */}
+                    {showUserMenu && (
+                        <div className="absolute right-0 top-full mt-2 w-56 bg-white dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 shadow-lg z-50 overflow-hidden animate-in fade-in slide-in-from-top-2 duration-200">
+                            <div className="px-4 py-3 border-b border-slate-100 dark:border-slate-700">
+                                <p className="text-sm font-bold text-slate-900 dark:text-white">{currentUser?.name || 'Admin User'}</p>
+                                <p className="text-xs text-slate-500">{currentUser?.id || 'EMP-001'}</p>
+                            </div>
+                            <div className="py-1">
+                                <button
+                                    onClick={handleMyProfile}
+                                    className="w-full flex items-center gap-3 px-4 py-2.5 text-sm text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-700/50 transition-colors"
+                                >
+                                    <span className="material-symbols-outlined text-[20px]">account_circle</span>
+                                    My Profile
+                                </button>
+                                <button
+                                    onClick={handleSettings}
+                                    className="w-full flex items-center gap-3 px-4 py-2.5 text-sm text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-700/50 transition-colors"
+                                >
+                                    <span className="material-symbols-outlined text-[20px]">settings</span>
+                                    Settings
+                                </button>
+                            </div>
+                            <div className="border-t border-slate-100 dark:border-slate-700 py-1">
+                                <button
+                                    onClick={handleSignOut}
+                                    className="w-full flex items-center gap-3 px-4 py-2.5 text-sm text-rose-600 dark:text-rose-400 hover:bg-rose-50 dark:hover:bg-rose-900/20 transition-colors"
+                                >
+                                    <span className="material-symbols-outlined text-[20px]">logout</span>
+                                    Sign Out
+                                </button>
+                            </div>
+                        </div>
+                    )}
                 </div>
             </div>
-
-            {/* Wiggle keyframe */}
-            <style>{`
-                @keyframes wiggle {
-                    0%, 100% { transform: rotate(0deg); }
-                    15%       { transform: rotate(-15deg); }
-                    30%       { transform: rotate(12deg); }
-                    45%       { transform: rotate(-10deg); }
-                    60%       { transform: rotate(8deg); }
-                    75%       { transform: rotate(-5deg); }
-                }
-            `}</style>
         </header>
     );
 }

@@ -1,10 +1,11 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useParams, useSearchParams, Link, useNavigate } from 'react-router-dom';
 import Sidebar from '../components/Sidebar';
 import Header from '../components/Header';
 import { useAppData, JobActivityChange, AttendanceLog } from '../context/AppDataContext';
 import { useSystemCalendar } from '../context/SystemCalendarContext';
 import { useUserAccess } from '../context/UserAccessProvider';
+import { supabase } from '../lib/supabase';
 
 export default function Employee() {
     const { id } = useParams();
@@ -17,9 +18,10 @@ export default function Employee() {
         verifyLocalAuth, addSecurityLog, loans, disciplinaryActions, expenses
     } = useAppData();
     const { currentUser } = useUserAccess();
-    const employee = employees.find(e => e.id === id) || employees[0];
-    const assignedAssets = assets.filter(a => a.assigneeId === employee.id);
-
+    const { getFormattedDate, getCurrentDateISO } = useSystemCalendar();
+    const [searchParams] = useSearchParams();
+    
+    // All useState hooks must be called before any early returns (React rules of hooks)
     const [activeTab, setActiveTab] = useState('Overview');
     const [isActionsMenuOpen, setIsActionsMenuOpen] = useState(false);
     const [adjustmentAmount, setAdjustmentAmount] = useState<number>(0);
@@ -28,10 +30,9 @@ export default function Employee() {
     const [activeModal, setActiveModal] = useState<string | null>(null);
     const [terminationError, setTerminationError] = useState<string | null>(null);
     const [separationReason, setSeparationReason] = useState<'Resignation' | 'Termination' | 'Left/Absconded' | 'Retirement'>('Termination');
-    const [searchParams] = useSearchParams();
 
     // Salary Update State
-    const [newSalary, setNewSalary] = useState<number>(employee.baseSalary);
+    const [newSalary, setNewSalary] = useState<number>(0);
     const [effectiveDate, setEffectiveDate] = useState<string>(new Date().toISOString().split('T')[0]);
     const [salaryReason, setSalaryReason] = useState<string>('');
     const [isReadOnly, setIsReadOnly] = useState(false);
@@ -41,6 +42,89 @@ export default function Employee() {
     const [isVaultUnlocked, setIsVaultUnlocked] = useState(false);
     const [vaultPin, setVaultPin] = useState('');
     const [vaultError, setVaultError] = useState('');
+
+    // Attendance Edit State
+    const [editingDate, setEditingDate] = useState<string | null>(null);
+    const [editingShiftId, setEditingShiftId] = useState<string>('');
+    const [editingReason, setEditingReason] = useState<string>('');
+    const [customStartTime, setCustomStartTime] = useState<string>('09:00');
+    const [customEndTime, setCustomEndTime] = useState<string>('18:00');
+    const [customWorkType, setCustomWorkType] = useState<'Regular' | 'Overtime'>('Regular');
+    const [manualCheckIn, setManualCheckIn] = useState<string>('09:00');
+    const [manualCheckOut, setManualCheckOut] = useState<string>('18:00');
+
+    // Profile Edit State
+    const [editName, setEditName] = useState('');
+    const [editRole, setEditRole] = useState('');
+    const [editDept, setEditDept] = useState('');
+    const [editLocation, setEditLocation] = useState('');
+    const [docPreviewUrl, setDocPreviewUrl] = useState<string | null>(null);
+
+    // Avatar Upload State
+    const [avatarUploading, setAvatarUploading] = useState(false);
+    const [avatarSuccess, setAvatarSuccess] = useState(false);
+    const [localAvatarUrl, setLocalAvatarUrl] = useState<string | null>(null);
+    const fileInputRef = useRef<HTMLInputElement>(null);
+
+    // Bank Details Edit State
+    const [editBankName, setEditBankName] = useState('');
+    const [editAccountNumber, setEditAccountNumber] = useState('');
+    const [editBankBranch, setEditBankBranch] = useState('');
+    const [editBankBranchCode, setEditBankBranchCode] = useState('');
+
+    // Now get employee after hooks are initialized
+    const employee = employees.find(e => e.id === id) || employees[0];
+    const assignedAssets = assets.filter(a => a.assigneeId === employee?.id);
+    
+    // All useEffect hooks must also be called before any early returns
+    useEffect(() => {
+        if (!employee) return;
+        if (activeModal === 'edit_profile') {
+            setEditName(employee.name);
+            setEditRole(employee.role);
+            setEditDept(employee.dept);
+            setEditLocation((employee as any).officeLocation || '');
+        }
+        if (activeModal === 'edit_bank_details') {
+            setEditBankName(employee.bankName || '');
+            setEditAccountNumber(employee.accountNumber || '');
+            setEditBankBranch(employee.bankBranch || '');
+            setEditBankBranchCode(employee.bankBranchCode || '');
+        }
+    }, [activeModal, employee]);
+
+    useEffect(() => {
+        if (!employee) return;
+        const modalParam = searchParams.get('modal');
+        if (modalParam === 'salary_review') {
+            setIsReadOnly(true);
+            setActiveModal('salary_update');
+            
+            // Auto-fill form with request data if found (simulated)
+            const requestId = searchParams.get('requestId');
+            const request = jobActivityChanges.find(r => r.id === requestId);
+            if (request) {
+                setNewSalary(request.newSalary || employee.baseSalary);
+                setEffectiveDate(request.effectiveDate);
+                setSalaryReason(request.detail);
+            }
+        }
+    }, [searchParams, jobActivityChanges, employee]);
+    
+    // Show loading state if employees data not loaded yet
+    if (!employee) {
+        return (
+            <div className="flex h-screen w-full bg-background-light dark:bg-background-dark font-display">
+                <Sidebar activeTab="Employees" />
+                <main className="flex-1 flex items-center justify-center ml-[280px]">
+                    <div className="flex flex-col items-center gap-3">
+                        <div className="w-8 h-8 border-2 border-indigo-500 border-t-transparent rounded-full animate-spin"></div>
+                        <p className="text-slate-500 text-sm">Loading employee data...</p>
+                    </div>
+                </main>
+            </div>
+        );
+    }
 
     const handleUnlockVault = () => {
         if (verifyLocalAuth(vaultPin)) {
@@ -63,54 +147,11 @@ export default function Employee() {
         }
     };
 
-    // Attendance Edit State
-    const [editingDate, setEditingDate] = useState<string | null>(null);
-    const [editingShiftId, setEditingShiftId] = useState<string>('');
-    const [editingReason, setEditingReason] = useState<string>('');
-    const [customStartTime, setCustomStartTime] = useState<string>('09:00');
-    const [customEndTime, setCustomEndTime] = useState<string>('18:00');
-    const [customWorkType, setCustomWorkType] = useState<'Regular' | 'Overtime'>('Regular');
-    const [manualCheckIn, setManualCheckIn] = useState<string>('09:00');
-    const [manualCheckOut, setManualCheckOut] = useState<string>('18:00');
-
-    // Profile Edit State
-    const [editName, setEditName] = useState(employee.name);
-    const [editRole, setEditRole] = useState(employee.role);
-    const [editDept, setEditDept] = useState(employee.dept);
-    const [editLocation, setEditLocation] = useState((employee as any).officeLocation || '');
-    const [docPreviewUrl, setDocPreviewUrl] = useState<string | null>(null);
-
-    useEffect(() => {
-        if (activeModal === 'edit_profile') {
-            setEditName(employee.name);
-            setEditRole(employee.role);
-            setEditDept(employee.dept);
-            setEditLocation((employee as any).officeLocation || '');
-        }
-    }, [activeModal, employee]);
-
     const closeModal = () => {
         setActiveModal(null);
         setTerminationError(null);
         setIsReadOnly(false);
     };
-
-    React.useEffect(() => {
-        const modalParam = searchParams.get('modal');
-        if (modalParam === 'salary_review') {
-            setIsReadOnly(true);
-            setActiveModal('salary_update');
-            
-            // Auto-fill form with request data if found (simulated)
-            const requestId = searchParams.get('requestId');
-            const request = jobActivityChanges.find(r => r.id === requestId);
-            if (request) {
-                setNewSalary(request.newSalary || employee.baseSalary);
-                setEffectiveDate(request.effectiveDate);
-                setSalaryReason(request.detail);
-            }
-        }
-    }, [searchParams, jobActivityChanges, employee]);
 
     return (
         <div className="flex h-screen w-full bg-background-light dark:bg-background-dark font-display text-slate-900 dark:text-white antialiased overflow-hidden">
@@ -118,7 +159,17 @@ export default function Employee() {
 
             <main className="flex-1 flex flex-col h-full overflow-hidden relative ml-[280px]">
                 <Header 
-                    title="Employee Profile"
+                    title={
+                        <div className="flex items-center gap-2">
+                            <button
+                                onClick={() => navigate('/employees')}
+                                className="text-slate-400 hover:text-indigo-600 dark:hover:text-indigo-400 transition-colors"
+                            >
+                                <span className="material-symbols-outlined text-[24px]">arrow_back</span>
+                            </button>
+                            <span>Employee Profile</span>
+                        </div>
+                    }
                     subtitle={`${employee.name} (ID: ${employee.id}) • ${employee.role}`}
                 />
                 <div className="flex-1 overflow-y-auto p-6 md:p-10 bg-[#F8FAFC]">
@@ -130,8 +181,97 @@ export default function Employee() {
                                 <div className="absolute inset-0 bg-black/5"></div>
                                 <div className="absolute right-0 top-0 h-full w-48 bg-white/10 skew-x-12 translate-x-20"></div>
                                 <div className="flex flex-col md:flex-row items-center gap-6 relative z-10">
-                                    <div className="relative size-28 rounded-full ring-4 ring-white/20 bg-white overflow-hidden shadow-md shrink-0">
-                                        <img alt={employee.name} className="w-full h-full object-cover" src={employee.avatar || "https://lh3.googleusercontent.com/aida-public/AB6AXuDtMXUX0ktXwWpCR_HssI-ya16-3aPa6AAVPyBQ1EHpfp-j-sPL3V6-M9LOQH5oBAEgQVe-LnDjqixmSwV106z7bEtrnsNZO1CATGA_USq9lnhHi1_HCFl-Cyi3xyw648ljz2mqjJMc3vscDUW5zgws6ccC1OF1vEu1wdaDvwNJ2V-sg_zZ0haXJZDCxUvx8VjDCNHaXD51nD66gSegMbmfNMdqwU2v6zEDDEhi7cAmX1yUQ8UQLqt3O-oPvyg5wEcfX6wNGOUrCzj4"} />
+                                    <div className="relative size-28 rounded-full ring-4 ring-white/20 bg-white overflow-hidden shadow-md shrink-0 group/avatar">
+                                        <img alt={employee.name} className="w-full h-full object-cover" src={localAvatarUrl || employee.avatar || "https://lh3.googleusercontent.com/aida-public/AB6AXuDtMXUX0ktXwWpCR_HssI-ya16-3aPa6AAVPyBQ1EHpfp-j-sPL3V6-M9LOQH5oBAEgQVe-LnDjqixmSwV106z7bEtrnsNZO1CATGA_USq9lnhHi1_HCFl-Cyi3xyw648ljz2mqjJMc3vscDUW5zgws6ccC1OF1vEu1wdaDvwNJ2V-sg_zZ0haXJZDCxUvx8VjDCNHaXD51nD66gSegMbmfNMdqwU2v6zEDDEhi7cAmX1yUQ8UQLqt3O-oPvyg5wEcfX6wNGOUrCzj4"} />
+                                        <input 
+                                            ref={fileInputRef}
+                                            type="file" 
+                                            accept="image/*"
+                                            className="hidden"
+                                            onChange={async (e) => {
+                                                const file = e.target.files?.[0];
+                                                if (!file) return;
+                                                
+                                                // Validate file size (1MB limit)
+                                                const maxSize = 1024 * 1024; // 1MB in bytes
+                                                if (file.size > maxSize) {
+                                                    alert('File size must be less than 1MB. Please choose a smaller image.');
+                                                    return;
+                                                }
+                                                
+                                                setAvatarUploading(true);
+                                                try {
+                                                    // Delete old avatar if exists
+                                                    if (employee.avatar) {
+                                                        try {
+                                                            const oldPath = employee.avatar.split('/').pop();
+                                                            if (oldPath) {
+                                                                await supabase.storage
+                                                                    .from('avatars')
+                                                                    .remove([oldPath]);
+                                                                console.log('Old avatar deleted:', oldPath);
+                                                            }
+                                                        } catch (deleteErr) {
+                                                            console.log('Could not delete old avatar:', deleteErr);
+                                                            // Continue with upload even if delete fails
+                                                        }
+                                                    }
+                                                    
+                                                    const fileExt = file.name.split('.').pop();
+                                                    const fileName = `${employee.id}-${Date.now()}.${fileExt}`;
+                                                    
+                                                    const { error: uploadError } = await supabase.storage
+                                                        .from('avatars')
+                                                        .upload(fileName, file, { upsert: true });
+                                                    
+                                                    if (uploadError) throw uploadError;
+                                                    
+                                                    const { data: { publicUrl } } = supabase.storage
+                                                        .from('avatars')
+                                                        .getPublicUrl(fileName);
+                                                    
+                                                    // Update local state immediately for UI refresh
+                                                    setLocalAvatarUrl(publicUrl);
+                                                    
+                                                    // Update employee in database
+                                                    console.log('Updating avatar in database:', { empId: employee.id, avatar: publicUrl, adminId: currentUser?.id });
+                                                    const result = await updateEmployee(employee.id, { avatar: publicUrl }, currentUser?.id || 'EMP-001');
+                                                    console.log('Update result:', result);
+                                                    
+                                                    if (!result.success) {
+                                                        throw new Error(result.message || 'Failed to update employee record');
+                                                    }
+                                                    
+                                                    // Show success toast
+                                                    setAvatarSuccess(true);
+                                                    setTimeout(() => setAvatarSuccess(false), 3000);
+                                                } catch (err: any) {
+                                                    console.error('Avatar upload failed:', err);
+                                                    const errorMsg = err?.message || err?.error_description || 'Unknown error';
+                                                    alert(`Failed to upload avatar: ${errorMsg}`);
+                                                } finally {
+                                                    setAvatarUploading(false);
+                                                }
+                                            }}
+                                        />
+                                        <button 
+                                            onClick={() => fileInputRef.current?.click()}
+                                            disabled={avatarUploading}
+                                            className="absolute inset-0 flex items-center justify-center bg-black/50 opacity-0 group-hover/avatar:opacity-100 transition-opacity cursor-pointer disabled:cursor-not-allowed"
+                                        >
+                                            {avatarUploading ? (
+                                                <div className="w-6 h-6 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
+                                            ) : (
+                                                <span className="material-symbols-outlined text-white text-2xl">photo_camera</span>
+                                            )}
+                                        </button>
+                                        {/* Success Toast */}
+                                        {avatarSuccess && (
+                                            <div className="absolute -bottom-14 left-1/2 -translate-x-1/2 bg-emerald-500 text-white text-xs font-bold px-4 py-2 rounded-lg shadow-lg flex items-center gap-2 animate-fade-in whitespace-nowrap z-50">
+                                                <span className="material-symbols-outlined text-base">check_circle</span>
+                                                Avatar updated successfully!
+                                            </div>
+                                        )}
                                     </div>
                                     <div className="flex-1 text-center md:text-left">
                                         <h1 className="text-2xl font-bold text-white mb-1">{employee.name}</h1>
@@ -141,8 +281,22 @@ export default function Employee() {
                                             {employee.dept}
                                         </p>
                                         <div className="flex flex-wrap items-center justify-center md:justify-start gap-3">
-                                            <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-bold bg-white/10 text-white backdrop-blur-sm border border-white/20 shadow-sm">
-                                                <span className="size-1.5 rounded-full bg-emerald-400 animate-pulse"></span> {employee.status}
+                                            <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-bold backdrop-blur-sm border shadow-sm ${
+                                                employee.status === 'Active' ? 'bg-emerald-500/20 text-emerald-100 border-emerald-400/30' :
+                                                employee.status === 'On Leave' ? 'bg-amber-500/20 text-amber-100 border-amber-400/30' :
+                                                employee.status === 'Terminated' ? 'bg-red-500/20 text-red-100 border-red-400/30' :
+                                                employee.status === 'Resigned' ? 'bg-amber-800/30 text-amber-200 border-amber-600/40' :
+                                                employee.status === 'Retired' ? 'bg-slate-800/30 text-slate-300 border-slate-600/40' :
+                                                'bg-white/10 text-white border-white/20'
+                                            }`}>
+                                                <span className={`size-1.5 rounded-full ${
+                                                    employee.status === 'Active' ? 'bg-emerald-400 animate-pulse' :
+                                                    employee.status === 'On Leave' ? 'bg-amber-400' :
+                                                    employee.status === 'Terminated' ? 'bg-red-400' :
+                                                    employee.status === 'Resigned' ? 'bg-amber-600' :
+                                                    employee.status === 'Retired' ? 'bg-slate-500' :
+                                                    'bg-slate-400'
+                                                }`}></span> {employee.status}
                                             </span>
                                             <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-bold bg-indigo-500/20 text-white backdrop-blur-sm border border-indigo-400/30 shadow-sm">
                                                 <span className="material-symbols-outlined text-[14px]">fingerprint</span> Biometric: Enrolled
@@ -188,7 +342,7 @@ export default function Employee() {
                             </div>
                             <div className="bg-white dark:bg-[#182130] px-8 border-t border-slate-200 dark:border-slate-800">
                                 <nav aria-label="Tabs" className="flex gap-8 overflow-x-auto no-scrollbar">
-                                    {['Overview', 'Personal & Family', 'Job & Pay', 'Movement', 'Attendance', 'Leave', 'Documents', 'Assets', 'Loans', 'Disciplinary', 'Expenses', 'Learning', 'History'].map((tab) => (
+                                    {['Overview', 'Job & Pay', 'Movement', 'Attendance', 'Leave', 'Documents', 'Assets', 'Loans', 'Disciplinary', 'Expenses', 'Learning'].map((tab) => (
                                         <button
                                             key={tab}
                                             onClick={() => setActiveTab(tab)}
@@ -198,7 +352,6 @@ export default function Employee() {
                                                 }`}
                                             style={activeTab === tab ? { color: '#4F46E5', borderColor: '#4F46E5' } : {}}
                                         >
-                                            {tab === 'Personal & Family' && <span className="material-symbols-outlined text-[18px]" style={{ fontVariationSettings: "'FILL' 1" }}>family_restroom</span>}
                                             {tab}
                                             {tab === 'Documents' && employee.documents.length > 0 && (
                                                 <span className="bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-400 text-[10px] px-1.5 py-0.5 rounded-full">{employee.documents.length}</span>
@@ -363,18 +516,43 @@ export default function Employee() {
                                                 <p className="w-full sm:w-[180px] sm:min-w-[180px] shrink-0 text-sm font-medium text-slate-500 dark:text-slate-400">NRC Number</p>
                                                 <div className="flex-1">
                                                     <div className="flex items-center gap-2 flex-wrap">
-                                                        <p className="text-base font-semibold text-slate-900 dark:text-white font-mono">12/Bahan(N)123456</p>
-                                                        <span className="material-symbols-outlined text-emerald-500 text-[20px]" title="Verified with Govt Database" style={{ fontVariationSettings: "'FILL' 1" }}>check_circle</span>
-                                                        <a className="ml-1 text-xs font-medium text-primary hover:text-indigo-700 hover:underline flex items-center gap-1 transition-colors" href="#">View Card 📎</a>
+                                                        <p className="text-base font-semibold text-slate-900 dark:text-white font-mono">{employee.nrcNumber || 'Not Provided'}</p>
+                                                        {employee.nrcNumber && employee.nrcNumber !== 'TBD' && employee.nrcNumber !== 'Pending Verification' && (
+                                                            <span className="material-symbols-outlined text-emerald-500 text-[20px]" title="Verified with Govt Database" style={{ fontVariationSettings: "'FILL' 1" }}>check_circle</span>
+                                                        )}
+                                                        {employee.nrcNumber && employee.nrcNumber !== 'TBD' && employee.nrcNumber !== 'Pending Verification' && (
+                                                            <a className="ml-1 text-xs font-medium text-primary hover:text-indigo-700 hover:underline flex items-center gap-1 transition-colors" href="#">View Card 📎</a>
+                                                        )}
                                                     </div>
                                                     <p className="text-xs text-slate-400 mt-1">Myanmar National Registration</p>
                                                 </div>
                                             </div>
                                             <div className="w-full h-px bg-slate-50 dark:bg-slate-800/50"></div>
                                             <div className="flex flex-col sm:flex-row gap-4 items-baseline">
-                                                <p className="w-full sm:w-[180px] sm:min-w-[180px] shrink-0 text-sm font-medium text-slate-500 dark:text-slate-400">Biometric ID (PIN)</p>
+                                                <p className="w-full sm:w-[180px] sm:min-w-[180px] shrink-0 text-sm font-medium text-slate-500 dark:text-slate-400">SSB Number</p>
                                                 <div className="flex-1">
-                                                    <p className="text-sm font-semibold text-slate-900 dark:text-white font-mono">1024</p>
+                                                    <p className="text-sm font-semibold text-slate-900 dark:text-white font-mono">{employee.ssbNumber || 'Not Provided'}</p>
+                                                </div>
+                                            </div>
+                                            <div className="w-full h-px bg-slate-50 dark:bg-slate-800/50"></div>
+                                            <div className="flex flex-col sm:flex-row gap-4 items-baseline">
+                                                <p className="w-full sm:w-[180px] sm:min-w-[180px] shrink-0 text-sm font-medium text-slate-500 dark:text-slate-400">Tax ID (TIN)</p>
+                                                <div className="flex-1">
+                                                    <p className="text-sm font-semibold text-slate-900 dark:text-white font-mono">{employee.taxId || 'Not Provided'}</p>
+                                                </div>
+                                            </div>
+                                            <div className="w-full h-px bg-slate-50 dark:bg-slate-800/50"></div>
+                                            <div className="flex flex-col sm:flex-row gap-4 items-baseline">
+                                                <p className="w-full sm:w-[180px] sm:min-w-[180px] shrink-0 text-sm font-medium text-slate-500 dark:text-slate-400">Date of Birth</p>
+                                                <div className="flex-1">
+                                                    <p className="text-sm font-semibold text-slate-900 dark:text-white">
+                                                        {employee.dateOfBirth ? new Date(employee.dateOfBirth).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' }) : 'Not Provided'}
+                                                    </p>
+                                                    {employee.dateOfBirth && (
+                                                        <p className="text-xs text-slate-400 mt-1">
+                                                            {Math.floor((new Date().getTime() - new Date(employee.dateOfBirth).getTime()) / (365.25 * 24 * 60 * 60 * 1000))} years old
+                                                        </p>
+                                                    )}
                                                 </div>
                                             </div>
                                             <div className="w-full h-px bg-slate-50 dark:bg-slate-800/50"></div>
@@ -395,28 +573,6 @@ export default function Employee() {
                                                     <span className={`text-xs font-bold ${employee.autoAttendanceEnabled ? 'text-indigo-600' : 'text-slate-400'}`}>
                                                         {employee.autoAttendanceEnabled ? 'ON' : 'OFF'}
                                                     </span>
-                                                </div>
-                                            </div>
-                                            <div className="w-full h-px bg-slate-50 dark:bg-slate-800/50"></div>
-                                            <div className="flex flex-col sm:flex-row gap-4 items-baseline">
-                                                <p className="w-full sm:w-[180px] sm:min-w-[180px] shrink-0 text-sm font-medium text-slate-500 dark:text-slate-400">Father's Name</p>
-                                                <div className="flex-1">
-                                                    <p className="text-sm font-semibold text-slate-900 dark:text-white">U Ba Kyaw</p>
-                                                </div>
-                                            </div>
-                                            <div className="w-full h-px bg-slate-50 dark:bg-slate-800/50"></div>
-                                            <div className="flex flex-col sm:flex-row gap-4 items-baseline">
-                                                <p className="w-full sm:w-[180px] sm:min-w-[180px] shrink-0 text-sm font-medium text-slate-500 dark:text-slate-400">Date of Birth</p>
-                                                <div className="flex-1">
-                                                    <p className="text-sm font-semibold text-slate-900 dark:text-white">14 Oct 1995</p>
-                                                    <p className="text-xs text-slate-400 mt-1">29 years old</p>
-                                                </div>
-                                            </div>
-                                            <div className="w-full h-px bg-slate-50 dark:bg-slate-800/50"></div>
-                                            <div className="flex flex-col sm:flex-row gap-4 items-baseline">
-                                                <p className="w-full sm:w-[180px] sm:min-w-[180px] shrink-0 text-sm font-medium text-slate-500 dark:text-slate-400">Race/Religion</p>
-                                                <div className="flex-1">
-                                                    <p className="text-sm font-semibold text-slate-900 dark:text-white">Burmese / Buddhist</p>
                                                 </div>
                                             </div>
                                         </div>
@@ -479,18 +635,24 @@ export default function Employee() {
                                             <div className="flex flex-col sm:flex-row gap-4 items-baseline">
                                                 <p className="w-full sm:w-[180px] sm:min-w-[180px] shrink-0 text-sm font-medium text-slate-500 dark:text-slate-400">Marital Status</p>
                                                 <div className="flex-1">
-                                                    <p className="text-sm font-semibold text-slate-900 dark:text-white">Married</p>
+                                                    <p className="text-sm font-semibold text-slate-900 dark:text-white">
+                                                        {employee.reliefs?.spouse ? 'Married' : 'Single'}
+                                                    </p>
                                                 </div>
                                             </div>
                                             <div className="w-full h-px bg-slate-50 dark:bg-slate-800/50"></div>
                                             <div className="flex flex-col sm:flex-row gap-4 items-baseline">
                                                 <p className="w-full sm:w-[180px] sm:min-w-[180px] shrink-0 text-sm font-medium text-slate-500 dark:text-slate-400">Spouse</p>
                                                 <div className="flex-1">
-                                                    <p className="text-sm font-semibold text-slate-900 dark:text-white">Ko Ko Maung <span className="text-slate-400 font-normal ml-1 text-xs">(Not Working)</span></p>
-                                                    <div className="mt-1.5">
-                                                        <span className="inline-flex items-center gap-1.5 px-2 py-1 rounded dark:bg-emerald-900/20 dark:text-emerald-400 border dark:border-emerald-800/30 text-[10px] font-bold uppercase tracking-wide bg-emerald-50 text-emerald-700 border-emerald-100">
-                                                            <span className="material-symbols-outlined text-[12px]">check</span> Eligible for Tax Relief
+                                                    <div className="flex items-center gap-3">
+                                                        <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-bold ${employee.reliefs?.spouse ? 'bg-emerald-50 text-emerald-700 border border-emerald-100' : 'bg-slate-100 text-slate-500 border border-slate-200'}`}>
+                                                            {employee.reliefs?.spouse ? 'Yes' : 'No'}
                                                         </span>
+                                                        {employee.reliefs?.spouse && (
+                                                            <span className="inline-flex items-center gap-1 px-2 py-1 rounded dark:bg-emerald-900/20 dark:text-emerald-400 border dark:border-emerald-800/30 text-[10px] font-bold uppercase tracking-wide bg-emerald-50 text-emerald-700 border-emerald-100">
+                                                                <span className="material-symbols-outlined text-[12px]">check</span> Tax Relief Eligible
+                                                            </span>
+                                                        )}
                                                     </div>
                                                 </div>
                                             </div>
@@ -498,15 +660,15 @@ export default function Employee() {
                                             <div className="flex flex-col sm:flex-row gap-4 items-baseline">
                                                 <p className="w-full sm:w-[180px] sm:min-w-[180px] shrink-0 text-sm font-medium text-slate-500 dark:text-slate-400">Parents</p>
                                                 <div className="flex-1">
-                                                    <div className="space-y-3">
-                                                        <div>
-                                                            <p className="text-sm font-semibold text-slate-900 dark:text-white">U Mya, Daw Hla <span className="text-slate-400 font-normal ml-1 text-xs">(Cohabiting)</span></p>
-                                                            <div className="mt-1.5">
-                                                                <span className="inline-flex items-center gap-1.5 px-2 py-1 rounded dark:bg-emerald-900/20 dark:text-emerald-400 border dark:border-emerald-800/30 text-[10px] font-bold uppercase tracking-wide bg-emerald-50 text-emerald-700 border-emerald-100">
-                                                                    <span className="material-symbols-outlined text-[12px]">check</span> Eligible for Tax Relief
-                                                                </span>
-                                                            </div>
-                                                        </div>
+                                                    <div className="flex items-center gap-3">
+                                                        <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-bold ${(employee.reliefs?.parentsCount || 0) > 0 ? 'bg-emerald-50 text-emerald-700 border border-emerald-100' : 'bg-slate-100 text-slate-500 border border-slate-200'}`}>
+                                                            {(employee.reliefs?.parentsCount || 0) > 0 ? `Yes (${employee.reliefs?.parentsCount})` : 'No'}
+                                                        </span>
+                                                        {(employee.reliefs?.parentsCount || 0) > 0 && (
+                                                            <span className="inline-flex items-center gap-1 px-2 py-1 rounded dark:bg-emerald-900/20 dark:text-emerald-400 border dark:border-emerald-800/30 text-[10px] font-bold uppercase tracking-wide bg-emerald-50 text-emerald-700 border-emerald-100">
+                                                                <span className="material-symbols-outlined text-[12px]">check</span> Tax Relief Eligible
+                                                            </span>
+                                                        )}
                                                     </div>
                                                 </div>
                                             </div>
@@ -514,7 +676,16 @@ export default function Employee() {
                                             <div className="flex flex-col sm:flex-row gap-4 items-baseline">
                                                 <p className="w-full sm:w-[180px] sm:min-w-[180px] shrink-0 text-sm font-medium text-slate-500 dark:text-slate-400">Children</p>
                                                 <div className="flex-1">
-                                                    <p className="text-sm text-slate-400 italic">No children registered</p>
+                                                    <div className="flex items-center gap-3">
+                                                        <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-bold ${(employee.reliefs?.childrenCount || 0) > 0 ? 'bg-emerald-50 text-emerald-700 border border-emerald-100' : 'bg-slate-100 text-slate-500 border border-slate-200'}`}>
+                                                            {(employee.reliefs?.childrenCount || 0) > 0 ? `Yes (${employee.reliefs?.childrenCount})` : 'No'}
+                                                        </span>
+                                                        {(employee.reliefs?.childrenCount || 0) > 0 && (
+                                                            <span className="inline-flex items-center gap-1 px-2 py-1 rounded dark:bg-emerald-900/20 dark:text-emerald-400 border dark:border-emerald-800/30 text-[10px] font-bold uppercase tracking-wide bg-emerald-50 text-emerald-700 border-emerald-100">
+                                                                <span className="material-symbols-outlined text-[12px]">check</span> Tax Relief Eligible
+                                                            </span>
+                                                        )}
+                                                    </div>
                                                 </div>
                                             </div>
                                         </div>
@@ -530,19 +701,29 @@ export default function Employee() {
                                             <button onClick={() => setActiveModal('add_emergency_contact')} className="text-xs font-medium text-[#4F46E5] hover:text-indigo-800 hover:underline">Add</button>
                                         </div>
                                         <div className="p-6 space-y-4">
-                                            <div className="flex items-center justify-between p-3 rounded-lg border border-slate-100 dark:border-slate-700/50 bg-slate-50/50 dark:bg-slate-800/30">
-                                                <div className="flex items-center gap-3">
-                                                    <div className="size-10 rounded-full bg-slate-200 dark:bg-slate-700 flex items-center justify-center text-slate-500 dark:text-slate-400 font-semibold text-sm">MM</div>
-                                                    <div>
-                                                        <p className="text-sm font-bold text-slate-900 dark:text-white">Maung Maung</p>
-                                                        <p className="text-xs text-slate-500 dark:text-slate-400">Brother</p>
+                                            {employee.emergencyContact ? (
+                                                <div className="flex items-center justify-between p-3 rounded-lg border border-slate-100 dark:border-slate-700/50 bg-slate-50/50 dark:bg-slate-800/30">
+                                                    <div className="flex items-center gap-3">
+                                                        <div className="size-10 rounded-full bg-slate-200 dark:bg-slate-700 flex items-center justify-center text-slate-500 dark:text-slate-400 font-semibold text-sm">
+                                                            {employee.emergencyContact.name.split(' ').map(w => w[0]).join('').toUpperCase().slice(0, 2)}
+                                                        </div>
+                                                        <div>
+                                                            <p className="text-sm font-bold text-slate-900 dark:text-white">{employee.emergencyContact.name}</p>
+                                                            <p className="text-xs text-slate-500 dark:text-slate-400">{employee.emergencyContact.relationship}</p>
+                                                        </div>
                                                     </div>
+                                                    <a className="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-white dark:bg-slate-700 border border-slate-200 dark:border-slate-600 text-sm font-semibold text-primary hover:text-indigo-600 dark:hover:text-indigo-400 hover:border-primary/30 transition-colors shadow-sm" href={`tel:${employee.emergencyContact.phone}`}>
+                                                        <span className="material-symbols-outlined text-[16px]">call</span>
+                                                        {employee.emergencyContact.phone}
+                                                    </a>
                                                 </div>
-                                                <a className="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-white dark:bg-slate-700 border border-slate-200 dark:border-slate-600 text-sm font-semibold text-primary hover:text-indigo-600 dark:hover:text-indigo-400 hover:border-primary/30 transition-colors shadow-sm" href="tel:09455500000">
-                                                    <span className="material-symbols-outlined text-[16px]">call</span>
-                                                    09-4555...
-                                                </a>
-                                            </div>
+                                            ) : (
+                                                <div className="flex flex-col items-center justify-center p-6 bg-slate-50/50 dark:bg-slate-800/30 rounded-xl border border-slate-100 dark:border-slate-700/50">
+                                                    <span className="material-symbols-outlined text-slate-300 text-[32px] mb-2">contact_phone</span>
+                                                    <p className="text-sm text-slate-500 font-medium text-center">No emergency contact registered.</p>
+                                                    <p className="text-xs text-slate-400 mt-1">Click "Add" to register one.</p>
+                                                </div>
+                                            )}
                                         </div>
                                     </div>
                                 </div>
@@ -673,7 +854,7 @@ export default function Employee() {
 
                         {activeTab === 'Job & Pay' && isVaultUnlocked && (
                             <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 animate-fade-in relative">
-                                <div className="absolute -top-3 right-0 -translate-y-full flex justify-end pb-3 z-10 w-full animate-fade-in">
+                                <div className="absolute -top-3 right-0 -translate-y-full flex justify-end pb-3 z-10 animate-fade-in">
                                     <div className="flex items-center gap-2 px-3 py-1.5 bg-emerald-50 dark:bg-emerald-900/20 text-emerald-600 border border-emerald-100 dark:border-emerald-800/50 rounded-lg shadow-sm">
                                         <span className="material-symbols-outlined text-[16px]">lock_open</span>
                                         <span className="text-xs font-bold uppercase tracking-wider">Vault Unlocked</span>
@@ -989,7 +1170,7 @@ export default function Employee() {
                                             <span className="material-symbols-outlined text-[#4F46E5]">calendar_month</span>
                                             Monthly Attendance
                                         </h3>
-                                        <p className="text-xs text-slate-500 font-medium mt-1">October 2023</p>
+                                        <p className="text-xs text-slate-500 font-medium mt-1">{getFormattedDate(new Date(), 'monthYear')}</p>
                                     </div>
                                 </div>
                                 <div className="overflow-x-auto">
@@ -1004,10 +1185,18 @@ export default function Employee() {
                                             </tr>
                                         </thead>
                                         <tbody>
-                                            {Array.from({ length: 31 }, (_, i) => {
-                                                const day = i + 1;
-                                                const dateStr = `2023-10-${day.toString().padStart(2, '0')}`;
-                                                const displayDate = `Oct ${day.toString().padStart(2, '0')}`;
+                                            {(() => {
+                                                const now = new Date();
+                                                const year = now.getFullYear();
+                                                const month = now.getMonth();
+                                                const daysInMonth = new Date(year, month + 1, 0).getDate();
+                                                const monthNames = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+                                                const monthName = monthNames[month];
+                                                
+                                                return Array.from({ length: daysInMonth }, (_, i) => {
+                                                    const day = i + 1;
+                                                    const dateStr = `${year}-${(month + 1).toString().padStart(2, '0')}-${day.toString().padStart(2, '0')}`;
+                                                    const displayDate = `${monthName} ${day.toString().padStart(2, '0')}`;
                                                 
                                                 const assignment = shiftAssignments.find(sa => sa.empId === employee.id && sa.date === dateStr);
                                                 const activeShiftId = assignment ? assignment.shiftId : employee.shiftId;
@@ -1126,7 +1315,8 @@ export default function Employee() {
                                                         </td>
                                                     </tr>
                                                 );
-                                            })}
+                                            });
+                                        })()}
                                         </tbody>
                                     </table>
                                 </div>
@@ -1459,7 +1649,7 @@ export default function Employee() {
                             );
                         })()}
 
-                        {activeTab !== 'Overview' && activeTab !== 'Documents' && activeTab !== 'Assets' && activeTab !== 'Job & Pay' && activeTab !== 'Movement' && activeTab !== 'Leave' && activeTab !== 'Attendance' && activeTab !== 'Personal & Family' && activeTab !== 'Loans' && activeTab !== 'Disciplinary' && activeTab !== 'Expenses' && (
+                        {activeTab !== 'Overview' && activeTab !== 'Documents' && activeTab !== 'Assets' && activeTab !== 'Job & Pay' && activeTab !== 'Movement' && activeTab !== 'Leave' && activeTab !== 'Attendance' && activeTab !== 'Loans' && activeTab !== 'Disciplinary' && activeTab !== 'Expenses' && activeTab !== 'Learning' && (
                             <div className="w-full h-64 bg-slate-50 dark:bg-slate-800/30 rounded-xl border-2 border-dashed border-slate-200 dark:border-slate-700 flex flex-col items-center justify-center animate-fade-in">
                                 <span className="material-symbols-outlined text-4xl text-slate-300 mb-2">construction</span>
                                 <p className="text-slate-500 font-medium">The {activeTab} view is currently under construction.</p>
@@ -1639,7 +1829,7 @@ export default function Employee() {
                                             <div className="space-y-1.5">
                                                 <label className="text-xs font-bold text-slate-400 uppercase tracking-wider">Current Salary</label>
                                                 <div className="p-3 border border-slate-200 rounded-lg bg-slate-50 dark:bg-slate-800 dark:border-slate-700 text-sm font-semibold text-slate-500">
-                                                    {employee.baseSalary.toLocaleString()} MMK
+                                                    {(employee.baseSalary || 0).toLocaleString()} MMK
                                                 </div>
                                             </div>
                                             <div className="space-y-1.5">
@@ -1696,10 +1886,9 @@ export default function Employee() {
                                                         empId: employee.id,
                                                         name: employee.name,
                                                         type: 'Adjustment',
-                                                        detail: salaryReason || `Salary adjustment to ${newSalary.toLocaleString()} MMK`,
+                                                        detail: `Salary adjustment from ${(employee.baseSalary || 0).toLocaleString()} to ${newSalary.toLocaleString()} MMK${salaryReason ? ` — ${salaryReason}` : ''}`,
                                                         effectiveDate,
                                                         priority: 'Medium',
-                                                        category: 'Staffing',
                                                         newSalary,
                                                         oldSalary: employee.baseSalary
                                                     });
@@ -1711,6 +1900,105 @@ export default function Employee() {
                                                 Submit for Approval
                                             </button>
                                         )}
+                                    </div>
+                                </>
+                            )}
+
+                            {activeModal === 'edit_bank_details' && (
+                                <>
+                                    <div className="p-6 border-b border-slate-100 dark:border-slate-800 flex justify-between items-center">
+                                        <h3 className="font-bold text-slate-900 dark:text-white flex items-center gap-2">
+                                            <span className="material-symbols-outlined text-emerald-600 bg-emerald-50 p-1.5 rounded-lg">account_balance</span>
+                                            Update Bank Details
+                                        </h3>
+                                        <button onClick={closeModal} className="text-slate-400 hover:text-slate-600 transition-colors">
+                                            <span className="material-symbols-outlined">close</span>
+                                        </button>
+                                    </div>
+                                    <div className="p-6 space-y-4">
+                                        <div className="p-3 bg-amber-50 border border-amber-100 rounded-lg flex gap-3 items-start mb-4">
+                                            <span className="material-symbols-outlined text-amber-600 text-[20px]">info</span>
+                                            <p className="text-[11px] text-amber-800 leading-relaxed font-medium">
+                                                Bank account changes require HR approval. Updates will be reflected after verification.
+                                            </p>
+                                        </div>
+                                        
+                                        <div className="space-y-1.5">
+                                            <label className="text-xs font-bold text-slate-400 uppercase tracking-wider">Bank Name</label>
+                                            <select
+                                                value={editBankName}
+                                                onChange={(e) => setEditBankName(e.target.value)}
+                                                className="w-full text-sm p-3 border border-slate-200 rounded-lg bg-white dark:bg-slate-800 dark:border-slate-700 font-bold focus:ring-2 focus:ring-indigo-500/20 outline-none"
+                                            >
+                                                <option value="">-- Select Bank --</option>
+                                                <option value="KBZ Bank">KBZ Bank</option>
+                                                <option value="AYA Bank">AYA Bank</option>
+                                                <option value="CB Bank">CB Bank</option>
+                                                <option value="UAB Bank">UAB Bank</option>
+                                                <option value="MAB Bank">MAB Bank</option>
+                                                <option value="Yoma Bank">Yoma Bank</option>
+                                                <option value="Myanma Apex Bank">Myanma Apex Bank</option>
+                                                <option value="Global Treasure Bank">Global Treasure Bank</option>
+                                            </select>
+                                        </div>
+                                        
+                                        <div className="space-y-1.5">
+                                            <label className="text-xs font-bold text-slate-400 uppercase tracking-wider">Account Number</label>
+                                            <input 
+                                                type="text" 
+                                                value={editAccountNumber}
+                                                onChange={(e) => setEditAccountNumber(e.target.value)}
+                                                className="w-full text-sm p-3 border border-slate-200 rounded-lg bg-white dark:bg-slate-800 dark:border-slate-700 font-mono focus:ring-2 focus:ring-indigo-500/20 outline-none" 
+                                                placeholder="Enter account number"
+                                            />
+                                        </div>
+                                        
+                                        <div className="grid grid-cols-2 gap-4">
+                                            <div className="space-y-1.5">
+                                                <label className="text-xs font-bold text-slate-400 uppercase tracking-wider">Branch Name</label>
+                                                <input 
+                                                    type="text" 
+                                                    value={editBankBranch}
+                                                    onChange={(e) => setEditBankBranch(e.target.value)}
+                                                    className="w-full text-sm p-3 border border-slate-200 rounded-lg bg-white dark:bg-slate-800 dark:border-slate-700 focus:ring-2 focus:ring-indigo-500/20 outline-none" 
+                                                    placeholder="e.g. Hlaing Branch"
+                                                />
+                                            </div>
+                                            <div className="space-y-1.5">
+                                                <label className="text-xs font-bold text-slate-400 uppercase tracking-wider">Branch Code</label>
+                                                <input 
+                                                    type="text" 
+                                                    value={editBankBranchCode}
+                                                    onChange={(e) => setEditBankBranchCode(e.target.value)}
+                                                    className="w-full text-sm p-3 border border-slate-200 rounded-lg bg-white dark:bg-slate-800 dark:border-slate-700 font-mono focus:ring-2 focus:ring-indigo-500/20 outline-none" 
+                                                    placeholder="e.g. 001"
+                                                />
+                                            </div>
+                                        </div>
+                                    </div>
+                                    <div className="p-4 border-t border-slate-100 dark:border-slate-800 bg-slate-50 dark:bg-slate-800/30 flex justify-end gap-3">
+                                        <button onClick={closeModal} className="px-5 py-2 rounded-lg text-sm font-semibold text-slate-600 dark:text-slate-400 hover:bg-slate-200 dark:hover:bg-slate-700 transition-colors">
+                                            Cancel
+                                        </button>
+                                        <button 
+                                            onClick={async () => {
+                                                const result = await updateEmployee(employee.id, {
+                                                    bankName: editBankName,
+                                                    accountNumber: editAccountNumber,
+                                                    bankBranch: editBankBranch,
+                                                    bankBranchCode: editBankBranchCode,
+                                                }, currentUser?.id || 'EMP-001');
+                                                if (result.success) {
+                                                    closeModal();
+                                                } else {
+                                                    alert(result.message);
+                                                }
+                                            }}
+                                            disabled={!editBankName || !editAccountNumber}
+                                            className="px-5 py-2 rounded-lg text-sm font-semibold text-white bg-emerald-600 hover:bg-emerald-700 transition-colors shadow-lg shadow-emerald-100 dark:shadow-none disabled:opacity-50"
+                                        >
+                                            Save Changes
+                                        </button>
                                     </div>
                                 </>
                             )}
@@ -2035,14 +2323,18 @@ export default function Employee() {
                                             Cancel
                                         </button>
                                         <button 
-                                            onClick={() => {
-                                                updateEmployee(employee.id, {
+                                            onClick={async () => {
+                                                const result = await updateEmployee(employee.id, {
                                                     name: editName,
                                                     role: editRole,
                                                     dept: editDept,
                                                     officeLocation: editLocation as any
-                                                });
-                                                closeModal();
+                                                }, currentUser?.id || 'EMP-001');
+                                                if (result.success) {
+                                                    closeModal();
+                                                } else {
+                                                    alert(result.message);
+                                                }
                                             }}
                                             className="px-5 py-2 rounded-lg text-sm font-semibold text-white bg-indigo-600 hover:bg-indigo-700 transition-colors shadow-lg shadow-indigo-200 dark:shadow-none"
                                         >
@@ -2082,7 +2374,7 @@ export default function Employee() {
                                 </>
                             )}
 
-                            {activeModal && !['deactivate', 'adjust_balance', 'edit_schedule', 'add_hours', 'salary_update', 'edit_profile', 'doc_preview'].includes(activeModal) && (
+                            {activeModal && !['deactivate', 'adjust_balance', 'edit_schedule', 'add_hours', 'salary_update', 'edit_profile', 'edit_bank_details', 'doc_preview'].includes(activeModal) && (
                                 <div className="p-10 text-center">
                                     <span className="material-symbols-outlined text-slate-300 text-5xl mb-4">info</span>
                                     <h3 className="text-lg font-bold text-slate-900 dark:text-white capitalize mb-1">{activeModal.replace(/_/g, ' ')}</h3>

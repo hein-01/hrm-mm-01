@@ -5,6 +5,8 @@ import Sidebar from '../components/Sidebar';
 import Header from '../components/Header';
 import { useAppData } from '../context/AppDataContext';
 import { useNotifications } from '../context/NotificationProvider';
+import { SkeletonTable } from '../components/SkeletonRow';
+import { supabase } from '../lib/supabase';
 
 // ─── Toast ────────────────────────────────────────────────────────────────────
 interface Toast { id: string; message: string; type: 'success' | 'error' | 'warning'; }
@@ -34,10 +36,13 @@ export default function BankDisbursements() {
     const { employees, payrollRecords, systemSettings, generateDisbursementBatch, disbursePayroll, lastPayrollStatus,
             payrollGroups, activePayrollGroupId, payrunId, lastPayrollTotal, setAlerts } = useAppData();
     const { pushNotification } = useNotifications();
+    const [isLoading, setIsLoading] = useState(true);
     const [selectedBank, setSelectedBank] = useState('All');
     const [searchQuery, setSearchQuery] = useState('');
     const [showApprovalModal, setShowApprovalModal] = useState(false);
     const [approverId, setApproverId] = useState('');
+    const [approverPassword, setApproverPassword] = useState('');
+    const [isVerifying, setIsVerifying] = useState(false);
     const [exportedBanks, setExportedBanks] = useState<Set<string>>(new Set());
     const [selectedRows, setSelectedRows]   = useState<Set<string>>(new Set());
     const [deptFilter, setDeptFilter]       = useState('All');
@@ -51,8 +56,18 @@ export default function BankDisbursements() {
     };
     const dismissToast = (id: string) => setToasts(prev => prev.filter(t => t.id !== id));
 
+    // Track loading state
+    React.useEffect(() => {
+        if (employees.length > 0) setIsLoading(false);
+    }, [employees]);
+
     const paymentProviders = systemSettings.paymentProviders;
-    const bankOptions = ['All', ...paymentProviders.map(p => p.name), 'Cash Payment'];
+    const bankOptions = useMemo(() => {
+        const providerBanks = paymentProviders.map(p => p.name);
+        const employeeBanks = Array.from(new Set(employees.map(e => e.bankName).filter(Boolean) as string[]));
+        const allBanks = Array.from(new Set([...providerBanks, ...employeeBanks])).sort();
+        return ['All', ...allBanks, 'Cash Payment'];
+    }, [paymentProviders, employees]);
 
     // Combine payroll records with employee bank/wallet details
     const applyRounding = (val: number) => {
@@ -63,25 +78,46 @@ export default function BankDisbursements() {
         return val;
     };
 
-    const disbursementData = useMemo(() =>
-        payrollRecords.map(record => {
-            const emp = employees.find(e => e.id === record.empId);
-            const provider = paymentProviders.find(p => p.name === emp?.bankName);
-            return {
-                ...record,
-                roundedNetPay: applyRounding(record.netPay),
-                bankName: emp?.bankName,
-                accountNumber: emp?.accountNumber,
-                bankBranchCode: emp?.bankBranchCode,
-                mobile: emp?.mobile,
-                dept: (emp as any)?.dept as string | undefined,
-                provider,
-                avatar: emp?.avatar,
-                initials: emp?.initials,
-                colorClass: emp?.colorClass
-            };
-        }),
-    [payrollRecords, employees, paymentProviders, systemSettings.paymentRoundingLogic]);
+    const disbursementData = useMemo(() => {
+        const recordMap = new Map(payrollRecords.map(r => [r.empId, r]));
+        return employees
+            .filter(e => e.status !== 'Terminated')
+            .map(emp => {
+                const record = recordMap.get(emp.id);
+                const provider = paymentProviders.find(p => p.name === emp.bankName);
+                return {
+                    empId: emp.id,
+                    name: emp.name,
+                    salary: record?.salary ?? emp.baseSalary ?? 0,
+                    additions: record?.additions ?? 0,
+                    deductions: record?.deductions ?? 0,
+                    ssb: record?.ssb ?? 0,
+                    employerSsb: record?.employerSsb ?? 0,
+                    pit: record?.pit ?? 0,
+                    netPay: record?.netPay ?? 0,
+                    status: record?.status ?? ('Draft' as const),
+                    alerts: record?.alerts ?? [],
+                    detailedBreakdowns: record?.detailedBreakdowns ?? {},
+                    biometricOTHours: record?.biometricOTHours,
+                    biometricAttendanceDays: record?.biometricAttendanceDays,
+                    biometricDeviceId: record?.biometricDeviceId,
+                    attendanceDeductions: record?.attendanceDeductions,
+                    leaveDeductions: record?.leaveDeductions,
+                    otherAdditions: record?.otherAdditions,
+                    otherDeductions: record?.otherDeductions,
+                    roundedNetPay: applyRounding(record?.netPay ?? 0),
+                    bankName: emp.bankName,
+                    accountNumber: emp.accountNumber,
+                    bankBranchCode: emp.bankBranchCode,
+                    mobile: emp.mobile,
+                    dept: (emp as any)?.dept as string | undefined,
+                    provider,
+                    avatar: emp.avatar,
+                    initials: emp.initials,
+                    colorClass: emp.colorClass
+                };
+            });
+    }, [payrollRecords, employees, paymentProviders, systemSettings.paymentRoundingLogic]);
 
     const activeProvider = paymentProviders.find(p => p.name === selectedBank);
 
@@ -103,7 +139,7 @@ export default function BankDisbursements() {
 
     const filteredData = useMemo(() =>
         disbursementData.filter(item => {
-            const matchesBank   = selectedBank === 'All' || item.bankName === selectedBank || (selectedBank === 'Cash Payment' && !item.bankName);
+            const matchesBank   = selectedBank === 'All' || item.bankName === selectedBank || (selectedBank === 'Cash Payment' && !item.bankName) || (item.bankName && item.bankName.toLowerCase().includes(selectedBank.toLowerCase()));
             const matchesSearch = item.name.toLowerCase().includes(searchQuery.toLowerCase()) || item.empId.toLowerCase().includes(searchQuery.toLowerCase());
             const matchesDept   = deptFilter === 'All' || item.dept === deptFilter;
             return matchesBank && matchesSearch && matchesDept;
@@ -303,31 +339,21 @@ export default function BankDisbursements() {
                     title="Bank Disbursements"
                     subtitle="Manage bulk salary-to-bank uploads, digital wallet payouts, and cash disbursement controls"
                 >
-                    <div className="relative w-full max-w-[480px] ml-4 hidden lg:block">
-                        <span className="material-symbols-outlined absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 text-xl">search</span>
-                        <input
-                            className="w-full border border-slate-200 dark:border-slate-800 rounded-lg py-2 pl-10 pr-4 text-sm focus:ring-2 focus:ring-[#4F46E5] focus:border-transparent text-slate-900 placeholder-slate-400 bg-white dark:bg-slate-900 transition-all shadow-sm"
-                            placeholder="Search by Employee Name or ID..."
-                            type="text"
-                            value={searchQuery}
-                            onChange={(e) => setSearchQuery(e.target.value)}
-                        />
-                    </div>
-                    <div className="hidden lg:flex items-center ml-2">
-                        <DropdownMenu
-                            value={deptFilter}
-                            onChange={setDeptFilter}
-                            options={allDepts.map(d => ({ value: d, label: d === 'All' ? 'All Departments' : d }))}
-                        />
-                    </div>
                 </Header>
 
                 <div className="flex-1 overflow-y-auto p-8 flex flex-col gap-6">
                     {/* Header Section */}
                     <div className="flex flex-col gap-4">
                         <div className="flex items-center justify-between">
-                            <div>
-                                <h1 className="text-sm font-bold tracking-tight text-slate-500 dark:text-slate-400 uppercase tracking-widest">Disbursement Actions</h1>
+                            <div className="relative w-full max-w-[480px]">
+                                <span className="material-symbols-outlined absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 text-xl">search</span>
+                                <input
+                                    className="w-full border border-slate-200 dark:border-slate-800 rounded-lg py-2 pl-10 pr-4 text-sm focus:ring-2 focus:ring-[#4F46E5] focus:border-transparent text-slate-900 placeholder-slate-400 bg-white dark:bg-slate-900 transition-all shadow-sm"
+                                    placeholder="Search by Employee Name or ID..."
+                                    type="text"
+                                    value={searchQuery}
+                                    onChange={(e) => setSearchQuery(e.target.value)}
+                                />
                             </div>
                             <div className="flex items-center gap-3">
                                 <button
@@ -450,14 +476,21 @@ export default function BankDisbursements() {
                                 </button>
                             ))}
                         </div>
-                        <p className="text-xs font-bold text-slate-400 uppercase tracking-widest">{filteredData.length} records found</p>
+                        <div className="flex items-center gap-3">
+                            <DropdownMenu
+                                value={deptFilter}
+                                onChange={setDeptFilter}
+                                options={allDepts.map(d => ({ value: d, label: d === 'All' ? 'All Departments' : d }))}
+                            />
+                            <p className="text-xs font-bold text-slate-400 uppercase tracking-widest">{filteredData.length} records found</p>
+                        </div>
                     </div>
 
                     {/* Data Table */}
-                    <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl overflow-hidden shadow-sm">
-                        <div className="overflow-x-auto">
+                    <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl shadow-sm">
+                        <div className="overflow-x-auto max-h-[calc(100vh-420px)] overflow-y-auto">
                             <table className="w-full text-left border-collapse min-w-[900px]">
-                                <thead>
+                                <thead className="sticky top-0 z-10">
                                     <tr className="bg-slate-50 dark:bg-slate-800/50 border-b border-slate-200 dark:border-slate-800">
                                         <th className="px-6 py-4"><input className="rounded text-primary focus:ring-primary bg-transparent border-slate-300 dark:border-slate-700" type="checkbox" checked={allSelected} onChange={toggleAll} /></th>
                                         {['Employee', activeProvider?.type === 'Digital Wallet' ? 'Wallet Details' : 'Bank Account', activeProvider?.type === 'Digital Wallet' ? 'Mobile Link' : 'Branch Code', 'Net Pay (MMK)', 'Validation', 'Status'].map(h => (
@@ -466,6 +499,10 @@ export default function BankDisbursements() {
                                     </tr>
                                 </thead>
                                 <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
+                                    {isLoading ? (
+                                        <SkeletonTable rows={8} columns={7} />
+                                    ) : (
+                                    <>
                                     {filteredData.map(item => {
                                         const missing = isMissingInfo(item);
                                         return (
@@ -545,6 +582,8 @@ export default function BankDisbursements() {
                                                 </div>
                                             </td>
                                         </tr>
+                                    )}
+                                    </>
                                     )}
                                 </tbody>
                             </table>

@@ -148,11 +148,16 @@ type AppDataContextType = {
     isAdmin: (empId: string) => boolean;
     subscriptionTier: 'premium' | 'standard';
     securityAuditLogs: Types.SecurityAuditLog[];
+    verifyLocalAuth: (input: string) => boolean;
+    addSecurityLog: (log: Omit<Types.SecurityAuditLog, 'id' | 'timestamp'>) => void;
     downloadSystemBackup: () => void;
     logSettingChange: (field: string, oldVal: any, newVal: any) => void;
     userPermissions: string[];
     tickets: Types.Ticket[];
     setTickets: React.Dispatch<React.SetStateAction<Types.Ticket[]>>;
+    loadingTickets: boolean;
+    updateTicketStatus: (id: string, status: Types.Ticket['status']) => Promise<void>;
+    loadingEmployees: boolean;
 };
 
 const AppDataContext = createContext<AppDataContextType | undefined>(undefined);
@@ -213,19 +218,20 @@ export const AppDataProvider: React.FC<{ children: ReactNode }> = ({ children })
     const getAdjustments = () => payrollSettersRef.current.adjustments;
     const getLastPayrollTotal = () => payrollSettersRef.current.lastPayrollTotal;
     const DEFAULT_EMPLOYEES: Types.Employee[] = [
-        { id: 'EMP-001', name: 'Nilar Lwin', role: 'Senior UX Designer', dept: 'Product Dept', status: 'Active', joinDate: '2021-01-15', avatar: 'https://lh3.googleusercontent.com/aida-public/AB6AXuDtMXUX0ktXwWpCR_HssI-ya16-3aPa6AAVPyBQ1EHpfp-j-sPL3V6-M9LOQH5oBAEgQVe-LnDjqixmSwV106z7bEtrnsNZO1CATGA_USq9lnhHi1_HCFl-Cyi3xyw648ljz2mqjJMc3vscDUW5zgws6ccC1OF1vEu1wdaDvwNJ2V-sg_zZ0haXJZDCxUvx8VjDCNXD51nD66gSegMbmfNMdqwU2v6zEDDEhi7cAmX1yUQ8UQLqt3O-oPvyg5wEcfX6wNGOUrCzj4', township: 'Sanchaung', nrcNumber: '12/Bahan(N)123456', ssbNumber: 'SSB-001-992', mobile: '09-4555-00000', hasCriticalRiskFlag: false, documents: [], recruitmentSource: 'LinkedIn', baseSalary: 1200000, reliefs: { spouse: true, parentsCount: 0 }, shiftId: 'SH-GEN-96', bankName: 'KBZ Bank', accountNumber: '1002019920031', bankBranch: 'Bahan Branch', bankBranchCode: 'KBZ-B01', enrolledCourses: [{ courseId: 'CRS-POL-101', enrollmentDate: '2023-09-01', status: 'In Progress' }], leaveBalances: { Casual: 4, Medical: 12, Earned: 8 }, policyId: 'LP-MGM-01', autoAttendanceEnabled: true },
-        { id: 'EMP-004', name: 'Thida', role: 'UI Designer', dept: 'Design', status: 'Active', joinDate: '2022-03-10', avatar: null, township: 'Bahan', nrcNumber: '12/Kamaya(N)555666', ssbNumber: 'SSB-004-112', initials: 'T', colorClass: 'bg-indigo-100 text-indigo-700', hasCriticalRiskFlag: false, documents: [], recruitmentSource: 'Internal Portal', baseSalary: 800000, reliefs: { spouse: false, parentsCount: 1 }, shiftId: 'SH-GEN-96', bankName: 'Yoma Bank', accountNumber: '200155667788', bankBranch: 'Sanchaung Branch', bankBranchCode: 'YOM-S02', enrolledCourses: [{ courseId: 'CRS-TECH-04', enrollmentDate: '2023-08-15', status: 'Completed', completionDate: '2023-09-10' }], leaveBalances: { Casual: 6, Medical: 15, Earned: 10 }, policyId: 'LP-GEN-01', autoAttendanceEnabled: false },
-        { id: 'EMP-012', name: 'Maung Maung', role: 'Frontend Developer', dept: 'Engineering', status: 'Active', joinDate: '2022-06-20', avatar: null, township: 'Insein', nrcNumber: '12/Okkala(N)777888', ssbNumber: 'SSB-012-334', initials: 'M', colorClass: 'bg-teal-100 text-teal-700', mobile: '09123456789', hasCriticalRiskFlag: true, criticalRiskCategory: 'Safety', documents: [], recruitmentSource: 'LinkedIn', baseSalary: 950000, reliefs: { spouse: true, parentsCount: 2 }, shiftId: 'SH-FAC-85', bankName: 'KPay', enrolledCourses: [{ courseId: 'CRS-102', enrollmentDate: '2024-01-10', status: 'In Progress' }], leaveBalances: { Casual: 6, Medical: 15, Earned: 10 }, policyId: 'LP-GEN-01', autoAttendanceEnabled: false },
-        { id: 'EMP-023', name: 'Kyaw Kyaw', role: 'Sales Executive', dept: 'Sales', status: 'Active', joinDate: '2023-02-05', avatar: null, township: 'Dagon', nrcNumber: '12/Dagon(N)999000', ssbNumber: 'SSB-023-556', initials: 'K', colorClass: 'bg-orange-100 text-orange-700', hasCriticalRiskFlag: false, documents: [], recruitmentSource: 'Types.Employee Referral', baseSalary: 700000, reliefs: { spouse: false, parentsCount: 1 }, shiftId: 'SH-GEN-96', bankName: 'MAB Bank', accountNumber: '998822331100', bankBranch: 'Dagon Branch', bankBranchCode: 'MAB-D09', enrolledCourses: [], leaveBalances: { Casual: 3, Medical: 8, Earned: 4 }, policyId: 'LP-ACC-01', autoAttendanceEnabled: false },
-        { id: 'EMP-024', name: 'Zaw Min', role: 'Backend Dev', dept: 'Engineering', status: 'Terminated', joinDate: '2021-08-12', avatar: null, township: 'Hlaing', nrcNumber: '12/Hlaing(N)111222', ssbNumber: 'SSB-024-778', initials: 'ZM', colorClass: 'bg-slate-100 text-slate-700', hasCriticalRiskFlag: false, documents: [], recruitmentSource: 'Direct', baseSalary: 850000, reliefs: { spouse: true, parentsCount: 2 }, shiftId: 'SH-GEN-96', enrolledCourses: [], leaveBalances: { Casual: 0, Medical: 0, Earned: 0 }, policyId: 'LP-GEN-01', autoAttendanceEnabled: false },
-        { id: 'EMP-099', name: 'Aye Aye', role: 'HR Manager', dept: 'HR & Admin', status: 'On Leave', joinDate: '2020-05-30', avatar: null, township: 'Mayangone', nrcNumber: '12/Mayan(N)333444', ssbNumber: 'SSB-099-111', initials: 'AA', colorClass: 'bg-pink-100 text-pink-700', hasCriticalRiskFlag: false, documents: [], recruitmentSource: 'LinkedIn', baseSalary: 1100000, reliefs: { spouse: false, parentsCount: 0 }, shiftId: 'SH-GEN-96', bankName: 'KBZ Bank', accountNumber: '1002019920088', bankBranch: 'Mayangone Branch', bankBranchCode: 'KBZ-M12', enrolledCourses: [], leaveBalances: { Casual: 2, Medical: 15, Earned: 12 }, policyId: 'LP-MGM-01', autoAttendanceEnabled: false },
-        { id: 'EMP-4022', name: 'U Kyaw Zayar', role: 'Senior Engineer', dept: 'Engineering', status: 'Active', joinDate: '2021-04-12', avatar: null, township: 'Tamwe', nrcNumber: '12/Tamwe(N)111111', ssbNumber: 'SSB-4022-111', initials: 'KZ', colorClass: 'bg-indigo-50 text-[#4F46E5] border border-indigo-100', mobile: '09-4500-1122', hasCriticalRiskFlag: false, documents: [], recruitmentSource: 'LinkedIn', baseSalary: 1000000, reliefs: { spouse: true, parentsCount: 1 }, shiftId: 'SH-GEN-96', bankName: 'AYA Bank', accountNumber: '300055443322', bankBranch: 'Tamwe Branch', bankBranchCode: 'AYA-T03', enrolledCourses: [], leaveBalances: { Casual: 6, Medical: 15, Earned: 10 }, policyId: 'LP-GEN-01', autoAttendanceEnabled: false },
-        { id: 'EMP-3105', name: 'Daw Aye Aye Myint', role: 'Marketing Specialist', dept: 'Marketing', status: 'Active', joinDate: '2022-12-01', avatar: null, township: 'Botahtaung', nrcNumber: '12/Bota(N)222222', ssbNumber: 'SSB-3105-222', initials: 'AM', colorClass: 'bg-emerald-50 text-emerald-600 border border-emerald-100', mobile: '09-2222-22222', hasCriticalRiskFlag: false, documents: [], recruitmentSource: 'Direct', baseSalary: 750000, reliefs: { spouse: false, parentsCount: 0 }, shiftId: 'SH-GEN-96', bankName: 'WaveMoney', enrolledCourses: [], leaveBalances: { Casual: 6, Medical: 15, Earned: 10 }, policyId: 'LP-GEN-01', autoAttendanceEnabled: false },
-        { id: 'EMP-1299', name: 'Daw Thida Aye', role: 'Sales rep', dept: 'Sales', status: 'Active', joinDate: '2020-07-15', avatar: null, township: 'Yankin', nrcNumber: '12/Yankin(N)333333', ssbNumber: 'SSB-1299-333', initials: 'TA', colorClass: 'bg-slate-200 text-slate-600 border border-slate-300', mobile: '09-7788-3344', hasCriticalRiskFlag: false, documents: [], recruitmentSource: 'Types.Employee Referral', baseSalary: 900000, reliefs: { spouse: true, parentsCount: 0 }, shiftId: 'SH-GEN-96', bankName: 'Yoma Bank', accountNumber: '200155667799', bankBranch: 'Yankin Branch', bankBranchCode: 'YOM-Y11', enrolledCourses: [], leaveBalances: { Casual: 6, Medical: 15, Earned: 10 }, policyId: 'LP-GEN-01', autoAttendanceEnabled: false },
-        { id: 'EMP-0044', name: 'Thaw Zin', role: 'Logistics Coordinator', dept: 'Logistics', status: 'Active', joinDate: '2023-01-20', avatar: null, township: 'Thaketa', nrcNumber: '12/Thaketa(N)444444', ssbNumber: 'SSB-0044-444', initials: 'TZ', colorClass: 'bg-amber-50 text-amber-600 border border-amber-100', mobile: '09-9988-7766', hasCriticalRiskFlag: false, documents: [], recruitmentSource: 'LinkedIn', baseSalary: 600000, reliefs: { spouse: false, parentsCount: 1 }, shiftId: 'SH-FAC-85', bankName: 'CB Bank', accountNumber: '00129988776600', bankBranch: 'Thaketa Branch', bankBranchCode: 'CBB-T44', enrolledCourses: [], leaveBalances: { Casual: 6, Medical: 15, Earned: 10 }, policyId: 'LP-GEN-01', autoAttendanceEnabled: false }
+        { id: 'EMP-001', name: 'Nilar Lwin', role: 'Senior UX Designer', dept: 'Product Dept', status: 'Active', joinDate: '2021-01-15', avatar: 'https://lh3.googleusercontent.com/aida-public/AB6AXuDtMXUX0ktXwWpCR_HssI-ya16-3aPa6AAVPyBQ1EHpfp-j-sPL3V6-M9LOQH5oBAEgQVe-LnDjqixmSwV106z7bEtrnsNZO1CATGA_USq9lnhHi1_HCFl-Cyi3xyw648ljz2mqjJMc3vscDUW5zgws6ccC1OF1vEu1wdaDvwNJ2V-sg_zZ0haXJZDCxUvx8VjDCNXD51nD66gSegMbmfNMdqwU2v6zEDDEhi7cAmX1yUQ8UQLqt3O-oPvyg5wEcfX6wNGOUrCzj4', township: 'Sanchaung', nrcNumber: '12/Bahan(N)123456', ssbNumber: 'SSB-001-992', mobile: '09-4555-00000', hasCriticalRiskFlag: false, documents: [], recruitmentSource: 'LinkedIn', baseSalary: 1200000, reliefs: { spouse: true, parentsCount: 0, childrenCount: 1 }, shiftId: 'SH-GEN-96', bankName: 'KBZ Bank', accountNumber: '1002019920031', bankBranch: 'Bahan Branch', bankBranchCode: 'KBZ-B01', enrolledCourses: [{ courseId: 'CRS-POL-101', enrollmentDate: '2023-09-01', status: 'In Progress' }], leaveBalances: { Casual: 4, Medical: 12, Earned: 8 }, policyId: 'LP-MGM-01', autoAttendanceEnabled: true },
+        { id: 'EMP-004', name: 'Thida', role: 'UI Designer', dept: 'Design', status: 'Active', joinDate: '2022-03-10', avatar: null, township: 'Bahan', nrcNumber: '12/Kamaya(N)555666', ssbNumber: 'SSB-004-112', initials: 'T', colorClass: 'bg-indigo-100 text-indigo-700', hasCriticalRiskFlag: false, documents: [], recruitmentSource: 'Internal Portal', baseSalary: 800000, reliefs: { spouse: false, parentsCount: 1, childrenCount: 0 }, shiftId: 'SH-GEN-96', bankName: 'Yoma Bank', accountNumber: '200155667788', bankBranch: 'Sanchaung Branch', bankBranchCode: 'YOM-S02', enrolledCourses: [{ courseId: 'CRS-TECH-04', enrollmentDate: '2023-08-15', status: 'Completed', completionDate: '2023-09-10' }], leaveBalances: { Casual: 6, Medical: 15, Earned: 10 }, policyId: 'LP-GEN-01', autoAttendanceEnabled: false },
+        { id: 'EMP-012', name: 'Maung Maung', role: 'Frontend Developer', dept: 'Engineering', status: 'Active', joinDate: '2022-06-20', avatar: null, township: 'Insein', nrcNumber: '12/Okkala(N)777888', ssbNumber: 'SSB-012-334', initials: 'M', colorClass: 'bg-teal-100 text-teal-700', mobile: '09123456789', hasCriticalRiskFlag: true, criticalRiskCategory: 'Safety', documents: [], recruitmentSource: 'LinkedIn', baseSalary: 950000, reliefs: { spouse: true, parentsCount: 2, childrenCount: 2 }, shiftId: 'SH-FAC-85', bankName: 'KPay', enrolledCourses: [{ courseId: 'CRS-102', enrollmentDate: '2024-01-10', status: 'In Progress' }], leaveBalances: { Casual: 6, Medical: 15, Earned: 10 }, policyId: 'LP-GEN-01', autoAttendanceEnabled: false },
+        { id: 'EMP-023', name: 'Kyaw Kyaw', role: 'Sales Executive', dept: 'Sales', status: 'Active', joinDate: '2023-02-05', avatar: null, township: 'Dagon', nrcNumber: '12/Dagon(N)999000', ssbNumber: 'SSB-023-556', initials: 'K', colorClass: 'bg-orange-100 text-orange-700', hasCriticalRiskFlag: false, documents: [], recruitmentSource: 'Types.Employee Referral', baseSalary: 700000, reliefs: { spouse: false, parentsCount: 1, childrenCount: 0 }, shiftId: 'SH-GEN-96', bankName: 'MAB Bank', accountNumber: '998822331100', bankBranch: 'Dagon Branch', bankBranchCode: 'MAB-D09', enrolledCourses: [], leaveBalances: { Casual: 3, Medical: 8, Earned: 4 }, policyId: 'LP-ACC-01', autoAttendanceEnabled: false },
+        { id: 'EMP-024', name: 'Zaw Min', role: 'Backend Dev', dept: 'Engineering', status: 'Terminated', joinDate: '2021-08-12', avatar: null, township: 'Hlaing', nrcNumber: '12/Hlaing(N)111222', ssbNumber: 'SSB-024-778', initials: 'ZM', colorClass: 'bg-slate-100 text-slate-700', hasCriticalRiskFlag: false, documents: [], recruitmentSource: 'Direct', baseSalary: 850000, reliefs: { spouse: true, parentsCount: 2, childrenCount: 3 }, shiftId: 'SH-GEN-96', enrolledCourses: [], leaveBalances: { Casual: 0, Medical: 0, Earned: 0 }, policyId: 'LP-GEN-01', autoAttendanceEnabled: false },
+        { id: 'EMP-099', name: 'Aye Aye', role: 'HR Manager', dept: 'HR & Admin', status: 'On Leave', joinDate: '2020-05-30', avatar: null, township: 'Mayangone', nrcNumber: '12/Mayan(N)333444', ssbNumber: 'SSB-099-111', initials: 'AA', colorClass: 'bg-pink-100 text-pink-700', hasCriticalRiskFlag: false, documents: [], recruitmentSource: 'LinkedIn', baseSalary: 1100000, reliefs: { spouse: false, parentsCount: 0, childrenCount: 0 }, shiftId: 'SH-GEN-96', bankName: 'KBZ Bank', accountNumber: '1002019920088', bankBranch: 'Mayangone Branch', bankBranchCode: 'KBZ-M12', enrolledCourses: [], leaveBalances: { Casual: 2, Medical: 15, Earned: 12 }, policyId: 'LP-MGM-01', autoAttendanceEnabled: false },
+        { id: 'EMP-4022', name: 'U Kyaw Zayar', role: 'Senior Engineer', dept: 'Engineering', status: 'Active', joinDate: '2021-04-12', avatar: null, township: 'Tamwe', nrcNumber: '12/Tamwe(N)111111', ssbNumber: 'SSB-4022-111', initials: 'KZ', colorClass: 'bg-indigo-50 text-[#4F46E5] border border-indigo-100', mobile: '09-4500-1122', hasCriticalRiskFlag: false, documents: [], recruitmentSource: 'LinkedIn', baseSalary: 1000000, reliefs: { spouse: true, parentsCount: 1, childrenCount: 1 }, shiftId: 'SH-GEN-96', bankName: 'AYA Bank', accountNumber: '300055443322', bankBranch: 'Tamwe Branch', bankBranchCode: 'AYA-T03', enrolledCourses: [], leaveBalances: { Casual: 6, Medical: 15, Earned: 10 }, policyId: 'LP-GEN-01', autoAttendanceEnabled: false },
+        { id: 'EMP-3105', name: 'Daw Aye Aye Myint', role: 'Marketing Specialist', dept: 'Marketing', status: 'Active', joinDate: '2022-12-01', avatar: null, township: 'Botahtaung', nrcNumber: '12/Bota(N)222222', ssbNumber: 'SSB-3105-222', initials: 'AM', colorClass: 'bg-emerald-50 text-emerald-600 border border-emerald-100', mobile: '09-2222-22222', hasCriticalRiskFlag: false, documents: [], recruitmentSource: 'Direct', baseSalary: 750000, reliefs: { spouse: false, parentsCount: 0, childrenCount: 0 }, shiftId: 'SH-GEN-96', bankName: 'WaveMoney', enrolledCourses: [], leaveBalances: { Casual: 6, Medical: 15, Earned: 10 }, policyId: 'LP-GEN-01', autoAttendanceEnabled: false },
+        { id: 'EMP-1299', name: 'Daw Thida Aye', role: 'Sales rep', dept: 'Sales', status: 'Active', joinDate: '2020-07-15', avatar: null, township: 'Yankin', nrcNumber: '12/Yankin(N)333333', ssbNumber: 'SSB-1299-333', initials: 'TA', colorClass: 'bg-slate-200 text-slate-600 border border-slate-300', mobile: '09-7788-3344', hasCriticalRiskFlag: false, documents: [], recruitmentSource: 'Types.Employee Referral', baseSalary: 900000, reliefs: { spouse: true, parentsCount: 0, childrenCount: 2 }, shiftId: 'SH-GEN-96', bankName: 'Yoma Bank', accountNumber: '200155667799', bankBranch: 'Yankin Branch', bankBranchCode: 'YOM-Y11', enrolledCourses: [], leaveBalances: { Casual: 6, Medical: 15, Earned: 10 }, policyId: 'LP-GEN-01', autoAttendanceEnabled: false },
+        { id: 'EMP-0044', name: 'Thaw Zin', role: 'Logistics Coordinator', dept: 'Logistics', status: 'Active', joinDate: '2023-01-20', avatar: null, township: 'Thaketa', nrcNumber: '12/Thaketa(N)444444', ssbNumber: 'SSB-0044-444', initials: 'TZ', colorClass: 'bg-amber-50 text-amber-600 border border-amber-100', mobile: '09-9988-7766', hasCriticalRiskFlag: false, documents: [], recruitmentSource: 'LinkedIn', baseSalary: 600000, reliefs: { spouse: false, parentsCount: 1, childrenCount: 0 }, shiftId: 'SH-FAC-85', bankName: 'CB Bank', accountNumber: '00129988776600', bankBranch: 'Thaketa Branch', bankBranchCode: 'CBB-T44', enrolledCourses: [], leaveBalances: { Casual: 6, Medical: 15, Earned: 10 }, policyId: 'LP-GEN-01', autoAttendanceEnabled: false }
     ];
 
     const [employees, setEmployees] = useState<Types.Employee[]>([]);
+    const [loadingEmployees, setLoadingEmployees] = useState(true);
 
     // ── Employees: Supabase fetch + realtime ──────────────────────────────────
     useEffect(() => {
@@ -238,7 +244,7 @@ export const AppDataProvider: React.FC<{ children: ReactNode }> = ({ children })
             documents: emp.documents || [],
             enrolledCourses: emp.enrolledCourses || [],
             leaveBalances: emp.leaveBalances || { Casual: 6, Medical: 30, Earned: 0 },
-            reliefs: emp.reliefs || { spouse: false, parentsCount: 0 }
+            reliefs: emp.reliefs || { spouse: false, parentsCount: 0, childrenCount: 0 }
         });
 
         const assetChannel = supabase.channel('assets-changes')
@@ -254,8 +260,15 @@ export const AppDataProvider: React.FC<{ children: ReactNode }> = ({ children })
             .subscribe();
 
         const fetchEmployees = async () => {
-            const { data, error } = await supabase.from('employees').select('*');
-            if (!error && data) setEmployees(data.map(mapEmp));
+            setLoadingEmployees(true);
+            try {
+                const { data, error } = await supabase.from('employees').select('*');
+                if (!error && data) setEmployees(data.map(mapEmp));
+            } catch (err) {
+                console.log('Employee fetch error:', err);
+            } finally {
+                setLoadingEmployees(false);
+            }
         };
         const fetchAssets = async () => {
             const { data, error } = await supabase.from('hrms_assets').select('*');
@@ -399,35 +412,34 @@ export const AppDataProvider: React.FC<{ children: ReactNode }> = ({ children })
     });
 
     const [alerts, setAlerts] = useState<Types.Alert[]>([]);
-
-    const [tickets, setTickets] = useState<Types.Ticket[]>([
-        { id: 'TKT-001', empId: 'EMP-001', empName: 'Nilar Lwin', category: 'payroll', subject: 'Incorrect Payslip for Oct', description: 'My payslip shows wrong deductions', priority: 'High', status: 'Open', createdAt: '2026-04-25' },
-        { id: 'TKT-002', empId: 'EMP-004', empName: 'Thida', category: 'it', subject: 'Request for new headset', description: 'Current headset not working', priority: 'Low', status: 'Resolved', createdAt: '2026-04-20' },
-        { id: 'TKT-003', empId: 'EMP-023', empName: 'Kyaw Kyaw', category: 'document', subject: 'Service Certificate needed', description: 'Need service certificate for bank loan application', priority: 'Medium', status: 'Open', createdAt: '2026-04-28' },
-    ]);
+    const [tickets, setTickets] = useState<Types.Ticket[]>([]);
+    const [loadingTickets, setLoadingTickets] = useState(true);
 
     // Fetch tickets from Supabase + realtime
     useEffect(() => {
         const mapTicketFromDb = (r: any): Types.Ticket => ({
             id: r.id,
-            empId: r.empId || r.empid,
-            empName: r.empName || r.empname,
+            empId: r.emp_id || r.empId || r.empid,
+            empName: r.emp_name || r.empName || r.empname,
             category: r.category,
             subject: r.subject,
             description: r.description,
             priority: r.priority,
             status: r.status || 'Open',
-            createdAt: r.createdAt || r.createdat,
-            updatedAt: r.updatedAt || r.updatedat,
+            createdAt: r.created_at || r.createdAt || r.createdat,
+            updatedAt: r.updated_at || r.updatedAt || r.updatedat,
         });
 
         const fetchTickets = async () => {
+            setLoadingTickets(true);
             try {
-                const { data, error } = await supabase.from('tickets').select('*').order('createdAt', { ascending: false });
+                const { data, error } = await supabase.from('tickets').select('*').order('created_at', { ascending: false }).limit(200);
                 if (error) throw error;
-                if (data && data.length > 0) setTickets(data.map(mapTicketFromDb));
+                if (data) setTickets(data.map(mapTicketFromDb));
             } catch (err) {
                 console.log('Using local tickets (Supabase not ready yet):', err);
+            } finally {
+                setLoadingTickets(false);
             }
         };
         fetchTickets();
@@ -435,6 +447,7 @@ export const AppDataProvider: React.FC<{ children: ReactNode }> = ({ children })
         const channel = supabase
             .channel('tickets-changes')
             .on('postgres_changes', { event: '*', schema: 'public', table: 'tickets' }, (payload) => {
+                console.log('[tickets-realtime]', payload.eventType, payload.new || payload.old);
                 if (payload.eventType === 'INSERT' && payload.new) {
                     const mapped = mapTicketFromDb(payload.new);
                     setTickets(prev => prev.some(t => t.id === mapped.id) ? prev : [mapped, ...prev]);
@@ -446,7 +459,9 @@ export const AppDataProvider: React.FC<{ children: ReactNode }> = ({ children })
                     setTickets(prev => prev.filter(t => t.id !== id));
                 }
             })
-            .subscribe();
+            .subscribe((status) => {
+                console.log('[tickets-realtime] subscribe status:', status);
+            });
 
         return () => { supabase.removeChannel(channel); };
     }, []);
@@ -4655,9 +4670,35 @@ export const AppDataProvider: React.FC<{ children: ReactNode }> = ({ children })
                             if (error) console.error('Supabase transfer sync error:', error.message);
                         });
 
-                    // 4. Other JobActivity types (Adjustment) - no cascade needed
-                    } else {
-                        // Payroll adjustment handled via addAdjustment flow
+                    // 4. Salary Adjustment logic
+                    } else if (item.type === 'Adjustment' && item.newSalary) {
+                        setEmployees(prev => prev.map(e => {
+                            if (e.id === item.empId) {
+                                const salaryEntry: SalaryHistoryEntry = {
+                                    date: item.effectiveDate,
+                                    oldSalary: item.oldSalary || e.baseSalary,
+                                    newSalary: item.newSalary,
+                                    reason: item.detail || 'Salary adjustment',
+                                    approvedBy: adminId
+                                };
+
+                                return {
+                                    ...e,
+                                    baseSalary: item.newSalary,
+                                    salaryHistory: [salaryEntry, ...(e.salaryHistory || [])]
+                                };
+                            }
+                            return e;
+                        }));
+
+                        // Sync salary adjustment to Supabase
+                        supabase.from('employees').update({
+                            baseSalary: item.newSalary
+                        }).eq('id', item.empId).then(({ error }) => {
+                            if (error) console.error('Supabase salary adjustment sync error:', error.message);
+                        });
+
+                        addAuditLog({ adminId, actionType: 'Salary Adjustment Approved', module: 'Inbox', detail: `Salary for ${item.name} adjusted from ${(item.oldSalary || 0).toLocaleString()} to ${item.newSalary.toLocaleString()} MMK.` });
                     }
 
                     // Auto-create announcement on Promotion approval only
@@ -4967,6 +5008,7 @@ export const AppDataProvider: React.FC<{ children: ReactNode }> = ({ children })
             if (updates.baseSalary !== undefined) supabaseUpdates.baseSalary = updates.baseSalary;
             if (updates.joinDate !== undefined) supabaseUpdates.joinDate = updates.joinDate;
             if (updates.profileImage !== undefined) supabaseUpdates.profileImage = updates.profileImage;
+            if (updates.avatar !== undefined) supabaseUpdates.avatar = updates.avatar;
             if (updates.mobile !== undefined) supabaseUpdates.mobile = updates.mobile;
             if (updates.township !== undefined) supabaseUpdates.township = updates.township;
             if (updates.nrcNumber !== undefined) supabaseUpdates.nrcNumber = updates.nrcNumber;
@@ -5245,15 +5287,32 @@ export const AppDataProvider: React.FC<{ children: ReactNode }> = ({ children })
         return roleDef?.permissions || [];
     }, [currentUser, systemSettings.roles]);
 
+    const updateTicketStatus = async (id: string, status: Types.Ticket['status']) => {
+        // Optimistic update
+        setTickets(prev => prev.map(t => t.id === id ? { ...t, status } : t));
+
+        try {
+            const { error } = await supabase
+                .from('tickets')
+                .update({ status, updated_at: new Date().toISOString() })
+                .eq('id', id);
+
+            if (error) throw error;
+        } catch (err) {
+            console.error('Failed to update ticket status:', err);
+            // Revert on error would be better, but for now we log it
+        }
+    };
+
     const coreValue = useMemo(() => ({
-        employees, setEmployees,
+        employees, setEmployees, loadingEmployees,
         reviews, setReviews,
         assets, setAssets, addAsset, updateAsset,
         candidates, setCandidates,
         candidateMessages, sendCandidateMessage,
         updateCandidateStage, rejectCandidate,
         alerts, setAlerts,
-        tickets, setTickets,
+        tickets, setTickets, loadingTickets, updateTicketStatus,
         courses, setCourses,
         certs, setCerts,
         analytics, setAnalytics,
@@ -5325,10 +5384,10 @@ export const AppDataProvider: React.FC<{ children: ReactNode }> = ({ children })
         toggleAutoAttendance,
         addHoliday, updateHoliday, deleteHoliday,
         // Live from UserAccessProvider
-        isAdmin, subscriptionTier, securityAuditLogs,
+        isAdmin, subscriptionTier, securityAuditLogs, verifyLocalAuth, addSecurityLog,
         // resolveOTConflict & handleInboxAction are added by the PayrollBridge
     }), [
-        employees, reviews, assets, candidates, candidateMessages, alerts, courses, certs, analytics, 
+        employees, loadingEmployees, reviews, assets, candidates, candidateMessages, alerts, tickets, loadingTickets, courses, certs, analytics, 
         leaveRequests, attendanceLogs, complianceSettings, systemSettings, auditLogs, 
         shifts, shiftAssignments, publishedWeeks,
         onboardingRecords, jobPostings, fieldAgents, laborContracts, 
@@ -5337,7 +5396,7 @@ export const AppDataProvider: React.FC<{ children: ReactNode }> = ({ children })
         performanceReviewRequests, submitReview, addJobActivityChange, announcements, createAnnouncement, acknowledgeAnnouncement,
         objectives, keyResults,
         toggleAutoAttendance, reorderDepartments, policyVersion,
-        isAdmin, subscriptionTier, securityAuditLogs, logSettingChange
+        isAdmin, subscriptionTier, securityAuditLogs, verifyLocalAuth, addSecurityLog, logSettingChange
     ]);
 
     const runSystemAudits = () => {

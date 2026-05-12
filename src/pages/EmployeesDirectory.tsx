@@ -1,18 +1,19 @@
 import React, { useState, useMemo } from 'react';
 import DropdownMenu from '../components/DropdownMenu';
 import { useNavigate } from 'react-router-dom';
-import { TableVirtuoso } from 'react-virtuoso';
 import Sidebar from '../components/Sidebar';
 import Header from '../components/Header';
 import { useAppData } from '../context/AppDataContext';
 import EmptyStateCard from '../components/EmptyStateCard';
 import { useDebounce } from '../hooks/useDebounce';
 
+const ITEMS_PER_PAGE = 10;
+
 export default function EmployeesDirectory() {
     const navigate = useNavigate();
 
     // Core Data Schema comes from Context now
-    const { employees, setEmployees, terminateEmployee, addJobActivityChange, addAdjustment, lastPayrollStatus, shifts, systemSettings, addDocumentToEmployee, fieldAgents, setFieldAgents, addEmployee } = useAppData();
+    const { employees, setEmployees, loadingEmployees, terminateEmployee, addJobActivityChange, addAdjustment, lastPayrollStatus, shifts, systemSettings, addDocumentToEmployee, fieldAgents, setFieldAgents, addEmployee } = useAppData();
 
     const [searchQuery, setSearchQuery] = useState('');
     const [deptFilter, setDeptFilter] = useState('All Departments');
@@ -23,7 +24,8 @@ export default function EmployeesDirectory() {
     const [activeRecord, setActiveRecord] = useState<any>(null);
     const [openDropdownId, setOpenDropdownId] = useState<string | null>(null);
 
-    const [isRefreshingGrid, setIsRefreshingGrid] = useState(false);
+    // Pagination State
+    const [currentPage, setCurrentPage] = useState(1);
 
     // Filter Logic — uses debouncedSearch to prevent CPU spike on every keystroke
     const filteredEmployees = useMemo(() => {
@@ -42,19 +44,38 @@ export default function EmployeesDirectory() {
         return result;
     }, [employees, deptFilter, debouncedSearch]);
 
-    // Handle filter changes — resets skeleton state immediately (no synthetic delay)
+    // Pagination calculations
+    const totalPages = Math.ceil(filteredEmployees.length / ITEMS_PER_PAGE);
+    const paginatedEmployees = useMemo(() => {
+        const start = (currentPage - 1) * ITEMS_PER_PAGE;
+        return filteredEmployees.slice(start, start + ITEMS_PER_PAGE);
+    }, [filteredEmployees, currentPage]);
+
+    // Reset to page 1 when filters change
     React.useEffect(() => {
-        setIsRefreshingGrid(true);
-        // Skeleton shows for exactly as long as debounce is pending
-        const t = setTimeout(() => setIsRefreshingGrid(false), 50);
-        return () => clearTimeout(t);
+        setCurrentPage(1);
     }, [deptFilter, debouncedSearch]);
 
-    // KPI Counters (Always stay true to the underlying raw array for Headcount, not filtered list unless specifically requested)
-    const activeCount = employees.filter(e => e.status === 'Active' || e.status === 'On Leave').length;
+    // KPI Counters - HR Standard Formulas
+    // Total Headcount = Active + On Leave (current workforce)
+    const activeOnlyCount = employees.filter(e => e.status === 'Active').length;
+    const onLeaveCount = employees.filter(e => e.status === 'On Leave').length;
+    const totalHeadcount = activeOnlyCount + onLeaveCount;
+    
+    // Departures YTD = Terminated + Resigned + Retired
     const terminatedCount = employees.filter(e => e.status === 'Terminated').length;
+    const resignedCount = employees.filter(e => e.status === 'Resigned').length;
+    const retiredCount = employees.filter(e => e.status === 'Retired').length;
+    const totalDepartures = terminatedCount + resignedCount + retiredCount;
+    
+    // Turnover Rate = (Total Departures / Total Headcount) × 100
+    const turnoverRate = totalHeadcount > 0 ? Math.round((totalDepartures / totalHeadcount) * 100) : 0;
+    
+    // Active Duty % = (Active Only / Total Headcount) × 100
+    const activeDutyRate = totalHeadcount > 0 ? Math.round((activeOnlyCount / totalHeadcount) * 100) : 0;
+    
     const mainDeptName = systemSettings.departments[0]?.name || 'Engineering';
-    const mainDeptCount = employees.filter(e => e.dept === mainDeptName).length;
+    const mainDeptCount = employees.filter(e => e.dept === mainDeptName && (e.status === 'Active' || e.status === 'On Leave')).length;
 
     // Form States
     const [newEmpName, setNewEmpName] = useState('');
@@ -66,6 +87,13 @@ export default function EmployeesDirectory() {
     const [newEmpAccountNumber, setNewEmpAccountNumber] = useState('');
     const [newEmpBranchCode, setNewEmpBranchCode] = useState('');
     const [newEmpTaxId, setNewEmpTaxId] = useState('');
+    const [newEmpDob, setNewEmpDob] = useState('');
+    const [newEmpHasSpouse, setNewEmpHasSpouse] = useState(false);
+    const [newEmpParentsCount, setNewEmpParentsCount] = useState(0);
+    const [newEmpChildrenCount, setNewEmpChildrenCount] = useState(0);
+    const [newEmpEmergencyName, setNewEmpEmergencyName] = useState('');
+    const [newEmpEmergencyRelation, setNewEmpEmergencyRelation] = useState('');
+    const [newEmpEmergencyPhone, setNewEmpEmergencyPhone] = useState('');
     const [authError, setAuthError] = useState('');
 
     const NRC_REGEX = new RegExp('^([0-9]{1,2})\\/[a-zA-Z]+\\([NEP]\\)[0-9]{6}$');
@@ -182,7 +210,8 @@ export default function EmployeesDirectory() {
             officeLocation: newEmpLocation || undefined,
             officeCoords: selectedLocation?.coords || undefined,
             baseSalary: 500000,
-            reliefs: { spouse: false, parentsCount: 0 },
+            dateOfBirth: newEmpDob || undefined,
+            reliefs: { spouse: newEmpHasSpouse, parentsCount: newEmpParentsCount, childrenCount: newEmpChildrenCount },
             shiftId: 'SH-GEN-96',
             bankName: newEmpBankName,
             accountNumber: newEmpAccountNumber,
@@ -191,7 +220,12 @@ export default function EmployeesDirectory() {
             enrolledCourses: [],
             leaveBalances: { Casual: 6, Medical: 15, Earned: 10 },
             policyId: 'LP-GEN-01',
-            autoAttendanceEnabled: false
+            autoAttendanceEnabled: false,
+            emergencyContact: newEmpEmergencyName && newEmpEmergencyPhone ? {
+                name: newEmpEmergencyName,
+                relationship: newEmpEmergencyRelation || 'Other',
+                phone: newEmpEmergencyPhone
+            } : undefined
         };
 
         const result = await addEmployee(newEmp as any, 'EMP-001');
@@ -250,8 +284,7 @@ export default function EmployeesDirectory() {
             effectiveDate: resignDate,
             finalWorkingDate: resignDate,
             resignationReason: resignReason,
-            priority: 'Medium',
-            category: 'Staffing'
+            priority: 'Medium'
         });
 
         // Mock delay for UX
@@ -279,8 +312,7 @@ export default function EmployeesDirectory() {
             jobDescription: promoteDesc || undefined,
             newSalary: promoteSalary ? parseInt(promoteSalary, 10) : undefined,
             oldSalary: activeRecord.baseSalary,
-            priority: 'High',
-            category: 'Staffing'
+            priority: 'High'
         });
 
         setTimeout(() => {
@@ -352,8 +384,7 @@ export default function EmployeesDirectory() {
             newSalary: transferSalary ? parseInt(transferSalary, 10) : undefined,
             oldSalary: activeRecord.baseSalary,
             transferReason: transferReason || undefined,
-            priority: 'High',
-            category: 'Staffing'
+            priority: 'High'
         });
         setTimeout(() => { setTransferLoading(false); closeModals(); }, 700);
     };
@@ -387,6 +418,12 @@ export default function EmployeesDirectory() {
         setNewEmpAccountNumber('');
         setNewEmpBranchCode('');
         setNewEmpTaxId('');
+        setNewEmpDob('');
+        setNewEmpHasSpouse(false);
+        setNewEmpParentsCount(0);
+        setNewEmpEmergencyName('');
+        setNewEmpEmergencyRelation('');
+        setNewEmpEmergencyPhone('');
         setTerminationError(null);
         setSeparationReason('Termination');
         setResignDate('');
@@ -423,26 +460,22 @@ export default function EmployeesDirectory() {
                 <Header 
                     title="Employees"
                     subtitle="Manage your workforce, track department distribution, and access employee records"
-                >
-                    <div className="relative w-full max-w-[480px] ml-4 hidden lg:block">
-                        <span className="material-symbols-outlined absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 text-xl">search</span>
-                        <input
-                            className="w-full border border-slate-200 dark:border-slate-800 rounded-lg py-2 pl-10 pr-4 text-sm focus:ring-2 focus:ring-[#4F46E5] focus:border-transparent text-slate-900 placeholder-slate-400 bg-white dark:bg-slate-900 transition-all shadow-sm"
-                            placeholder="Search by name, ID or role..."
-                            type="text"
-                            value={searchQuery}
-                            onChange={(e) => setSearchQuery(e.target.value)}
-                        />
-                    </div>
-                </Header>
+                />
 
                 <div className="flex-1 overflow-y-auto px-6 pb-6 bg-[#F8FAFC]">
                     <div className="max-w-[1600px] mx-auto space-y-6 mt-6">
 
                         {/* Page Header */}
                         <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
-                            <div>
-                                <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">Master Directory</p>
+                            <div className="relative w-full max-w-[400px]">
+                                <span className="material-symbols-outlined absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 text-xl">search</span>
+                                <input
+                                    className="w-full border border-slate-200 rounded-lg py-2 pl-10 pr-4 text-sm focus:ring-2 focus:ring-[#4F46E5] focus:border-transparent text-slate-900 placeholder-slate-400 bg-white transition-all shadow-sm"
+                                    placeholder="Search by name, ID or role..."
+                                    type="text"
+                                    value={searchQuery}
+                                    onChange={(e) => setSearchQuery(e.target.value)}
+                                />
                             </div>
                             <div className="flex items-center gap-3">
                                 <button onClick={handleExportCSV} className="px-4 py-2 bg-white border border-slate-200 text-slate-700 rounded-lg text-sm font-semibold hover:bg-slate-50 shadow-sm flex items-center gap-2">
@@ -457,30 +490,70 @@ export default function EmployeesDirectory() {
                             </div>
                         </div>
 
-                        {/* KPI Cards */}
-                        <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-                            <div className="bg-white p-5 rounded-xl border border-slate-200 shadow-sm flex flex-col justify-between">
-                                <p className="text-sm font-bold text-slate-500 uppercase tracking-tight">Total Headcount</p>
-                                <div className="flex items-center gap-3 mt-2">
-                                    <span className="text-3xl font-bold text-slate-900">{employees.length}</span>
+                        {/* Headcount Dashboard */}
+                        <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
+                            {/* Dashboard Header */}
+                            <div className="bg-purple-50 text-purple-900 px-6 py-4 text-center border-b border-purple-100">
+                                <h2 className="text-lg font-bold uppercase tracking-wider">Headcount Dashboard</h2>
+                                <p className="text-xs text-purple-500 uppercase tracking-widest mt-1">YTD</p>
+                            </div>
+                            
+                            {/* Main KPI Cards */}
+                            <div className="grid grid-cols-1 md:grid-cols-3 divide-y md:divide-y-0 md:divide-x divide-slate-200">
+                                {/* Total Headcount */}
+                                <div className="p-6 flex flex-col items-center justify-center text-center">
+                                    <p className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-2">Total Headcount</p>
+                                    {loadingEmployees ? (
+                                        <div className="h-10 w-16 bg-slate-100 rounded animate-pulse" />
+                                    ) : (
+                                        <div className="text-4xl font-black text-slate-900">{totalHeadcount}</div>
+                                    )}
+                                    <p className="text-xs text-slate-400 mt-1">
+                                        {loadingEmployees ? '' : `(${onLeaveCount} on leave)`}
+                                    </p>
+                                </div>
+                                
+                                {/* Active Duty % */}
+                                <div className="p-6 flex flex-col items-center justify-center text-center">
+                                    <p className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-2">Active Duty %</p>
+                                    {loadingEmployees ? (
+                                        <div className="h-10 w-20 bg-slate-100 rounded animate-pulse" />
+                                    ) : (
+                                        <div className="text-4xl font-black text-slate-900">{activeDutyRate}%</div>
+                                    )}
+                                    <p className="text-xs text-slate-400 mt-1">
+                                        {loadingEmployees ? '' : `(${activeOnlyCount} of ${totalHeadcount} active)`}
+                                    </p>
+                                </div>
+                                
+                                {/* Turnover Rate */}
+                                <div className="p-6 flex flex-col items-center justify-center text-center">
+                                    <p className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-2">Turnover Rate</p>
+                                    {loadingEmployees ? (
+                                        <div className="h-10 w-16 bg-slate-100 rounded animate-pulse" />
+                                    ) : (
+                                        <div className="text-4xl font-black text-slate-900">{turnoverRate}%</div>
+                                    )}
+                                    <p className="text-xs text-slate-400 mt-1">
+                                        {loadingEmployees ? '' : `(${totalDepartures} departures)`}
+                                    </p>
                                 </div>
                             </div>
-                            <div className="bg-white p-5 rounded-xl border border-slate-200 shadow-sm flex flex-col justify-between">
-                                <p className="text-sm font-bold text-slate-500 uppercase tracking-tight">Active Duty</p>
-                                <div className="flex items-center gap-3 mt-2">
-                                    <span className="text-3xl font-bold text-emerald-600">{activeCount}</span>
-                                </div>
-                            </div>
-                            <div className="bg-white p-5 rounded-xl border border-slate-200 shadow-sm flex flex-col justify-between">
-                                <p className="text-sm font-bold text-slate-500 uppercase tracking-tight">Terminated (YTD)</p>
-                                <div className="flex items-center gap-3 mt-2">
-                                    <span className="text-3xl font-bold text-slate-900">{terminatedCount}</span>
-                                </div>
-                            </div>
-                            <div className="bg-white p-5 rounded-xl border border-slate-200 shadow-sm flex flex-col justify-between">
-                                <p className="text-sm font-bold text-slate-500 uppercase tracking-tight">{mainDeptName} Dept</p>
-                                <div className="flex items-center gap-3 mt-2">
-                                    <span className="text-3xl font-bold text-indigo-600">{mainDeptCount}</span>
+                            
+                            {/* Headcount by Dept */}
+                            <div className="border-t border-slate-200 px-6 py-5">
+                                <p className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-4 text-center">Headcount by Dept</p>
+                                <div className="flex flex-wrap justify-center gap-6">
+                                    {systemSettings.departments.slice(0, 4).map((dept) => {
+                                        const count = employees.filter(e => e.dept === dept.name && (e.status === 'Active' || e.status === 'On Leave')).length;
+                                        const percentage = totalHeadcount > 0 ? Math.round((count / totalHeadcount) * 100) : 0;
+                                        return (
+                                            <div key={dept.name} className="text-center">
+                                                <p className="text-xs font-medium text-slate-600">{dept.name}</p>
+                                                <p className="text-lg font-bold text-slate-900">{count} <span className="text-xs font-normal text-slate-400">({percentage}%)</span></p>
+                                            </div>
+                                        );
+                                    })}
                                 </div>
                             </div>
                         </div>
@@ -510,148 +583,212 @@ export default function EmployeesDirectory() {
                                 </div>
                             </div>
 
-                            {/* Masked Sensitive Grid View — Virtualized for 500+ workers */}
-                            <div className="bg-white rounded-xl border border-slate-200 overflow-hidden shadow-sm">
-                                {isRefreshingGrid ? (
-                                    <div className="p-12 text-center space-y-4">
-                                        <div className="size-12 rounded-full border-2 border-slate-200 border-t-indigo-500 animate-spin mx-auto"></div>
-                                        <p className="text-xs font-bold text-slate-400 uppercase tracking-widest">Refreshing Workforce Directory...</p>
-                                    </div>
-                                ) : filteredEmployees.length === 0 ? (
-                                    <EmptyStateCard 
-                                        icon="person_search"
-                                        title="No Employees Found"
-                                        subtitle={`We couldn't find any employees matching "${searchQuery}" in ${deptFilter}.`}
-                                        action={{ label: 'Invite New Employee', onClick: () => setActiveModal('add') }}
-                                    />
-                                ) : (
-                                    <TableVirtuoso
-                                        style={{ height: Math.min(filteredEmployees.length * 80 + 56, 700) }}
-                                        data={filteredEmployees}
-                                        fixedHeaderContent={() => (
-                                            <tr className="border-b border-slate-200 bg-slate-50 text-xs uppercase font-semibold text-slate-500 text-left">
-                                                <th className="px-6 py-4">Employee</th>
-                                                <th className="px-6 py-4 text-left">Status</th>
-                                                <th className="px-6 py-4 text-left">Department & Role</th>
-                                                <th className="px-6 py-4 text-center">Validation</th>
-                                                <th className="px-6 py-4 border-l border-slate-100 text-left">Security Status</th>
-                                                <th className="px-6 py-4 text-left">Join Date</th>
-                                                <th className="px-6 py-4 text-right">Actions</th>
+                            {/* Employee Table with Pagination */}
+                            {loadingEmployees ? (
+                                <div className="p-8 space-y-4">
+                                    {[1, 2, 3, 4, 5].map(i => (
+                                        <div key={i} className="flex items-center gap-4 animate-pulse py-3 px-6">
+                                            <div className="size-10 rounded-full bg-slate-100" />
+                                            <div className="flex-1 space-y-2">
+                                                <div className="h-4 w-32 bg-slate-100 rounded" />
+                                                <div className="h-3 w-20 bg-slate-50 rounded" />
+                                            </div>
+                                            <div className="h-6 w-20 bg-slate-50 rounded-full" />
+                                            <div className="h-4 w-24 bg-slate-100 rounded" />
+                                            <div className="h-4 w-16 bg-slate-50 rounded" />
+                                            <div className="h-4 w-20 bg-slate-100 rounded" />
+                                            <div className="h-8 w-8 bg-slate-100 rounded" />
+                                        </div>
+                                    ))}
+                                </div>
+                            ) : filteredEmployees.length === 0 ? (
+                                <EmptyStateCard 
+                                    icon="person_search"
+                                    title="No Employees Found"
+                                    subtitle={`We couldn't find any employees matching "${searchQuery}" in ${deptFilter}.`}
+                                    action={{ label: 'Invite New Employee', onClick: () => setActiveModal('add') }}
+                                />
+                            ) : (
+                                <>
+                                    <table className="w-full text-left text-sm">
+                                        <thead className="border-b border-slate-200 bg-slate-50 text-xs uppercase font-semibold text-slate-500">
+                                            <tr>
+                                                <th className="px-6 py-4 w-[22%] min-w-[200px]">Employee</th>
+                                                <th className="px-6 py-4 text-left w-[12%] min-w-[100px]">Status</th>
+                                                <th className="px-6 py-4 text-left w-[18%] min-w-[160px]">Department & Role</th>
+                                                <th className="px-6 py-4 text-center w-[12%] min-w-[100px]">Validation</th>
+                                                <th className="px-6 py-4 border-l border-slate-100 text-left w-[16%] min-w-[140px]">Security Status</th>
+                                                <th className="px-6 py-4 text-left w-[12%] min-w-[110px]">Join Date</th>
+                                                <th className="px-6 py-4 text-right w-[8%] min-w-[70px]">Actions</th>
                                             </tr>
-                                        )}
-                                        itemContent={(_, emp) => (
-                                            <>
-                                                <td className="px-6 py-4 cursor-pointer" onClick={() => navigate(`/employees/${emp.id}`)}>
-                                                    <div className="flex items-center gap-3">
-                                                        {emp.avatar ? (
-                                                            <div className="size-10 rounded-full bg-cover bg-center shrink-0 border border-slate-200" style={{ backgroundImage: `url("${emp.avatar}")` }} loading="lazy"></div>
-                                                        ) : (
-                                                            <div className={`size-10 rounded-full flex items-center justify-center font-bold shrink-0 text-sm ${emp.colorClass || 'bg-slate-100 text-slate-700'}`}>{emp.initials}</div>
-                                                        )}
-                                                        <div className="flex flex-col gap-0.5">
-                                                            <p className="font-bold text-slate-900 hover:text-[#4F46E5] transition-colors">{emp.name}</p>
-                                                            <p className="text-xs text-slate-500 font-mono tracking-tight">{emp.id}</p>
+                                        </thead>
+                                        <tbody className="divide-y divide-slate-100">
+                                            {paginatedEmployees.map(emp => (
+                                                <tr key={emp.id} className="hover:bg-slate-50/50 transition-colors">
+                                                    <td className="px-6 py-4 cursor-pointer" onClick={() => navigate(`/employees/${emp.id}`)}>
+                                                        <div className="flex items-center gap-3">
+                                                            {emp.avatar ? (
+                                                                <div className="size-10 rounded-full bg-cover bg-center shrink-0 border border-slate-200" style={{ backgroundImage: `url("${emp.avatar}")` }} loading="lazy"></div>
+                                                            ) : (
+                                                                <div className={`size-10 rounded-full flex items-center justify-center font-bold shrink-0 text-sm ${emp.colorClass || 'bg-slate-100 text-slate-700'}`}>{emp.initials}</div>
+                                                            )}
+                                                            <div className="flex flex-col gap-0.5">
+                                                                <p className="font-bold text-slate-900 hover:text-[#4F46E5] transition-colors whitespace-nowrap">{emp.name}</p>
+                                                                <p className="text-xs text-slate-500 font-mono tracking-tight">{emp.id}</p>
+                                                            </div>
                                                         </div>
-                                                    </div>
-                                                </td>
-                                                <td className="px-6 py-4">
-                                                    {emp.status === 'Active' && <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-bold bg-emerald-50 text-emerald-700 border border-emerald-100"><span className="size-1.5 rounded-full bg-emerald-500"></span> Active</span>}
-                                                    {emp.status === 'On Leave' && <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-bold bg-amber-50 text-amber-700 border border-amber-100"><span className="size-1.5 rounded-full bg-amber-500"></span> On Leave</span>}
-                                                    {emp.status === 'Terminated' && <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-bold bg-slate-100 text-slate-600 border border-slate-200">Terminated</span>}
-                                                    {emp.status === 'Resigned' && <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-bold bg-blue-50 text-blue-600 border border-blue-100">Resigned</span>}
-                                                    {emp.status === 'Retired' && <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-bold bg-purple-50 text-purple-600 border border-purple-100">Retired</span>}
-                                                    {emp.contractActionRequired && (
-                                                        <span className="ml-2 inline-flex items-center gap-1 px-2 py-1 rounded-full text-[10px] font-bold bg-amber-50 text-amber-700 border border-amber-200">
-                                                            <span className="material-symbols-outlined text-[12px]">warning</span>
-                                                            Contract Action Required
-                                                        </span>
-                                                    )}
-                                                </td>
-                                                <td className="px-6 py-4 text-left">
-                                                    <p className="font-bold text-slate-700 text-xs uppercase tracking-tighter">{emp.dept}</p>
-                                                    <p className="text-[10px] text-slate-400 font-bold uppercase tracking-widest">{emp.role}</p>
-                                                </td>
-                                                <td className="px-6 py-4 text-center">
-                                                    {(() => {
-                                                        const missing: string[] = [];
-                                                        if (!emp.bankName || !emp.accountNumber) missing.push('Bank Account');
-                                                        if (!emp.nrcNumber || emp.nrcNumber === 'TBD' || emp.nrcNumber === 'Pending Verification') missing.push('NRC');
-                                                        if (!emp.mobile) missing.push('Phone');
-                                                        if (missing.length > 0) {
+                                                    </td>
+                                                    <td className="px-6 py-4">
+                                                        <div className="flex flex-wrap gap-1">
+                                                            {emp.status === 'Active' && <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-bold bg-emerald-50 text-emerald-700 border border-emerald-100 shrink-0"><span className="size-1.5 rounded-full bg-emerald-500"></span> Active</span>}
+                                                            {emp.status === 'On Leave' && <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-bold bg-amber-50 text-amber-700 border border-amber-100 shrink-0"><span className="size-1.5 rounded-full bg-amber-500"></span> On Leave</span>}
+                                                            {emp.status === 'Terminated' && <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-bold bg-red-50 text-red-700 border border-red-100 shrink-0"><span className="size-1.5 rounded-full bg-red-500"></span> Terminated</span>}
+                                                            {emp.status === 'Resigned' && <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-bold bg-amber-100 text-amber-900 border border-amber-300 shrink-0"><span className="size-1.5 rounded-full bg-amber-700"></span> Resigned</span>}
+                                                            {emp.status === 'Retired' && <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-bold bg-slate-800 text-slate-100 border border-slate-700 shrink-0"><span className="size-1.5 rounded-full bg-slate-400"></span> Retired</span>}
+                                                            {emp.contractActionRequired && (
+                                                                <span className="inline-flex items-center gap-1 px-2 py-1 rounded-full text-[10px] font-bold bg-amber-50 text-amber-700 border border-amber-200 shrink-0">
+                                                                    <span className="material-symbols-outlined text-[12px]">warning</span>
+                                                                    Action Required
+                                                                </span>
+                                                            )}
+                                                        </div>
+                                                    </td>
+                                                    <td className="px-6 py-4 text-left">
+                                                        <p className="font-bold text-slate-700 text-xs uppercase tracking-tighter whitespace-nowrap">{emp.dept}</p>
+                                                        <p className="text-[10px] text-slate-400 font-bold uppercase tracking-widest whitespace-nowrap">{emp.role}</p>
+                                                    </td>
+                                                    <td className="px-6 py-4 text-center">
+                                                        {(() => {
+                                                            const missing: string[] = [];
+                                                            if (!emp.bankName || !emp.accountNumber) missing.push('Bank Account');
+                                                            if (!emp.nrcNumber || emp.nrcNumber === 'TBD' || emp.nrcNumber === 'Pending Verification') missing.push('NRC');
+                                                            if (!emp.mobile) missing.push('Phone');
+                                                            if (missing.length > 0) {
+                                                                return (
+                                                                    <span className="relative group cursor-help inline-block">
+                                                                        <span className="inline-flex items-center gap-1 px-2 py-1 rounded-full text-[10px] font-bold bg-red-50 text-red-600 border border-red-100">
+                                                                            <span className="material-symbols-outlined text-[14px]">warning</span> {missing.length}
+                                                                        </span>
+                                                                        <span className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 px-3 py-2 bg-slate-900 text-white text-[10px] font-semibold rounded-lg whitespace-nowrap opacity-0 group-hover:opacity-100 transition-opacity z-50 pointer-events-none shadow-lg">
+                                                                            Missing payroll-critical data: {missing.join(', ')}
+                                                                        </span>
+                                                                    </span>
+                                                                );
+                                                            }
                                                             return (
-                                                                <span className="relative group cursor-help">
-                                                                    <span className="inline-flex items-center gap-1 px-2 py-1 rounded-full text-[10px] font-bold bg-red-50 text-red-600 border border-red-100">
-                                                                        <span className="material-symbols-outlined text-[14px]">warning</span> {missing.length}
-                                                                    </span>
-                                                                    <span className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 px-3 py-2 bg-slate-900 text-white text-[10px] font-semibold rounded-lg whitespace-nowrap opacity-0 group-hover:opacity-100 transition-opacity z-50 pointer-events-none shadow-lg">
-                                                                        Missing payroll-critical data: {missing.join(', ')}
-                                                                    </span>
+                                                                <span className="inline-flex items-center gap-1 px-2 py-1 rounded-full text-[10px] font-bold bg-emerald-50 text-emerald-600 border border-emerald-100">
+                                                                    <span className="material-symbols-outlined text-[14px]">check_circle</span> OK
                                                                 </span>
                                                             );
-                                                        }
-                                                        return (
-                                                            <span className="inline-flex items-center gap-1 px-2 py-1 rounded-full text-[10px] font-bold bg-emerald-50 text-emerald-600 border border-emerald-100">
-                                                                <span className="material-symbols-outlined text-[14px]">check_circle</span> OK
-                                                            </span>
-                                                        );
-                                                    })()}
-                                                </td>
-                                                <td className="px-6 py-4 border-l border-slate-50 text-left">
-                                                    <div className="flex items-center gap-1.5">
-                                                        <span className={`size-1.5 rounded-full ${emp.riskFactor > 2 ? 'bg-red-500 animate-pulse' : emp.riskFactor > 0 ? 'bg-amber-500' : 'bg-emerald-500'}`}></span>
-                                                        <span className="text-[10px] font-black uppercase text-slate-500 tracking-tighter">Handshake Clear</span>
-                                                    </div>
-                                                </td>
-                                                <td className="px-6 py-4 text-left font-mono text-xs text-slate-500">
-                                                    {emp.joinDate || '2023-10-01'}
-                                                </td>
-                                                <td className="px-6 py-4 text-right relative">
-                                                    <button 
-                                                        onClick={() => setOpenDropdownId(openDropdownId === emp.id ? null : emp.id)}
-                                                        className="p-1 rounded-md hover:bg-slate-100 text-slate-400 transition-colors"
-                                                    >
-                                                        <span className="material-symbols-outlined">more_vert</span>
-                                                    </button>
-                                                    
-                                                    {openDropdownId === emp.id && (
-                                                        <>
-                                                            <div className="fixed inset-0 z-40" onClick={() => setOpenDropdownId(null)}></div>
-                                                            <div className="absolute right-6 top-12 w-48 bg-white rounded-xl shadow-xl border border-slate-100 z-50 overflow-hidden animate-in fade-in zoom-in duration-150">
-                                                                {emp.status === 'Terminated' ? (
-                                                                    <button className="flex items-center gap-2 w-full px-4 py-2 text-sm text-slate-400 cursor-not-allowed italic">
-                                                                        No Actions Available
-                                                                    </button>
-                                                                ) : (
-                                                                    <>
-                                                                        <button onClick={() => { setOpenDropdownId(null); setActiveRecord(emp); setActiveModal('promote'); }} className="flex items-center gap-2 w-full px-4 py-2 text-sm text-indigo-600 hover:bg-indigo-50 font-medium border-b border-slate-50">
-                                                                            <span className="material-symbols-outlined text-[18px]">trending_up</span> Promote / Revise
+                                                        })()}
+                                                    </td>
+                                                    <td className="px-6 py-4 border-l border-slate-100 text-left">
+                                                        <div className="flex items-center gap-1.5">
+                                                            <span className={`size-1.5 rounded-full ${emp.riskFactor > 2 ? 'bg-red-500 animate-pulse' : emp.riskFactor > 0 ? 'bg-amber-500' : 'bg-emerald-500'}`}></span>
+                                                            <span className="text-[10px] font-black uppercase text-slate-500 tracking-tighter">Handshake Clear</span>
+                                                        </div>
+                                                    </td>
+                                                    <td className="px-6 py-4 text-left font-mono text-xs text-slate-500">
+                                                        {emp.joinDate || '2023-10-01'}
+                                                    </td>
+                                                    <td className="px-6 py-4 text-right relative">
+                                                        <button 
+                                                            onClick={() => setOpenDropdownId(openDropdownId === emp.id ? null : emp.id)}
+                                                            className="p-1 rounded-md hover:bg-slate-100 text-slate-400 transition-colors cursor-pointer"
+                                                        >
+                                                            <span className="material-symbols-outlined">more_vert</span>
+                                                        </button>
+                                                        
+                                                        {openDropdownId === emp.id && (
+                                                            <>
+                                                                <div className="fixed inset-0 z-40" onClick={() => setOpenDropdownId(null)}></div>
+                                                                <div className="absolute right-6 top-12 w-48 bg-white rounded-xl shadow-xl border border-slate-100 z-50 overflow-hidden animate-in fade-in zoom-in duration-150">
+                                                                    {emp.status === 'Terminated' ? (
+                                                                        <button className="flex items-center gap-2 w-full px-4 py-2 text-sm text-slate-400 cursor-not-allowed italic">
+                                                                            No Actions Available
                                                                         </button>
-                                                                        <button onClick={() => { setOpenDropdownId(null); setActiveRecord(emp); setTransferDept(emp.dept); setTransferShift(emp.shiftId || ''); setActiveModal('transfer'); }} className="flex items-center gap-2 w-full px-4 py-2 text-sm text-teal-600 hover:bg-teal-50 font-medium border-b border-slate-50">
-                                                                            <span className="material-symbols-outlined text-[18px]">swap_horiz</span> Transfer
-                                                                        </button>
-                                                                        <button onClick={() => { setOpenDropdownId(null); setActiveRecord(emp); setAdjMonth(openPayrollMonth); setActiveModal('adjust'); }} className="flex items-center gap-2 w-full px-4 py-2 text-sm text-violet-600 hover:bg-violet-50 font-medium border-b border-slate-50">
-                                                                            <span className="material-symbols-outlined text-[18px]">payments</span> Adjust
-                                                                        </button>
-                                                                        <button onClick={() => { setOpenDropdownId(null); setActiveRecord(emp); setActiveModal('resign'); }} className="flex items-center gap-2 w-full px-4 py-2 text-sm text-amber-600 hover:bg-amber-50 font-medium border-b border-slate-50">
-                                                                            <span className="material-symbols-outlined text-[18px]">exit_to_app</span> Request Resignation
-                                                                        </button>
-                                                                        <button onClick={() => { setOpenDropdownId(null); setActiveRecord(emp); setActiveModal('deactivate'); }} className="flex items-center gap-2 w-full px-4 py-2 text-sm text-red-600 hover:bg-red-50 font-medium border-b border-slate-50">
-                                                                            <span className="material-symbols-outlined text-[18px]">person_off</span> Deactivate User
-                                                                        </button>
-                                                                    </>
-                                                                )}
-                                                            </div>
-                                                        </>
-                                                    )}
-                                                </td>
-                                            </>
-                                        )}
-                                    />
-                                )}
+                                                                    ) : (
+                                                                        <>
+                                                                            <button onClick={() => { setOpenDropdownId(null); setActiveRecord(emp); setActiveModal('promote'); }} className="flex items-center gap-2 w-full px-4 py-2 text-sm text-indigo-600 hover:bg-indigo-50 font-medium border-b border-slate-50 cursor-pointer">
+                                                                                <span className="material-symbols-outlined text-[18px]">trending_up</span> Promote / Revise
+                                                                            </button>
+                                                                            <button onClick={() => { setOpenDropdownId(null); setActiveRecord(emp); setTransferDept(emp.dept); setTransferShift(emp.shiftId || ''); setActiveModal('transfer'); }} className="flex items-center gap-2 w-full px-4 py-2 text-sm text-teal-600 hover:bg-teal-50 font-medium border-b border-slate-50 cursor-pointer">
+                                                                                <span className="material-symbols-outlined text-[18px]">swap_horiz</span> Transfer
+                                                                            </button>
+                                                                            <button onClick={() => { setOpenDropdownId(null); setActiveRecord(emp); setAdjMonth(openPayrollMonth); setActiveModal('adjust'); }} className="flex items-center gap-2 w-full px-4 py-2 text-sm text-violet-600 hover:bg-violet-50 font-medium border-b border-slate-50 cursor-pointer">
+                                                                                <span className="material-symbols-outlined text-[18px]">payments</span> Adjust
+                                                                            </button>
+                                                                            <button onClick={() => { setOpenDropdownId(null); setActiveRecord(emp); setActiveModal('resign'); }} className="flex items-center gap-2 w-full px-4 py-2 text-sm text-amber-600 hover:bg-amber-50 font-medium border-b border-slate-50 cursor-pointer">
+                                                                                <span className="material-symbols-outlined text-[18px]">exit_to_app</span> Resignation
+                                                                            </button>
+                                                                            <button onClick={() => { setOpenDropdownId(null); setActiveRecord(emp); setActiveModal('deactivate'); }} className="flex items-center gap-2 w-full px-4 py-2 text-sm text-red-600 hover:bg-red-50 font-medium cursor-pointer">
+                                                                                <span className="material-symbols-outlined text-[18px]">person_off</span> Deactivate User
+                                                                            </button>
+                                                                        </>
+                                                                    )}
+                                                                </div>
+                                                            </>
+                                                        )}
+                                                    </td>
+                                                </tr>
+                                            ))}
+                                        </tbody>
+                                    </table>
+                                    
+                                    {/* Pagination Controls */}
+                                    <div className="px-6 py-4 border-t border-slate-100 flex items-center justify-between bg-slate-50/50">
+                                        <p className="text-xs text-slate-500">
+                                            Showing <span className="font-bold text-slate-700">{Math.min((currentPage - 1) * ITEMS_PER_PAGE + 1, filteredEmployees.length)}</span> - <span className="font-bold text-slate-700">{Math.min(currentPage * ITEMS_PER_PAGE, filteredEmployees.length)}</span> of <span className="font-bold text-slate-700">{filteredEmployees.length}</span> employees
+                                        </p>
+                                        <div className="flex items-center gap-2">
+                                            <button 
+                                                onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
+                                                disabled={currentPage === 1}
+                                                className="px-3 py-1.5 text-xs font-bold rounded-lg border border-slate-200 bg-white text-slate-600 hover:bg-slate-50 disabled:opacity-50 disabled:cursor-not-allowed transition-colors cursor-pointer"
+                                            >
+                                                Previous
+                                            </button>
+                                            <div className="flex items-center gap-1">
+                                                {Array.from({ length: Math.min(5, totalPages) }, (_, i) => {
+                                                    let pageNum;
+                                                    if (totalPages <= 5) {
+                                                        pageNum = i + 1;
+                                                    } else if (currentPage <= 3) {
+                                                        pageNum = i + 1;
+                                                    } else if (currentPage >= totalPages - 2) {
+                                                        pageNum = totalPages - 4 + i;
+                                                    } else {
+                                                        pageNum = currentPage - 2 + i;
+                                                    }
+                                                    return (
+                                                        <button
+                                                            key={pageNum}
+                                                            onClick={() => setCurrentPage(pageNum)}
+                                                            className={`w-8 h-8 text-xs font-bold rounded-lg transition-colors cursor-pointer ${
+                                                                currentPage === pageNum 
+                                                                    ? 'bg-indigo-600 text-white' 
+                                                                    : 'bg-white border border-slate-200 text-slate-600 hover:bg-slate-50'
+                                                            }`}
+                                                        >
+                                                            {pageNum}
+                                                        </button>
+                                                    );
+                                                })}
+                                            </div>
+                                            <button 
+                                                onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))}
+                                                disabled={currentPage === totalPages}
+                                                className="px-3 py-1.5 text-xs font-bold rounded-lg border border-slate-200 bg-white text-slate-600 hover:bg-slate-50 disabled:opacity-50 disabled:cursor-not-allowed transition-colors cursor-pointer"
+                                            >
+                                                Next
+                                            </button>
+                                        </div>
+                                    </div>
+                                </>
+                            )}
                             </div>
                         </div>
                     </div>
-                </div>
 
                 {/* 3. Promotion Request Modal */}
                 {activeModal === 'promote' && activeRecord && (
@@ -686,7 +823,7 @@ export default function EmployeesDirectory() {
                                         </div>
                                         <div>
                                             <p className="text-[10px] font-bold text-slate-400 uppercase">Current Salary</p>
-                                            <p className="font-bold text-slate-700">{activeRecord.baseSalary?.toLocaleString()} MMK</p>
+                                            <p className="font-bold text-slate-700">{(activeRecord.baseSalary || 0).toLocaleString()} MMK</p>
                                         </div>
                                         <div>
                                             <p className="text-[10px] font-bold text-slate-400 uppercase">Current Shift</p>
@@ -727,7 +864,7 @@ export default function EmployeesDirectory() {
                                             <label className="text-xs font-bold text-slate-700 block mb-1.5">New Base Salary (MMK)</label>
                                             <input
                                                 value={promoteSalary} onChange={e => setPromoteSalary(e.target.value)}
-                                                type="number" placeholder={`Current: ${activeRecord.baseSalary?.toLocaleString()}`}
+                                                type="number" placeholder={`Current: ${(activeRecord.baseSalary || 0).toLocaleString()}`}
                                                 className="w-full text-sm p-2.5 border border-slate-300 rounded-xl focus:ring-[#4F46E5] focus:border-[#4F46E5] bg-white"
                                             />
                                         </div>
@@ -1004,6 +1141,77 @@ export default function EmployeesDirectory() {
                                     <div>
                                         <label className="text-xs font-bold text-slate-700 block mb-1.5">Tax Identification Number (TIN)</label>
                                         <input value={newEmpTaxId} onChange={e => setNewEmpTaxId(e.target.value)} type="text" className="w-full text-sm p-2.5 border border-slate-300 rounded-lg focus:ring-[#4F46E5] focus:border-[#4F46E5] font-mono" placeholder="Optional — required for PIT payer lists" />
+                                    </div>
+                                </div>
+                                <div className="space-y-4">
+                                    <p className="text-[10px] font-bold uppercase tracking-widest text-[#4F46E5] border-b pb-2">Tax Relief Information</p>
+                                    <div className="grid grid-cols-2 gap-4">
+                                        <div>
+                                            <label className="text-xs font-bold text-slate-700 block mb-1.5">Date of Birth</label>
+                                            <input value={newEmpDob} onChange={e => setNewEmpDob(e.target.value)} type="date" className="w-full text-sm p-2.5 border border-slate-300 rounded-lg focus:ring-[#4F46E5] focus:border-[#4F46E5]" />
+                                        </div>
+                                        <div>
+                                            <label className="text-xs font-bold text-slate-700 block mb-1.5">Parents Count</label>
+                                            <select value={newEmpParentsCount} onChange={e => setNewEmpParentsCount(Number(e.target.value))} className="w-full text-sm p-2.5 border border-slate-300 rounded-lg focus:ring-[#4F46E5] focus:border-[#4F46E5]">
+                                                <option value={0}>0</option>
+                                                <option value={1}>1</option>
+                                                <option value={2}>2</option>
+                                            </select>
+                                        </div>
+                                    </div>
+                                    <div className="grid grid-cols-2 gap-4">
+                                        <div>
+                                            <label className="text-xs font-bold text-slate-700 block mb-1.5">Children Count</label>
+                                            <input value={newEmpChildrenCount} onChange={e => setNewEmpChildrenCount(Number(e.target.value))} type="number" min="0" max="10" className="w-full text-sm p-2.5 border border-slate-300 rounded-lg focus:ring-[#4F46E5] focus:border-[#4F46E5]" placeholder="0" />
+                                        </div>
+                                        <div className="flex items-end">
+                                            <p className="text-[10px] text-slate-500">Qualifying children: unmarried, under 18 or in full-time education</p>
+                                        </div>
+                                    </div>
+                                    <div className="flex items-center gap-3 p-3 bg-slate-50 rounded-lg border border-slate-200">
+                                        <input 
+                                            type="checkbox" 
+                                            id="hasSpouse" 
+                                            checked={newEmpHasSpouse} 
+                                            onChange={e => setNewEmpHasSpouse(e.target.checked)}
+                                            className="w-4 h-4 text-indigo-600 border-slate-300 rounded focus:ring-indigo-500"
+                                        />
+                                        <label htmlFor="hasSpouse" className="text-sm font-medium text-slate-700 cursor-pointer">
+                                            Has Spouse (for tax relief eligibility)
+                                        </label>
+                                    </div>
+                                    {(newEmpHasSpouse || newEmpParentsCount > 0) && (
+                                        <div className="p-2.5 bg-emerald-50 border border-emerald-100 rounded-lg flex gap-2 items-start">
+                                            <span className="material-symbols-outlined text-emerald-500 text-[16px] mt-0.5">check</span>
+                                            <p className="text-[10px] text-emerald-700 font-medium">
+                                                Tax relief will be calculated automatically based on dependents.
+                                            </p>
+                                        </div>
+                                    )}
+                                </div>
+                                <div className="space-y-4">
+                                    <p className="text-[10px] font-bold uppercase tracking-widest text-[#4F46E5] border-b pb-2">Emergency Contact</p>
+                                    <div className="grid grid-cols-2 gap-4">
+                                        <div>
+                                            <label className="text-xs font-bold text-slate-700 block mb-1.5">Contact Name</label>
+                                            <input value={newEmpEmergencyName} onChange={e => setNewEmpEmergencyName(e.target.value)} type="text" className="w-full text-sm p-2.5 border border-slate-300 rounded-lg focus:ring-[#4F46E5] focus:border-[#4F46E5]" placeholder="e.g. Maung Maung" />
+                                        </div>
+                                        <div>
+                                            <label className="text-xs font-bold text-slate-700 block mb-1.5">Relationship</label>
+                                            <select value={newEmpEmergencyRelation} onChange={e => setNewEmpEmergencyRelation(e.target.value)} className="w-full text-sm p-2.5 border border-slate-300 rounded-lg focus:ring-[#4F46E5] focus:border-[#4F46E5]">
+                                                <option value="">-- Select --</option>
+                                                <option value="Spouse">Spouse</option>
+                                                <option value="Parent">Parent</option>
+                                                <option value="Sibling">Sibling</option>
+                                                <option value="Child">Child</option>
+                                                <option value="Friend">Friend</option>
+                                                <option value="Other">Other</option>
+                                            </select>
+                                        </div>
+                                    </div>
+                                    <div>
+                                        <label className="text-xs font-bold text-slate-700 block mb-1.5">Phone Number</label>
+                                        <input value={newEmpEmergencyPhone} onChange={e => setNewEmpEmergencyPhone(e.target.value)} type="tel" className="w-full text-sm p-2.5 border border-slate-300 rounded-lg focus:ring-[#4F46E5] focus:border-[#4F46E5]" placeholder="e.g. 09-455500000" />
                                     </div>
                                 </div>
                                 <div className="space-y-4">

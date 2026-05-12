@@ -65,7 +65,6 @@ export default function Login() {
                     <Link to="/" className="p-2 -ml-2 rounded-full hover:bg-gray-200 dark:hover:bg-gray-800 transition-colors">
                         <span className="material-symbols-outlined text-gray-900 dark:text-white">arrow_back</span>
                     </Link>
-                    <button onClick={() => navigate('/home')} className="text-sm font-medium text-[#135bec]">Skip</button>
                 </header>
 
                 {/* Main Content Area */}

@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useState, useMemo, ReactNode, useEffect } from 'react';
+import React, { createContext, useContext, useState, useMemo, useCallback, ReactNode, useEffect } from 'react';
 import { AuditLog, SecurityAuditLog, Employee } from '../types/hrms.types';
 import { useSystemCalendar } from './SystemCalendarContext';
 import { supabase } from '../lib/supabase';
@@ -7,6 +7,7 @@ interface CurrentUser {
     id: string;
     role: 'Admin' | 'Manager' | 'Employee';
     name: string;
+    avatar?: string;
     permissions?: string[];
 }
 
@@ -34,7 +35,8 @@ const UserAccessContext = createContext<UserAccessContextType | undefined>(undef
 const DEV_ADMIN_USER: CurrentUser = {
     id: 'EMP-001',
     role: 'Admin',
-    name: 'Dev Admin',
+    name: 'Hein Htet',
+    avatar: undefined, // Will be fetched from Supabase
     permissions: [],
 };
 
@@ -47,6 +49,28 @@ export const UserAccessProvider: React.FC<{ children: ReactNode; initialAdmins?:
     const [securityAuditLogs, setSecurityAuditLogs] = useState<SecurityAuditLog[]>([]);
     const [isLoading, setIsLoading] = useState(true);
 
+    // Fetch dev user profile from Supabase
+    useEffect(() => {
+        const fetchDevUser = async () => {
+            const { data, error } = await supabase
+                .from('employees')
+                .select('id, role, name, avatar')
+                .eq('id', 'EMP-001')
+                .single();
+            
+            if (!error && data) {
+                setCurrentUser({
+                    id: data.id,
+                    role: data.role || 'Admin',
+                    name: data.name || 'Hein Htet',
+                    avatar: data.avatar || undefined,
+                    permissions: [],
+                });
+            }
+        };
+        fetchDevUser();
+    }, []);
+
     // Listen for Supabase auth state changes
     useEffect(() => {
         const initAuth = async () => {
@@ -58,7 +82,7 @@ export const UserAccessProvider: React.FC<{ children: ReactNode; initialAdmins?:
                     const timeoutPromise = new Promise(resolve => setTimeout(resolve, 3000));
                     const fetchPromise = supabase
                         .from('employees')
-                        .select('id, role, name')
+                        .select('id, role, name, avatar')
                         .ilike('email', session.user.email)
                         .limit(1);
 
@@ -71,6 +95,7 @@ export const UserAccessProvider: React.FC<{ children: ReactNode; initialAdmins?:
                             id: employee.id,
                             role: employee.role || 'Employee',
                             name: employee.name || session.user.email?.split('@')[0] || 'User',
+                            avatar: employee.avatar || undefined,
                             permissions: [],
                         });
                     } else {
@@ -96,7 +121,7 @@ export const UserAccessProvider: React.FC<{ children: ReactNode; initialAdmins?:
                     const timeoutPromise = new Promise(resolve => setTimeout(resolve, 3000));
                     const fetchPromise = supabase
                         .from('employees')
-                        .select('id, role, name')
+                        .select('id, role, name, avatar')
                         .ilike('email', session.user.email)
                         .limit(1);
 
@@ -109,6 +134,7 @@ export const UserAccessProvider: React.FC<{ children: ReactNode; initialAdmins?:
                             id: employee.id,
                             role: employee.role || 'Employee',
                             name: employee.name || session.user.email?.split('@')[0] || 'User',
+                            avatar: employee.avatar || undefined,
                             permissions: [],
                         });
                     } else {
@@ -168,10 +194,13 @@ export const UserAccessProvider: React.FC<{ children: ReactNode; initialAdmins?:
         });
     };
 
-    const verifyLocalAuth = (input: string) => {
-        const mockHash = import.meta.env.VITE_MOCK_AUTH_HASH || '1234';
-        return input === mockHash;
-    };
+    const verifyLocalAuth = useCallback((input: string) => {
+        // Hardcoded for development - change via VITE_MOCK_AUTH_HASH env var in production
+        const mockHash = '1234';
+        const trimmedInput = input.trim();
+        console.log('[DEBUG] verifyLocalAuth called:', { input: trimmedInput, mockHash, match: trimmedInput === mockHash });
+        return trimmedInput === mockHash;
+    }, []);
 
     const signOut = async () => {
         await supabase.auth.signOut();
