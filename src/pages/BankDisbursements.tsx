@@ -357,14 +357,6 @@ export default function BankDisbursements() {
                             </div>
                             <div className="flex items-center gap-3">
                                 <button
-                                    onClick={() => setShowApprovalModal(true)}
-                                    disabled={isDisbursed || !hasRecords || !isApproved}
-                                    className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-bold transition-all shadow-sm text-white ${isDisbursed || !hasRecords || !isApproved ? 'bg-slate-400 cursor-not-allowed' : 'bg-[#4F46E5] hover:opacity-90'}`}
-                                >
-                                    <span className="material-symbols-outlined text-[20px]">{isDisbursed ? 'check_circle' : 'verified_user'}</span>
-                                    <span>{isDisbursed ? 'Payroll Disbursed ✓' : isApproved ? 'Finalize Disbursement' : 'Approve Payroll First'}</span>
-                                </button>
-                                <button
                                     onClick={handleXMLExport}
                                     disabled={!hasRecords || !isApproved}
                                     title="Export ISO 20022 pain.001.001.03 XML"
@@ -380,6 +372,14 @@ export default function BankDisbursements() {
                                 >
                                     <span>Generate CSV</span>
                                     <span className="material-symbols-outlined text-[20px]">download</span>
+                                </button>
+                                <button
+                                    onClick={() => setShowApprovalModal(true)}
+                                    disabled={isDisbursed || !hasRecords || !isApproved}
+                                    className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-bold transition-all shadow-sm text-white ${isDisbursed || !hasRecords || !isApproved ? 'bg-slate-400 cursor-not-allowed' : 'bg-[#4F46E5] hover:opacity-90'}`}
+                                >
+                                    <span className="material-symbols-outlined text-[20px]">{isDisbursed ? 'check_circle' : 'verified_user'}</span>
+                                    <span>{isDisbursed ? 'Payroll Disbursed ✓' : isApproved ? 'Finalize Disbursement' : 'Approve Payroll First'}</span>
                                 </button>
                                 <button
                                     onClick={handleNotify}
