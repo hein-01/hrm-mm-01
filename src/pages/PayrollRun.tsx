@@ -49,20 +49,7 @@ export default function PayrollRun() {
     const handleExportPITForm = () => exportPITReportCSV(payrollRecords, employees, exportSuffix);
     const handleExportSSBReturn = () => exportSSBForm15CSV(payrollRecords, employees, exportSuffix);
 
-    const handleBankExport = () => {
-        const validRecords = payrollRecords.filter(r => r.status !== 'Error');
-        const headers = ['Employee Name', 'Bank Name', 'Account Number', 'Net Pay (MMK)'];
-        const rows = validRecords.map(rec => {
-            const emp = employees.find(e => e.id === rec.empId);
-            return [
-                rec.name,
-                emp?.bankName ?? 'N/A',
-                emp?.accountNumber ?? 'MISSING',
-                rec.netPay.toString()
-            ];
-        });
-        downloadCSV(`Bank_Transfer_${exportSuffix}.csv`, headers, rows);
-    };
+    /* Legacy mass CSV export removed in favor of granular Bank Disbursements module outputs */
 
     // Live sync: OT approvals in another tab reflect immediately in Net Pay
     useEffect(() => {
@@ -90,8 +77,7 @@ export default function PayrollRun() {
         { id: 6, title: 'Tax & SSB', icon: 'account_balance', description: 'Compliance review' },
         { id: 7, title: 'Calculation', icon: 'calculate', description: 'Detailed breakdown' },
         { id: 8, title: 'Approval', icon: 'fact_check', description: 'Multi-stage signoff' },
-        { id: 9, title: 'Publish', icon: 'send', description: 'Release & payslips' },
-        { id: 10, title: 'Compliance', icon: 'description', description: 'Gov forms & reports' }
+        { id: 9, title: 'Finalize', icon: 'verified', description: 'Commit ledger & reports' }
     ];
 
     const payslipOTPay = payslipEmployee
@@ -519,7 +505,7 @@ export default function PayrollRun() {
                                 <input type="checkbox" id="superAdminConfirm" className="size-5 mt-0.5 accent-[#4F46E5] cursor-pointer" />
                                 <label htmlFor="superAdminConfirm" className="cursor-pointer">
                                     <p className="text-sm font-black text-slate-900 dark:text-white">I, {activeAdminId}, confirm this payroll is accurate and authorize disbursement</p>
-                                    <p className="text-[10px] text-amber-700 dark:text-amber-400 font-medium mt-1">This action creates an immutable authorization record and enables bank transfer in Step 9.</p>
+                                    <p className="text-[10px] text-amber-700 dark:text-amber-400 font-medium mt-1">This action creates an immutable authorization record and unlocks Step 9: Finalization &amp; Compliance.</p>
                                 </label>
                             </div>
                             <button
@@ -527,7 +513,7 @@ export default function PayrollRun() {
                                 className="w-full py-4 bg-[#4F46E5] text-white rounded-2xl text-sm font-black uppercase tracking-widest shadow-xl shadow-indigo-200 dark:shadow-none hover:bg-indigo-700 transition-all flex items-center justify-center gap-3"
                             >
                                 <span className="material-symbols-outlined">lock_open</span>
-                                Authorize &amp; Proceed to Disbursement
+                                Authorize &amp; Proceed to Finalization
                             </button>
                         </div>
                     </div>
@@ -535,151 +521,80 @@ export default function PayrollRun() {
             )}
 
             {currentStep === 9 && (
-                                <div className="max-w-4xl mx-auto space-y-8 py-8 animate-fade-in">
-                                    <div className="bg-white dark:bg-slate-800 rounded-3xl border border-slate-200 dark:border-slate-800 shadow-xl overflow-hidden">
-                                        <div className="p-8 border-b border-slate-100 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-800/50 flex items-center justify-between">
-                                            <div className="flex items-center gap-4">
-                                                <div className="h-14 w-14 bg-indigo-50 dark:bg-indigo-900/30 rounded-2xl flex items-center justify-center text-[#4F46E5]">
-                                                    <span className="material-symbols-outlined text-3xl font-bold">account_balance</span>
-                                                </div>
-                                                <div>
-                                                    <h3 className="text-2xl font-black text-slate-900 dark:text-white uppercase tracking-tight">Stage 9: Disbursement & Release</h3>
-                                                    <p className="text-sm text-slate-500 font-medium font-mono uppercase tracking-tighter">🔒 Security Guard: Multi-Stage Financial Compliance</p>
-                                                </div>
-                                            </div>
-                                            <div className="flex items-center gap-2">
-                                                <span className="px-3 py-1 bg-amber-100 text-amber-700 text-[10px] font-black uppercase rounded-full tracking-widest animate-pulse">Awaiting Bank Transfer</span>
-                                            </div>
-                                        </div>
+                <div className="max-w-4xl mx-auto space-y-8 py-8 animate-fade-in">
+                    <div className="text-center space-y-4 mb-12">
+                        <div className="size-20 bg-emerald-100 dark:bg-emerald-900/30 rounded-3xl flex items-center justify-center mx-auto text-emerald-600 rotate-12 transition-transform hover:rotate-0 cursor-pointer shadow-lg">
+                            <span className="material-symbols-outlined text-4xl">verified</span>
+                        </div>
+                        <h2 className="text-3xl font-black text-slate-900 dark:text-white uppercase tracking-tight">Step 9: Finalize Payroll &amp; Compliance</h2>
+                        <p className="text-slate-500 font-medium">Commit ledger calculations for <b>{activeGroup?.period}</b>. Statutory Myanmar reporting files are generated instantly upon locking.</p>
+                    </div>
 
-                                        <div className="p-10 space-y-10">
-                                            {/* Step 9.1: Bank File Generation */}
-                                            <div className="relative pl-12 border-l-2 border-dashed border-slate-200 dark:border-slate-700">
-                                                <div className="absolute -left-[13px] top-0 h-6 w-6 rounded-full bg-[#4F46E5] flex items-center justify-center text-white text-[10px] font-black border-4 border-white dark:border-slate-800">9.1</div>
-                                                <div className="flex flex-col md:flex-row md:items-center justify-between gap-6 bg-slate-50 dark:bg-slate-900/50 p-6 rounded-2xl border border-slate-100 dark:border-slate-800">
-                                                    <div>
-                                                        <h4 className="text-lg font-black text-slate-900 dark:text-white uppercase tracking-tight">Generate Bank CSV</h4>
-                                                        <p className="text-xs text-slate-500 max-w-sm mt-1">Download the standardized transfer file formatted for <b>KBZ, Yoma, and CB Bank</b> portals.</p>
-                                                    </div>
-                                                    <button onClick={handleBankExport} className="px-6 py-3 bg-slate-900 text-white rounded-xl text-xs font-black uppercase tracking-widest flex items-center gap-2 hover:scale-105 transition-all shadow-lg active:scale-95">
-                                                        <span className="material-symbols-outlined text-[18px]">download</span>
-                                                        Generate Bank File (.CSV)
-                                                    </button>
-                                                </div>
-                                            </div>
-
-                                            {/* Step 9.2: Bank Confirmation Guard */}
-                                            <div className="relative pl-12 border-l-2 border-dashed border-slate-200 dark:border-slate-700">
-                                                <div className="absolute -left-[13px] top-0 h-6 w-6 rounded-full bg-slate-200 dark:bg-slate-700 flex items-center justify-center text-slate-400 text-[10px] font-black border-4 border-white dark:border-slate-800">9.2</div>
-                                                <div className="space-y-6">
-                                                    <div>
-                                                        <h4 className="text-lg font-black text-slate-900 dark:text-white uppercase tracking-tight">Bank File Confirmation</h4>
-                                                        <p className="text-xs text-slate-500 max-w-sm mt-1">Confirm that bank transfers have been processed before finalizing the payroll ledger.</p>
-                                                    </div>
-
-                                                    <div className="p-6 rounded-2xl border-2 border-amber-100 bg-amber-50/50 dark:bg-amber-900/10 dark:border-amber-900/30 flex items-start gap-4">
-                                                        <input 
-                                                            type="checkbox" 
-                                                            id="bankConfirm"
-                                                            className="size-6 mt-1 rounded accent-[#4F46E5] cursor-pointer"
-                                                            onChange={e => { if (e.target.checked) handleDisburse(); }}
-                                                        />
-                                                        <label htmlFor="bankConfirm" className="flex-1 cursor-pointer">
-                                                            <span className="block text-sm font-black text-slate-900 dark:text-white uppercase tracking-tight">I confirm that the Bank CSV has been uploaded & processed</span>
-                                                            <span className="block text-[10px] text-amber-700 dark:text-amber-400 font-bold leading-relaxed mt-1">This creates an immutable audit trail for the disbursement event. Mobile app payslip notifications are managed securely in the final Bank Disbursement module.</span>
-                                                        </label>
-                                                    </div>
-
-                                                    <button 
-                                                        onClick={() => setCurrentStep(10)}
-                                                        disabled={!step8Approved}
-                                                        title={!step8Approved ? 'Super-Admin sign-off required in Step 8 before proceeding' : ''}
-                                                        className={`w-full py-4 rounded-2xl text-sm font-black uppercase tracking-widest transition-all flex items-center justify-center gap-3 ${step8Approved ? 'bg-[#4F46E5] text-white shadow-xl shadow-indigo-200 dark:shadow-none hover:bg-indigo-700' : 'bg-slate-200 dark:bg-slate-700 text-slate-400 dark:text-slate-500 cursor-not-allowed'}`}
-                                                    >
-                                                        Proceed to Step 10: Finalization <span className="material-symbols-outlined text-[18px]">arrow_forward</span>
-                                                    </button>
-                                                </div>
-                                            </div>
-                                        </div>
-                                    </div>
-
-                                    <div className="p-6 bg-slate-900 rounded-3xl border border-slate-800 shadow-2xl flex items-center justify-between text-white overflow-hidden relative">
-                                        <div className="absolute -right-10 -bottom-10 h-40 w-40 bg-white/5 rounded-full blur-2xl"></div>
-                                        <div className="relative z-10">
-                                            <p className="text-[10px] font-black uppercase tracking-[0.2em] text-indigo-400 mb-1">Mobile Ecosystem Status</p>
-                                            <p className="text-sm font-medium text-slate-400">Total employees sync-ready: <span className="text-white font-bold">{employees.length}</span></p>
-                                        </div>
-                                        <div className="flex gap-2 relative z-10">
-                                            <div className="size-2 bg-emerald-500 rounded-full animate-pulse"></div>
-                                            <span className="text-[10px] font-bold text-emerald-500 uppercase">Sync Gateway Online</span>
-                                        </div>
-                                    </div>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                        {/* Myanmar Government Form Section */}
+                        <div className="bg-white dark:bg-slate-800 p-8 rounded-3xl border border-slate-200 dark:border-slate-700 shadow-sm group hover:border-[#4F46E5] transition-all">
+                            <div className="flex items-center gap-4 mb-6">
+                                <div className="h-12 w-12 bg-rose-50 dark:bg-rose-900/30 rounded-xl flex items-center justify-center text-rose-600 group-hover:scale-110 transition-transform">
+                                    <span className="material-symbols-outlined">description</span>
                                 </div>
-                            )}
-
-                            {currentStep === 10 && (
-                                <div className="max-w-4xl mx-auto space-y-8 py-8 animate-fade-in">
-                                    <div className="text-center space-y-4 mb-12">
-                                        <div className="size-20 bg-emerald-100 dark:bg-emerald-900/30 rounded-3xl flex items-center justify-center mx-auto text-emerald-600 rotate-12 transition-transform hover:rotate-0 cursor-pointer shadow-lg">
-                                            <span className="material-symbols-outlined text-4xl">verified</span>
-                                        </div>
-                                        <h2 className="text-3xl font-black text-slate-900 dark:text-white uppercase tracking-tight">Payroll Finalized Successfully</h2>
-                                        <p className="text-slate-500 font-medium">All financial obligations for <b>{activeGroup?.period}</b> have been met. Compliance reporting is now available.</p>
-                                    </div>
-
-                                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                                        {/* Myanmar Government Form Section */}
-                                        <div className="bg-white dark:bg-slate-800 p-8 rounded-3xl border border-slate-200 dark:border-slate-700 shadow-sm group hover:border-[#4F46E5] transition-all">
-                                            <div className="flex items-center gap-4 mb-6">
-                                                <div className="h-12 w-12 bg-rose-50 dark:bg-rose-900/30 rounded-xl flex items-center justify-center text-rose-600 group-hover:scale-110 transition-transform">
-                                                    <span className="material-symbols-outlined">description</span>
-                                                </div>
-                                                <div>
-                                                    <h4 className="font-bold text-slate-900 dark:text-white">ပတခ(ဝင)-၁၅(က)</h4>
-                                                    <p className="text-[10px] text-slate-500 font-black uppercase tracking-widest">Monthly Income Tax Form</p>
-                                                </div>
-                                            </div>
-                                            <button onClick={handleExportPITForm} className="w-full py-3 bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl text-xs font-black uppercase tracking-widest text-[#4F46E5] hover:bg-slate-100 transition-all flex items-center justify-center gap-2">
-                                                <span className="material-symbols-outlined text-[18px]">download_for_offline</span>
-                                                Download PIT CSV
-                                            </button>
-                                        </div>
-
-                                        <div className="bg-white dark:bg-slate-800 p-8 rounded-3xl border border-slate-200 dark:border-slate-700 shadow-sm group hover:border-[#4F46E5] transition-all">
-                                            <div className="flex items-center gap-4 mb-6">
-                                                <div className="h-12 w-12 bg-emerald-50 dark:bg-emerald-900/30 rounded-xl flex items-center justify-center text-emerald-600 group-hover:scale-110 transition-transform">
-                                                    <span className="material-symbols-outlined">shield</span>
-                                                </div>
-                                                <div>
-                                                    <h4 className="font-bold text-slate-900 dark:text-white">SSB Monthly Return</h4>
-                                                    <p className="text-[10px] text-slate-500 font-black uppercase tracking-widest">Employer & Employee 5% Contrib</p>
-                                                </div>
-                                            </div>
-                                            <button onClick={handleExportSSBReturn} className="w-full py-3 bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl text-xs font-black uppercase tracking-widest text-[#4F46E5] hover:bg-slate-100 transition-all flex items-center justify-center gap-2">
-                                                <span className="material-symbols-outlined text-[18px]">download_for_offline</span>
-                                                Download SSB CSV
-                                            </button>
-                                        </div>
-                                    </div>
-
-                                    <div className="flex items-center justify-center gap-6 mt-12 pt-12 border-t border-slate-100 dark:border-slate-800">
-                                        <button onClick={() => setCurrentStep(1)} className="text-sm font-bold text-slate-500 hover:text-slate-900 transition-colors uppercase tracking-widest">Back to Overview</button>
-                                        <button 
-                                            onClick={async () => {
-                                                await finalizePayroll();
-                                                if (activePayrollGroupId) {
-                                                    updatePayrollGroupStatus(activePayrollGroupId, 'Approved');
-                                                }
-                                                navigate('/bank-disbursements');
-                                            }}
-                                            className="px-10 py-4 bg-[#4F46E5] text-white rounded-2xl text-sm font-black uppercase tracking-[0.1em] shadow-2xl shadow-indigo-200 dark:shadow-indigo-900/20 hover:scale-105 transition-all active:scale-95 flex items-center gap-3"
-                                        >
-                                            <span className="material-symbols-outlined text-[20px]">account_balance</span>
-                                            Finalize & Proceed to Disbursement
-                                        </button>
-                                    </div>
+                                <div>
+                                    <h4 className="font-bold text-slate-900 dark:text-white">ပတခ(ဝင)-၁၅(က)</h4>
+                                    <p className="text-[10px] text-slate-500 font-black uppercase tracking-widest">Monthly Income Tax Form</p>
                                 </div>
-                            )}
+                            </div>
+                            <button onClick={handleExportPITForm} className="w-full py-3 bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl text-xs font-black uppercase tracking-widest text-[#4F46E5] hover:bg-slate-100 transition-all flex items-center justify-center gap-2">
+                                <span className="material-symbols-outlined text-[18px]">download_for_offline</span>
+                                Download PIT CSV
+                            </button>
+                        </div>
+
+                        <div className="bg-white dark:bg-slate-800 p-8 rounded-3xl border border-slate-200 dark:border-slate-700 shadow-sm group hover:border-[#4F46E5] transition-all">
+                            <div className="flex items-center gap-4 mb-6">
+                                <div className="h-12 w-12 bg-emerald-50 dark:bg-emerald-900/30 rounded-xl flex items-center justify-center text-emerald-600 group-hover:scale-110 transition-transform">
+                                    <span className="material-symbols-outlined">shield</span>
+                                </div>
+                                <div>
+                                    <h4 className="font-bold text-slate-900 dark:text-white">SSB Monthly Return</h4>
+                                    <p className="text-[10px] text-slate-500 font-black uppercase tracking-widest">Employer &amp; Employee 5% Contrib</p>
+                                </div>
+                            </div>
+                            <button onClick={handleExportSSBReturn} className="w-full py-3 bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl text-xs font-black uppercase tracking-widest text-[#4F46E5] hover:bg-slate-100 transition-all flex items-center justify-center gap-2">
+                                <span className="material-symbols-outlined text-[18px]">download_for_offline</span>
+                                Download SSB CSV
+                            </button>
+                        </div>
+                    </div>
+
+                    <div className="p-6 bg-slate-900 rounded-3xl border border-slate-800 shadow-xl flex items-center justify-between text-white overflow-hidden relative mt-6">
+                        <div className="absolute -right-10 -bottom-10 h-40 w-40 bg-white/5 rounded-full blur-2xl"></div>
+                        <div className="relative z-10">
+                            <p className="text-[10px] font-black uppercase tracking-[0.2em] text-indigo-400 mb-1">Treasury Handoff Gateway</p>
+                            <p className="text-sm font-medium text-slate-400">Ledger entries ready: <span className="text-white font-bold">{payrollRecords.filter(r => r.status !== 'Error').length}</span></p>
+                        </div>
+                        <div className="flex gap-2 relative z-10">
+                            <div className="size-2 bg-emerald-500 rounded-full animate-pulse"></div>
+                            <span className="text-[10px] font-bold text-emerald-500 uppercase">Bank Disburse Hub Online</span>
+                        </div>
+                    </div>
+
+                    <div className="flex items-center justify-center gap-6 mt-12 pt-12 border-t border-slate-100 dark:border-slate-800">
+                        <button onClick={() => setCurrentStep(1)} className="text-sm font-bold text-slate-500 hover:text-slate-900 transition-colors uppercase tracking-widest">Back to Overview</button>
+                        <button 
+                            onClick={async () => {
+                                await finalizePayroll();
+                                if (activePayrollGroupId) {
+                                    updatePayrollGroupStatus(activePayrollGroupId, 'Approved');
+                                }
+                                navigate('/bank-disbursements');
+                            }}
+                            className="px-10 py-4 bg-[#4F46E5] text-white rounded-2xl text-sm font-black uppercase tracking-[0.1em] shadow-2xl shadow-indigo-200 dark:shadow-indigo-900/20 hover:scale-105 transition-all active:scale-95 flex items-center gap-3"
+                        >
+                            <span className="material-symbols-outlined text-[20px]">account_balance</span>
+                            Finalize &amp; Proceed to Bank Disbursement
+                        </button>
+                    </div>
+                </div>
+            )}
                         </div>
                     </div>
                 </div>
