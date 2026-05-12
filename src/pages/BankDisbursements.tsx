@@ -266,7 +266,9 @@ export default function BankDisbursements() {
             ...notifyScope.map(rec => ({
                 id: `PAID-${rec.empId}-${Date.now()}`,
                 type: 'success',
-                message: `💰 Salary Disbursed: Your payment for ${period} has been sent to ${(rec as any).bankName ?? 'your account'}. Check your bank account for ${Math.round(rec.netPay).toLocaleString()} MMK.`,
+                message: (rec as any).bankName
+                    ? `💰 Salary Disbursed: Your payment for ${period} has been sent to ${(rec as any).bankName}. Check your bank account for ${Math.round(rec.netPay).toLocaleString()} MMK.`
+                    : `💵 Cash Salary Ready: Your payment for ${period} is prepared. Please collect your physical pay packet of ${Math.round(rec.netPay).toLocaleString()} MMK from the Finance/HR Cashier Desk.`,
                 timestamp: new Date().toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' }),
                 isRead: false,
             })),
@@ -276,8 +278,10 @@ export default function BankDisbursements() {
         if (notifyScope.length <= 5) {
             notifyScope.forEach(rec => {
                 pushNotification({
-                    title: `Payslip Ready — ${period}`,
-                    body: `${rec.name}'s salary of ${Math.round(rec.netPay).toLocaleString()} MMK has been disbursed to ${(rec as any).bankName ?? 'cash'}.`,
+                    title: (rec as any).bankName ? `Payslip Ready — ${period}` : `Cash Packet Ready — ${period}`,
+                    body: (rec as any).bankName
+                        ? `${rec.name}'s salary of ${Math.round(rec.netPay).toLocaleString()} MMK has been disbursed to ${(rec as any).bankName}.`
+                        : `Your salary of ${Math.round(rec.netPay).toLocaleString()} MMK is ready for collection at the Finance/HR Cashier Desk.`,
                     category: 'Financial', priority: 'high',
                     icon: 'payments',
                     iconBg: 'bg-emerald-100 dark:bg-emerald-900/30', iconColor: 'text-emerald-600 dark:text-emerald-400',
@@ -334,7 +338,9 @@ export default function BankDisbursements() {
                         ...notifyScope.map(rec => ({
                             id: `PAID-${rec.empId}-${Date.now()}`,
                             type: 'success',
-                            message: `💰 Salary Disbursed: Your payment for ${period} has been sent to ${(rec as any).bankName ?? 'your account'}. Check your bank account for ${Math.round(rec.netPay).toLocaleString()} MMK.`,
+                            message: (rec as any).bankName
+                                ? `💰 Salary Disbursed: Your payment for ${period} has been sent to ${(rec as any).bankName}. Check your bank account for ${Math.round(rec.netPay).toLocaleString()} MMK.`
+                                : `💵 Cash Salary Ready: Your payment for ${period} is prepared. Please collect your physical pay packet of ${Math.round(rec.netPay).toLocaleString()} MMK from the Finance/HR Cashier Desk.`,
                             timestamp: new Date().toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' }),
                             isRead: false,
                         })),
@@ -344,8 +350,10 @@ export default function BankDisbursements() {
                     if (notifyScope.length <= 5) {
                         notifyScope.forEach(rec => {
                             pushNotification({
-                                title: `Payslip Ready — ${period}`,
-                                body: `${rec.name}'s salary of ${Math.round(rec.netPay).toLocaleString()} MMK has been disbursed to ${(rec as any).bankName ?? 'cash'}.`,
+                                title: (rec as any).bankName ? `Payslip Ready — ${period}` : `Cash Packet Ready — ${period}`,
+                                body: (rec as any).bankName
+                                    ? `${rec.name}'s salary of ${Math.round(rec.netPay).toLocaleString()} MMK has been disbursed to ${(rec as any).bankName}.`
+                                    : `Your salary of ${Math.round(rec.netPay).toLocaleString()} MMK is ready for collection at the Finance/HR Cashier Desk.`,
                                 category: 'Financial', priority: 'high',
                                 icon: 'payments',
                                 iconBg: 'bg-emerald-100 dark:bg-emerald-900/30', iconColor: 'text-emerald-600 dark:text-emerald-400',
