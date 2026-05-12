@@ -825,7 +825,10 @@ export const AppDataProvider: React.FC<{ children: ReactNode }> = ({ children })
             { id: 'PROV-001', name: 'KBZ Bank', type: 'Bank', requiredFields: ['accountNumber'] },
             { id: 'PROV-002', name: 'CB Bank', type: 'Bank', requiredFields: ['accountNumber'] },
             { id: 'PROV-003', name: 'KPay', type: 'Digital Wallet', requiredFields: ['mobile'] },
-            { id: 'PROV-004', name: 'WaveMoney', type: 'Digital Wallet', requiredFields: ['mobile'] }
+            { id: 'PROV-004', name: 'WaveMoney', type: 'Digital Wallet', requiredFields: ['mobile'] },
+            { id: 'PROV-005', name: 'AYA Bank', type: 'Bank', requiredFields: ['accountNumber'] },
+            { id: 'PROV-006', name: 'Yoma Bank', type: 'Bank', requiredFields: ['accountNumber'] },
+            { id: 'PROV-007', name: 'MAB Bank', type: 'Bank', requiredFields: ['accountNumber'] }
         ],
         paymentRoundingLogic: 'Nearest',
         companyLogo: null,

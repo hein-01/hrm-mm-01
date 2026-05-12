@@ -62,7 +62,24 @@ export default function BankDisbursements() {
         if (employees.length > 0) setIsLoading(false);
     }, [employees]);
 
-    const paymentProviders = systemSettings.paymentProviders;
+    const paymentProviders = useMemo(() => {
+        const configured = systemSettings.paymentProviders || [];
+        const configuredNames = new Set(configured.map(p => p.name));
+        const extraProviders: typeof configured = [];
+        employees.forEach(e => {
+            if (e.bankName && !configuredNames.has(e.bankName)) {
+                configuredNames.add(e.bankName);
+                const isWallet = e.bankName.toLowerCase().includes('pay') || e.bankName.toLowerCase().includes('wave');
+                extraProviders.push({
+                    id: `PROV-AUTO-${e.bankName}`,
+                    name: e.bankName,
+                    type: isWallet ? 'Digital Wallet' : 'Bank',
+                    requiredFields: isWallet ? ['mobile'] : ['accountNumber']
+                });
+            }
+        });
+        return [...configured, ...extraProviders];
+    }, [systemSettings.paymentProviders, employees]);
     const bankOptions = useMemo(() => {
         const providerBanks = paymentProviders.map(p => p.name);
         const employeeBanks = Array.from(new Set(employees.map(e => e.bankName).filter(Boolean) as string[]));
