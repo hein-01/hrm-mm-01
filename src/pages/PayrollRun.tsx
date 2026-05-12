@@ -568,13 +568,13 @@ export default function PayrollRun() {
                                                 </div>
                                             </div>
 
-                                            {/* Step 9.2: Publication Guard */}
+                                            {/* Step 9.2: Bank Confirmation Guard */}
                                             <div className="relative pl-12 border-l-2 border-dashed border-slate-200 dark:border-slate-700">
                                                 <div className="absolute -left-[13px] top-0 h-6 w-6 rounded-full bg-slate-200 dark:bg-slate-700 flex items-center justify-center text-slate-400 text-[10px] font-black border-4 border-white dark:border-slate-800">9.2</div>
                                                 <div className="space-y-6">
                                                     <div>
-                                                        <h4 className="text-lg font-black text-slate-900 dark:text-white uppercase tracking-tight">Mobile Sync & Payslips</h4>
-                                                        <p className="text-xs text-slate-500 max-w-sm mt-1">Push notifications to the Employee Mobile App and generate encrypted PDF payslips.</p>
+                                                        <h4 className="text-lg font-black text-slate-900 dark:text-white uppercase tracking-tight">Bank File Confirmation</h4>
+                                                        <p className="text-xs text-slate-500 max-w-sm mt-1">Confirm that bank transfers have been processed before finalizing the payroll ledger.</p>
                                                     </div>
 
                                                     <div className="p-6 rounded-2xl border-2 border-amber-100 bg-amber-50/50 dark:bg-amber-900/10 dark:border-amber-900/30 flex items-start gap-4">
@@ -586,18 +586,17 @@ export default function PayrollRun() {
                                                         />
                                                         <label htmlFor="bankConfirm" className="flex-1 cursor-pointer">
                                                             <span className="block text-sm font-black text-slate-900 dark:text-white uppercase tracking-tight">I confirm that the Bank CSV has been uploaded & processed</span>
-                                                            <span className="block text-[10px] text-amber-700 dark:text-amber-400 font-bold leading-relaxed mt-1">Payslips will only be visible on the mobile app AFTER this confirmation. This creates an audit trail for the disbursement event.</span>
+                                                            <span className="block text-[10px] text-amber-700 dark:text-amber-400 font-bold leading-relaxed mt-1">This creates an immutable audit trail for the disbursement event. Mobile app payslip notifications are managed securely in the final Bank Disbursement module.</span>
                                                         </label>
                                                     </div>
 
                                                     <button 
-                                                        onClick={handlePublish}
+                                                        onClick={() => setCurrentStep(10)}
                                                         disabled={!step8Approved}
-                                                        title={!step8Approved ? 'Super-Admin sign-off required in Step 8 before publishing' : ''}
-                                                        className={`w-full py-4 rounded-2xl text-sm font-black uppercase tracking-widest transition-all flex items-center justify-center gap-3 ${step8Approved ? 'bg-emerald-600 text-white shadow-xl shadow-emerald-200 dark:shadow-none hover:bg-emerald-700' : 'bg-slate-200 dark:bg-slate-700 text-slate-400 dark:text-slate-500 cursor-not-allowed'}`}
+                                                        title={!step8Approved ? 'Super-Admin sign-off required in Step 8 before proceeding' : ''}
+                                                        className={`w-full py-4 rounded-2xl text-sm font-black uppercase tracking-widest transition-all flex items-center justify-center gap-3 ${step8Approved ? 'bg-[#4F46E5] text-white shadow-xl shadow-indigo-200 dark:shadow-none hover:bg-indigo-700' : 'bg-slate-200 dark:bg-slate-700 text-slate-400 dark:text-slate-500 cursor-not-allowed'}`}
                                                     >
-                                                        <span className="material-symbols-outlined">send</span>
-                                                        Publish to Mobile App
+                                                        Proceed to Step 10: Finalization <span className="material-symbols-outlined text-[18px]">arrow_forward</span>
                                                     </button>
                                                 </div>
                                             </div>
