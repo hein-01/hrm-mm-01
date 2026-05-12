@@ -99,9 +99,10 @@ export default function BankDisbursements() {
 
     const disbursementData = useMemo(() => {
         const recordMap = new Map(payrollRecords.map(r => [r.empId, r]));
-        return employees
-            .filter(e => e.status !== 'Terminated')
-            .map(emp => {
+        const baseFiltered = payrollRecords.length > 0
+            ? employees.filter(e => e.status !== 'Terminated' && recordMap.has(e.id) && recordMap.get(e.id)?.status !== 'Error')
+            : employees.filter(e => e.status !== 'Terminated');
+        return baseFiltered.map(emp => {
                 const record = recordMap.get(emp.id);
                 const provider = paymentProviders.find(p => p.name === emp.bankName);
                 return {

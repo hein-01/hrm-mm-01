@@ -935,6 +935,7 @@ export const PayrollProvider: React.FC<PayrollProviderProps> = ({
         setPayrunId(id);
         setIsPayrollLocked(true);
         setLastPayrollStatus('Approved');
+        setPayrollRecords(prev => prev.map(r => r.status !== 'Error' ? { ...r, status: 'Approved' as const } : r));
         // Insert payroll records into Supabase with explicit column mapping
         const recordsToInsert = payrollRecords.map(r => ({
             id: `REC-${Date.now()}-${Math.random().toString(36).substr(2,4)}`,
