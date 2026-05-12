@@ -25,8 +25,6 @@ create table if not exists public.employees (
     "shiftId"           text,
     "bankName"          text,
     "accountNumber"     text,
-    "bankBranch"        text,
-    "bankBranchCode"    text,
     "leaveBalances"     jsonb       default '{"Casual": 6, "Medical": 30, "Earned": 0}'::jsonb,
     "policyId"          text,
     "officeLocation"    text,

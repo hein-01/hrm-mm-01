@@ -45,12 +45,6 @@ BEGIN
     IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'employees' AND column_name = 'accountNumber') THEN
         ALTER TABLE employees ADD COLUMN "accountNumber" TEXT;
     END IF;
-    IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'employees' AND column_name = 'bankBranch') THEN
-        ALTER TABLE employees ADD COLUMN "bankBranch" TEXT;
-    END IF;
-    IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'employees' AND column_name = 'bankBranchCode') THEN
-        ALTER TABLE employees ADD COLUMN "bankBranchCode" TEXT;
-    END IF;
 
     -- Employment
     IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'employees' AND column_name = 'shiftId') THEN
