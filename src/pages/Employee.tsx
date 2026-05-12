@@ -69,8 +69,7 @@ export default function Employee() {
     // Bank Details Edit State
     const [editBankName, setEditBankName] = useState('');
     const [editAccountNumber, setEditAccountNumber] = useState('');
-    const [editBankBranch, setEditBankBranch] = useState('');
-    const [editBankBranchCode, setEditBankBranchCode] = useState('');
+
 
     // Now get employee after hooks are initialized
     const employee = employees.find(e => e.id === id) || employees[0];
@@ -88,8 +87,7 @@ export default function Employee() {
         if (activeModal === 'edit_bank_details') {
             setEditBankName(employee.bankName || '');
             setEditAccountNumber(employee.accountNumber || '');
-            setEditBankBranch(employee.bankBranch || '');
-            setEditBankBranchCode(employee.bankBranchCode || '');
+
         }
     }, [activeModal, employee]);
 
@@ -956,23 +954,7 @@ export default function Employee() {
                                                 </p>
                                             </div>
                                         </div>
-                                        <div className="w-full h-px bg-slate-50 dark:bg-slate-800/50"></div>
-                                        <div className="flex flex-col sm:flex-row gap-4 items-baseline">
-                                            <p className="w-full sm:w-[180px] sm:min-w-[180px] shrink-0 text-sm font-medium text-slate-500 dark:text-slate-400">Branch Name</p>
-                                            <div className="flex-1">
-                                                <p className="text-sm font-semibold text-slate-900 dark:text-white">{employee.bankBranch || '-'}</p>
-                                            </div>
-                                        </div>
-                                        <div className="w-full h-px bg-slate-50 dark:bg-slate-800/50"></div>
-                                        <div className="flex flex-col sm:flex-row gap-4 items-baseline">
-                                            <p className="w-full sm:w-[180px] sm:min-w-[180px] shrink-0 text-sm font-medium text-slate-500 dark:text-slate-400">Branch Code</p>
-                                            <div className="flex-1">
-                                                <p className={`text-sm font-semibold font-mono ${employee.bankBranchCode ? 'text-slate-900 dark:text-white' : 'text-red-500 italic'}`}>
-                                                    {employee.bankBranchCode || 'Missing - Required for KBZ/CB'}
-                                                </p>
-                                                <p className="text-[10px] text-slate-400 mt-1">Mandatory for corporate bulk upload portals.</p>
-                                            </div>
-                                        </div>
+
                                     </div>
                                 </div>
                             </div>
@@ -1953,28 +1935,7 @@ export default function Employee() {
                                             />
                                         </div>
                                         
-                                        <div className="grid grid-cols-2 gap-4">
-                                            <div className="space-y-1.5">
-                                                <label className="text-xs font-bold text-slate-400 uppercase tracking-wider">Branch Name</label>
-                                                <input 
-                                                    type="text" 
-                                                    value={editBankBranch}
-                                                    onChange={(e) => setEditBankBranch(e.target.value)}
-                                                    className="w-full text-sm p-3 border border-slate-200 rounded-lg bg-white dark:bg-slate-800 dark:border-slate-700 focus:ring-2 focus:ring-indigo-500/20 outline-none" 
-                                                    placeholder="e.g. Hlaing Branch"
-                                                />
-                                            </div>
-                                            <div className="space-y-1.5">
-                                                <label className="text-xs font-bold text-slate-400 uppercase tracking-wider">Branch Code</label>
-                                                <input 
-                                                    type="text" 
-                                                    value={editBankBranchCode}
-                                                    onChange={(e) => setEditBankBranchCode(e.target.value)}
-                                                    className="w-full text-sm p-3 border border-slate-200 rounded-lg bg-white dark:bg-slate-800 dark:border-slate-700 font-mono focus:ring-2 focus:ring-indigo-500/20 outline-none" 
-                                                    placeholder="e.g. 001"
-                                                />
-                                            </div>
-                                        </div>
+
                                     </div>
                                     <div className="p-4 border-t border-slate-100 dark:border-slate-800 bg-slate-50 dark:bg-slate-800/30 flex justify-end gap-3">
                                         <button onClick={closeModal} className="px-5 py-2 rounded-lg text-sm font-semibold text-slate-600 dark:text-slate-400 hover:bg-slate-200 dark:hover:bg-slate-700 transition-colors">
@@ -1985,8 +1946,8 @@ export default function Employee() {
                                                 const result = await updateEmployee(employee.id, {
                                                     bankName: editBankName,
                                                     accountNumber: editAccountNumber,
-                                                    bankBranch: editBankBranch,
-                                                    bankBranchCode: editBankBranchCode,
+                                                    bankBranch: undefined,
+                                                    bankBranchCode: undefined,
                                                 }, currentUser?.id || 'EMP-001');
                                                 if (result.success) {
                                                     closeModal();

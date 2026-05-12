@@ -57,8 +57,6 @@ const CATEGORIES: {
         fields: [
             { label: 'Bank Name', placeholder: 'e.g. KBZ, AYA, CB...' },
             { label: 'Account Number', placeholder: 'Account Number' },
-            { label: 'Bank Branch', placeholder: 'Branch name' },
-            { label: 'Branch Code', placeholder: 'Branch code' },
         ],
     },
     {
@@ -458,8 +456,6 @@ export default function SelfService() {
             'Current Address': (emp as any).currentAddress ?? '',
             'Bank Name': emp.bankName ?? '',
             'Account Number': emp.accountNumber ?? '',
-            'Bank Branch': emp.bankBranch ?? '',
-            'Branch Code': emp.bankBranchCode ?? '',
             'Emergency Contact Name': emp.emergencyContact?.name ?? '',
             'Emergency Contact Phone': emp.emergencyContact?.phone ?? '',
             'Relationship': emp.emergencyContact?.relationship ?? '',
@@ -908,8 +904,6 @@ export default function SelfService() {
                                                         'Current Address': (emp as any).currentAddress ?? '—',
                                                         'Bank Name': emp.bankName ?? '—',
                                                         'Account Number': emp.accountNumber ?? '—',
-                                                        'Bank Branch': emp.bankBranch ?? '—',
-                                                        'Branch Code': emp.bankBranchCode ?? '—',
                                                         'Emergency Contact Name': emp.emergencyContact?.name ?? '—',
                                                         'Emergency Contact Phone': emp.emergencyContact?.phone ?? '—',
                                                         'Relationship': emp.emergencyContact?.relationship ?? '—',

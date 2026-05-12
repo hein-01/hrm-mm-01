@@ -861,8 +861,7 @@ export type Employee = {
     shiftId: string;
     bankName?: string;
     accountNumber?: string;
-    bankBranch?: string;
-    bankBranchCode?: string;
+
     emergencyContact?: EmergencyContact;
     enrolledCourses: {
         courseId: string;

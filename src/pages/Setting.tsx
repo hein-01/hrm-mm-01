@@ -63,7 +63,7 @@ export default function Setting() {
 
     // Payment Provider Modals
     const [showCreateProviderModal, setShowCreateProviderModal] = useState(false);
-    const [newProvider, setNewProvider] = useState<{ name: string; type: 'Bank' | 'Digital Wallet'; requiredFields: string[] }>({ name: '', type: 'Bank', requiredFields: ['accountNumber', 'bankBranchCode'] });
+    const [newProvider, setNewProvider] = useState<{ name: string; type: 'Bank' | 'Digital Wallet'; requiredFields: string[] }>({ name: '', type: 'Bank', requiredFields: ['accountNumber'] });
     const [newCategory, setNewCategory] = useState({ name: '', description: '', monthlyLimit: 0 });
 
     // Holidays Management State
@@ -104,7 +104,7 @@ export default function Setting() {
             ...prev,
             paymentProviders: [...prev.paymentProviders, { ...newProvider, id: `PROV-${Date.now()}` } as any]
         }));
-        setNewProvider({ name: '', type: 'Bank', requiredFields: ['accountNumber', 'bankBranchCode'] });
+        setNewProvider({ name: '', type: 'Bank', requiredFields: ['accountNumber'] });
         setShowCreateProviderModal(false);
     };
 
@@ -1659,7 +1659,7 @@ export default function Setting() {
                                                         <div className="flex flex-wrap gap-2">
                                                             {provider.requiredFields.map(field => (
                                                                 <span key={field} className="px-2 py-1 bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 rounded text-xs font-medium border border-slate-200 dark:border-slate-700">
-                                                                    {field === 'accountNumber' ? 'Account Number' : field === 'bankBranchCode' ? 'Branch Code' : field === 'mobile' ? 'Mobile Number (9-11 digits)' : field}
+                                                                    {field === 'accountNumber' ? 'Account Number' : field === 'mobile' ? 'Mobile Number (9-11 digits)' : field}
                                                                 </span>
                                                             ))}
                                                         </div>

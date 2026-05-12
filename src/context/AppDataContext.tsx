@@ -822,7 +822,7 @@ export const AppDataProvider: React.FC<{ children: ReactNode }> = ({ children })
         },
         lastAuditDate: new Date().toISOString().split('T')[0],
         paymentProviders: [
-            { id: 'PROV-001', name: 'KBZ Bank', type: 'Bank', requiredFields: ['accountNumber', 'bankBranchCode'] },
+            { id: 'PROV-001', name: 'KBZ Bank', type: 'Bank', requiredFields: ['accountNumber'] },
             { id: 'PROV-002', name: 'CB Bank', type: 'Bank', requiredFields: ['accountNumber'] },
             { id: 'PROV-003', name: 'KPay', type: 'Digital Wallet', requiredFields: ['mobile'] },
             { id: 'PROV-004', name: 'WaveMoney', type: 'Digital Wallet', requiredFields: ['mobile'] }
@@ -3473,9 +3473,7 @@ export const AppDataProvider: React.FC<{ children: ReactNode }> = ({ children })
         csvHeader += `Provider: ${providerName}\n`;
         csvHeader += `Period: ${payrollMonth}\n\n`;
 
-        csvHeader += isDigitalWallet 
-            ? `Wallet Account Name,${targetIdHeader},Payment Amount\n`
-            : `Bank Account Name,${targetIdHeader},Branch Code,Payment Amount\n`;
+        csvHeader += `Account Name,${targetIdHeader},Payment Amount\n`;
 
         // 4. Batch Split Logic (AYA Bank > 500)
         const chunkSize = providerName === 'AYA Bank' ? 500 : activeRecords.length;
@@ -3505,11 +3503,7 @@ export const AppDataProvider: React.FC<{ children: ReactNode }> = ({ children })
                 // 3. Leading Zero Guard (Excel explicit string format)
                 const safeTargetId = `="${cleanTargetId}"`;
                 
-                if (isDigitalWallet) {
-                    csvContent += `"${cleanName}",${safeTargetId},"${val}"\n`;
-                } else {
-                    csvContent += `"${cleanName}",${safeTargetId},"${emp?.bankBranchCode || ''}","${val}"\n`;
-                }
+                csvContent += `"${cleanName}",${safeTargetId},"${val}"\n`;
 
                 return sum + val;
             }, 0);
@@ -3929,8 +3923,7 @@ export const AppDataProvider: React.FC<{ children: ReactNode }> = ({ children })
                 'SSB Number': 'ssbNumber',
                 'Bank Name': 'bankName',
                 'Account Number': 'accountNumber',
-                'Bank Branch': 'bankBranch',
-                'Branch Code': 'bankBranchCode',
+
                 'Tax ID': 'taxId',
                 'Office Location': 'officeLocation',
             };
@@ -5016,8 +5009,7 @@ export const AppDataProvider: React.FC<{ children: ReactNode }> = ({ children })
             if (updates.taxId !== undefined) supabaseUpdates.taxId = updates.taxId;
             if (updates.bankName !== undefined) supabaseUpdates.bankName = updates.bankName;
             if (updates.accountNumber !== undefined) supabaseUpdates.accountNumber = updates.accountNumber;
-            if (updates.bankBranch !== undefined) supabaseUpdates.bankBranch = updates.bankBranch;
-            if (updates.bankBranchCode !== undefined) supabaseUpdates.bankBranchCode = updates.bankBranchCode;
+
             if (updates.shiftId !== undefined) supabaseUpdates.shiftId = updates.shiftId;
             if (updates.policyId !== undefined) supabaseUpdates.policyId = updates.policyId;
             if (updates.recruitmentSource !== undefined) supabaseUpdates.recruitmentSource = updates.recruitmentSource;
@@ -5089,8 +5081,7 @@ export const AppDataProvider: React.FC<{ children: ReactNode }> = ({ children })
                 taxId: newEmployee.taxId || '',
                 bankName: newEmployee.bankName || '',
                 accountNumber: newEmployee.accountNumber || '',
-                bankBranch: newEmployee.bankBranch || '',
-                bankBranchCode: newEmployee.bankBranchCode || '',
+
                 shiftId: newEmployee.shiftId || '',
                 policyId: newEmployee.policyId || '',
                 recruitmentSource: newEmployee.recruitmentSource || '',

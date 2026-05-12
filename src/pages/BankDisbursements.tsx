@@ -109,7 +109,7 @@ export default function BankDisbursements() {
                     roundedNetPay: applyRounding(record?.netPay ?? 0),
                     bankName: emp.bankName,
                     accountNumber: emp.accountNumber,
-                    bankBranchCode: emp.bankBranchCode,
+                    bankBranchCode: undefined,
                     mobile: emp.mobile,
                     dept: (emp as any)?.dept as string | undefined,
                     provider,
@@ -196,7 +196,7 @@ export default function BankDisbursements() {
             addToast('No valid records in current selection. Fix missing data first.', 'error');
             return;
         }
-        const headers = ['Employee Name', 'Employee ID', 'NRC Number', 'Bank Name', 'Account Number', 'Branch Code', 'Net Pay (MMK)'];
+        const headers = ['Employee Name', 'Employee ID', 'NRC Number', 'Bank Name', 'Account Number', 'Net Pay (MMK)'];
         const rows = exportable.map(item => {
             const emp = employees.find(e => e.id === item.empId);
             return [
@@ -205,7 +205,6 @@ export default function BankDisbursements() {
                 sanitize((emp as any)?.nrcNumber ?? ''),
                 sanitize(item.bankName ?? 'Cash Payment'),
                 sanitize(item.accountNumber ?? ''),
-                sanitize(item.bankBranchCode ?? ''),
                 String(Math.round(item.netPay))
             ];
         });
@@ -547,7 +546,7 @@ export default function BankDisbursements() {
                                 <thead className="sticky top-0 z-10">
                                     <tr className="bg-slate-50 dark:bg-slate-800/50 border-b border-slate-200 dark:border-slate-800">
                                         <th className="px-6 py-4"><input className="rounded text-primary focus:ring-primary bg-transparent border-slate-300 dark:border-slate-700" type="checkbox" checked={allSelected} onChange={toggleAll} /></th>
-                                        {['Employee', activeProvider?.type === 'Digital Wallet' ? 'Wallet Details' : 'Bank Account', activeProvider?.type === 'Digital Wallet' ? 'Mobile Link' : 'Branch Code', 'Net Pay (MMK)', 'Validation', 'Status'].map(h => (
+                                        {['Employee', activeProvider?.type === 'Digital Wallet' ? 'Wallet Details' : 'Bank Account', activeProvider?.type === 'Digital Wallet' ? 'Mobile Link' : 'Routing', 'Net Pay (MMK)', 'Validation', 'Status'].map(h => (
                                             <th key={h} className={`px-6 py-4 text-[10px] font-bold text-slate-500 uppercase tracking-widest ${h === 'Net Pay (MMK)' ? 'text-right' : ''}`}>{h}</th>
                                         ))}
                                     </tr>
@@ -594,10 +593,10 @@ export default function BankDisbursements() {
                                                     </div>
                                                 </td>
                                                 <td className="px-6 py-4 align-middle">
-                                                    <span className={`text-xs font-mono font-bold ${item.provider?.type === 'Digital Wallet' ? (item.mobile && item.mobile.replace(/\D/g, '').length >= 9 && item.mobile.replace(/\D/g, '').length <= 11 ? 'text-emerald-500' : 'text-red-400') : (item.bankBranchCode ? 'text-slate-600 dark:text-slate-400' : 'text-amber-400 italic')}`}>
+                                                    <span className={`text-xs font-mono font-bold ${item.provider?.type === 'Digital Wallet' ? (item.mobile && item.mobile.replace(/\D/g, '').length >= 9 && item.mobile.replace(/\D/g, '').length <= 11 ? 'text-emerald-500' : 'text-red-400') : 'text-slate-600 dark:text-slate-400'}`}>
                                                         {item.provider?.type === 'Digital Wallet' 
                                                             ? (item.mobile && item.mobile.replace(/\D/g, '').length >= 9 && item.mobile.replace(/\D/g, '').length <= 11 ? 'Valid Phone' : 'Invalid Sync') 
-                                                            : (item.bankBranchCode || 'NA')}
+                                                            : 'Direct Account'}
                                                     </span>
                                                 </td>
                                                 <td className="px-6 py-4 text-right align-middle">

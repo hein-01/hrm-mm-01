@@ -85,7 +85,6 @@ export default function EmployeesDirectory() {
     const [newEmpNrc, setNewEmpNrc] = useState('');
     const [newEmpBankName, setNewEmpBankName] = useState('');
     const [newEmpAccountNumber, setNewEmpAccountNumber] = useState('');
-    const [newEmpBranchCode, setNewEmpBranchCode] = useState('');
     const [newEmpTaxId, setNewEmpTaxId] = useState('');
     const [newEmpDob, setNewEmpDob] = useState('');
     const [newEmpHasSpouse, setNewEmpHasSpouse] = useState(false);
@@ -175,8 +174,8 @@ export default function EmployeesDirectory() {
         const selectedProvider = systemSettings.paymentProviders.find(p => p.name === newEmpBankName);
         const isDigitalWallet = selectedProvider?.type === 'Digital Wallet';
         
-        if (!newEmpBankName || !newEmpAccountNumber || (!isDigitalWallet && !newEmpBranchCode)) {
-            setAuthError('Bank Name, Account Number, and Branch Code are required for payroll disbursement.');
+        if (!newEmpBankName || !newEmpAccountNumber) {
+            setAuthError('Bank Name and Account Number are required for payroll disbursement.');
             return;
         }
 
@@ -215,8 +214,8 @@ export default function EmployeesDirectory() {
             shiftId: 'SH-GEN-96',
             bankName: newEmpBankName,
             accountNumber: newEmpAccountNumber,
-            bankBranch: '',
-            bankBranchCode: newEmpBranchCode,
+            bankBranch: undefined,
+            bankBranchCode: undefined,
             enrolledCourses: [],
             leaveBalances: { Casual: 6, Medical: 15, Earned: 10 },
             policyId: 'LP-GEN-01',
@@ -390,11 +389,11 @@ export default function EmployeesDirectory() {
     };
 
     const handleExportCSV = () => {
-        const headers = ['ID', 'Name', 'Role', 'Department', 'Status', 'Join Date', 'NRC', 'Bank', 'Account', 'Branch Code', 'Phone'];
+        const headers = ['ID', 'Name', 'Role', 'Department', 'Status', 'Join Date', 'NRC', 'Bank', 'Account', 'Phone'];
         const rows = filteredEmployees.map(e => [
             e.id, e.name, e.role, e.dept, e.status, e.joinDate,
             e.nrcNumber || '', e.bankName || '', e.accountNumber || '',
-            e.bankBranchCode || '', e.mobile || ''
+            e.mobile || ''
         ]);
         const csvContent = [headers, ...rows].map(r => r.map(c => `"${String(c).replace(/"/g, '""')}"`).join(',')).join('\n');
         const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
@@ -416,7 +415,6 @@ export default function EmployeesDirectory() {
         setNewEmpNrc('');
         setNewEmpBankName('');
         setNewEmpAccountNumber('');
-        setNewEmpBranchCode('');
         setNewEmpTaxId('');
         setNewEmpDob('');
         setNewEmpHasSpouse(false);
@@ -1225,22 +1223,9 @@ export default function EmployeesDirectory() {
                                             ))}
                                         </select>
                                     </div>
-                                    <div className="grid grid-cols-2 gap-4">
-                                        <div>
-                                            <label className="text-xs font-bold text-slate-700 block mb-1.5">Account Number <span className="text-red-500">*</span></label>
-                                            <input value={newEmpAccountNumber} onChange={e => setNewEmpAccountNumber(e.target.value)} type="text" className="w-full text-sm p-2.5 border border-slate-300 rounded-lg focus:ring-[#4F46E5] focus:border-[#4F46E5] font-mono" placeholder="e.g. 1002019920031" />
-                                        </div>
-                                        <div>
-                                            <label className="text-xs font-bold text-slate-700 block mb-1.5">Branch Code {systemSettings.paymentProviders.find(p => p.name === newEmpBankName)?.type === 'Digital Wallet' && <span className="text-slate-400">(N/A)</span>} <span className="text-red-500">*</span></label>
-                                            <input 
-                                                value={newEmpBranchCode} 
-                                                onChange={e => setNewEmpBranchCode(e.target.value)} 
-                                                type="text" 
-                                                disabled={systemSettings.paymentProviders.find(p => p.name === newEmpBankName)?.type === 'Digital Wallet'}
-                                                className="w-full text-sm p-2.5 border border-slate-300 rounded-lg focus:ring-[#4F46E5] focus:border-[#4F46E5] font-mono disabled:bg-slate-100 disabled:text-slate-400" 
-                                                placeholder={systemSettings.paymentProviders.find(p => p.name === newEmpBankName)?.type === 'Digital Wallet' ? 'Not required for digital wallet' : 'e.g. KBZ-B01'} 
-                                            />
-                                        </div>
+                                    <div>
+                                        <label className="text-xs font-bold text-slate-700 block mb-1.5">Account Number <span className="text-red-500">*</span></label>
+                                        <input value={newEmpAccountNumber} onChange={e => setNewEmpAccountNumber(e.target.value)} type="text" className="w-full text-sm p-2.5 border border-slate-300 rounded-lg focus:ring-[#4F46E5] focus:border-[#4F46E5] font-mono" placeholder="e.g. 1002019920031" />
                                     </div>
                                     <div className="p-2.5 bg-blue-50 border border-blue-100 rounded-lg flex gap-2 items-start">
                                         <span className="material-symbols-outlined text-blue-500 text-[16px] mt-0.5">info</span>
