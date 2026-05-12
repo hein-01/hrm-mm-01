@@ -763,6 +763,13 @@ export const PayrollProvider: React.FC<PayrollProviderProps> = ({
             ? eligibleEmployees.filter(e => employeeIds.includes(e.id))
             : eligibleEmployees;
 
+        if (activePayrollGroupId) {
+            const selectedIds = targetEmployees.map(e => e.id);
+            setPayrollGroups(prev => prev.map(g => g.id === activePayrollGroupId ? { ...g, affectedEmployees: selectedIds } : g));
+            supabase.from('payroll_groups').update({ "affectedEmployees": selectedIds }).eq('id', activePayrollGroupId)
+                .then(({ error }) => { if (error) console.error("Failed to sync affectedEmployees:", error); });
+        }
+
         // --- Myanmar 2026 tiered annualized PIT (20% relief + personalized deductions) ---
         const calcAnnualPIT = (annual: number, exemption: number): number => {
             if (annual <= exemption) return 0;
