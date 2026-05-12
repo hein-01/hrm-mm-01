@@ -46,6 +46,7 @@ export default function BankDisbursements() {
     const [exportedBanks, setExportedBanks] = useState<Set<string>>(new Set());
     const [selectedRows, setSelectedRows]   = useState<Set<string>>(new Set());
     const [deptFilter, setDeptFilter]       = useState('All');
+    const [statusTab, setStatusTab]         = useState<'Pending Release' | 'Disbursed Successfully' | 'Action Required' | 'All'>('Pending Release');
     const [autoNotify, setAutoNotify]       = useState(true);
 
     // Toast
@@ -155,7 +156,7 @@ export default function BankDisbursements() {
         ['All', ...Array.from(new Set(employees.map(e => (e as any).dept as string).filter(Boolean))).sort()],
     [employees]);
 
-    const filteredData = useMemo(() =>
+    const scopeFilteredData = useMemo(() =>
         disbursementData.filter(item => {
             const matchesBank   = selectedBank === 'All' || item.bankName === selectedBank || (selectedBank === 'Cash Payment' && !item.bankName) || (item.bankName && item.bankName.toLowerCase().includes(selectedBank.toLowerCase()));
             const matchesSearch = item.name.toLowerCase().includes(searchQuery.toLowerCase()) || item.empId.toLowerCase().includes(searchQuery.toLowerCase());
@@ -163,6 +164,35 @@ export default function BankDisbursements() {
             return matchesBank && matchesSearch && matchesDept;
         }),
     [disbursementData, selectedBank, searchQuery, deptFilter]);
+
+    const tabbedCounts = useMemo(() => {
+        let pending = 0;
+        let disbursed = 0;
+        let rejected = 0;
+        scopeFilteredData.forEach(item => {
+            const isMissing = isMissingInfo(item);
+            if (isMissing) rejected++;
+            if (item.status === 'Disbursed') disbursed++;
+            else if (!isMissing) pending++;
+        });
+        return {
+            All: scopeFilteredData.length,
+            'Pending Release': pending,
+            'Disbursed Successfully': disbursed,
+            'Action Required': rejected
+        };
+    }, [scopeFilteredData]);
+
+    const filteredData = useMemo(() => {
+        return scopeFilteredData.filter(item => {
+            if (statusTab === 'All') return true;
+            const isMissing = isMissingInfo(item);
+            if (statusTab === 'Action Required') return isMissing;
+            if (statusTab === 'Disbursed Successfully') return item.status === 'Disbursed';
+            if (statusTab === 'Pending Release') return item.status !== 'Disbursed' && !isMissing;
+            return true;
+        });
+    }, [scopeFilteredData, statusTab]);
 
     const stats = useMemo(() => {
         // Stats ONLY reflect the Active Tab context
@@ -558,6 +588,40 @@ export default function BankDisbursements() {
 
                     {/* Data Table */}
                     <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl shadow-sm">
+                        {/* Sub-Status Segmented Tabs */}
+                        <div className="flex items-center gap-2 p-3 border-b border-slate-200 dark:border-slate-800 overflow-x-auto bg-slate-50/50 dark:bg-slate-800/20">
+                            {(['Pending Release', 'Disbursed Successfully', 'Action Required', 'All'] as const).map(tab => {
+                                const count = tabbedCounts[tab];
+                                const isActive = statusTab === tab;
+                                return (
+                                    <button
+                                        key={tab}
+                                        onClick={() => setStatusTab(tab)}
+                                        className={`flex items-center gap-2 px-3.5 py-2 rounded-lg text-xs font-bold transition-all whitespace-nowrap ${
+                                            isActive
+                                                ? tab === 'Pending Release' ? 'bg-amber-50 text-amber-700 border border-amber-200/60 shadow-2xs dark:bg-amber-900/20 dark:text-amber-400 dark:border-amber-800/40' :
+                                                  tab === 'Disbursed Successfully' ? 'bg-emerald-50 text-emerald-700 border border-emerald-200/60 shadow-2xs dark:bg-emerald-900/20 dark:text-emerald-400 dark:border-emerald-800/40' :
+                                                  tab === 'Action Required' ? 'bg-red-50 text-red-700 border border-red-200/60 shadow-2xs dark:bg-red-900/20 dark:text-red-400 dark:border-red-800/40' :
+                                                  'bg-slate-900 text-white shadow-2xs dark:bg-slate-100 dark:text-slate-900'
+                                                : 'text-slate-500 hover:bg-slate-100 dark:hover:bg-slate-800'
+                                        }`}
+                                    >
+                                        <span>{tab}</span>
+                                        <span className={`px-2 py-0.5 rounded-full text-[10px] font-black ${
+                                            isActive
+                                                ? tab === 'Pending Release' ? 'bg-amber-200/60 text-amber-800 dark:bg-amber-800/40 dark:text-amber-300' :
+                                                  tab === 'Disbursed Successfully' ? 'bg-emerald-200/60 text-emerald-800 dark:bg-emerald-800/40 dark:text-emerald-300' :
+                                                  tab === 'Action Required' ? 'bg-red-200/60 text-red-800 dark:bg-red-800/40 dark:text-red-300' :
+                                                  'bg-white/20 text-white dark:bg-slate-900/20 dark:text-slate-900'
+                                                : 'bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-400'
+                                        }`}>
+                                            {count}
+                                        </span>
+                                    </button>
+                                );
+                            })}
+                        </div>
+
                         <div className="overflow-x-auto max-h-[calc(100vh-420px)] overflow-y-auto">
                             <table className="w-full text-left border-collapse min-w-[900px]">
                                 <thead className="sticky top-0 z-10">
