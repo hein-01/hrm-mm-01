@@ -472,13 +472,13 @@ export default function BankDisbursements() {
                             {/* Per-bank export status */}
                             <div className="flex items-center gap-2 flex-wrap">
                                 {stats.bankBreakdown.map(b => (
-                                    <span key={b.bank} className={`text-[10px] font-bold px-2 py-1 rounded-md border ${
+                                    <span key={b.bank} className={`inline-flex items-center gap-1 text-xs font-bold px-2.5 py-1 rounded-lg border h-7 transition-all ${
                                         exportedBanks.has(b.bank)
-                                            ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
+                                            ? 'bg-emerald-50 text-emerald-700 border-emerald-200 shadow-2xs'
                                             : 'bg-slate-50 text-slate-500 border-slate-200'
                                     }`}>
-                                        {b.bank.replace(' Bank', '')}: {b.count}
-                                        {exportedBanks.has(b.bank) && <span className="material-symbols-outlined text-[10px] ml-0.5">check</span>}
+                                        <span>{b.bank.replace(' Bank', '')}: {b.count}</span>
+                                        {exportedBanks.has(b.bank) && <span className="material-symbols-outlined text-[14px] text-emerald-600 leading-none shrink-0">check</span>}
                                     </span>
                                 ))}
                             </div>
