@@ -37,7 +37,7 @@ export default function Attendance() {
     const [showDevSettings, setShowDevSettings] = useState(false);
 
     // Personal Mobile Simulator State
-    const [simLocation, setSimLocation] = useState(systemSettings.officeLocations[0].id);
+    const [simLocation, setSimLocation] = useState(systemSettings.officeLocations[0]?.id ?? '');
     const [isDevModeOverride, setIsDevModeOverride] = useState(false);
     const [isPunching, setIsPunching] = useState(false);
     const [punchSuccess, setPunchSuccess] = useState(false);
@@ -52,7 +52,13 @@ export default function Attendance() {
     const handleCheckIn = async () => {
         setIsPunching(true);
         try {
-            const selectedLoc = systemSettings.officeLocations.find(l => l.id === simLocation) || systemSettings.officeLocations[0];
+            const locations = systemSettings.officeLocations;
+            if (locations.length === 0) {
+                alert('No office locations configured. Please add a location in Settings → Locations first.');
+                return;
+            }
+            const selectedLoc = locations.find(l => l.id === simLocation) || locations[0];
+            if (!selectedLoc) return;
             const applyBypass = isDevelopment && isDevModeOverride;
             const gps = applyBypass
                 ? { lat: selectedLoc.coords.lat + 0.05, lng: selectedLoc.coords.lng + 0.05 }
@@ -242,6 +248,7 @@ export default function Attendance() {
             let LateMinutes = 0;
             if (log.status === 'Late' && log.checkIn) {
                 const shift = shifts.find(s => s.id === emp?.shiftId) || shifts[0];
+                if (!shift) { LateMinutes = 0; } else {
                 const [targetH, targetM] = shift.start.split(':').map(Number);
                 const targetMins = targetH * 60 + targetM;
                 const GRACE_PERIOD = complianceSettings.attendanceGracePeriod;
@@ -263,6 +270,7 @@ export default function Attendance() {
                 if (checkInMins > targetMins + GRACE_PERIOD) {
                     LateMinutes = checkInMins - targetMins;
                 }
+                } // end else (shift exists)
             }
 
             const isConditionMet = safeEval(rule.condition, { LateMinutes });

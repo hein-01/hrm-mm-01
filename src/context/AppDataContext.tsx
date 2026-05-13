@@ -2767,6 +2767,7 @@ export const AppDataProvider: React.FC<{ children: ReactNode }> = ({ children })
         const assignment = shiftAssignments.find(sa => sa.empId === empId && sa.date === todayStr);
         const activeShiftId = assignment ? assignment.shiftId : emp.shiftId;
         const shift = shifts.find(s => s.id === activeShiftId) || shifts[0];
+        if (!shift) return { success: false, message: 'No shift configured. Please create a shift in Settings → Shifts first.' };
         const [shiftH, shiftM] = shift.start.split(':').map(Number);
         
         const now = getAdjustedDateObj();
@@ -2955,6 +2956,7 @@ export const AppDataProvider: React.FC<{ children: ReactNode }> = ({ children })
                 const autoLogExists = currentLogs.some(l => l.empId === emp.id && l.date === formattedDate && l.checkInMethod === '🤖 Auto');
                 if (!autoLogExists) {
                     const shift = shifts.find(s => s.id === emp.shiftId) || shifts[0];
+                    if (!shift) return; // Skip auto-log if no shift configured
                     currentLogs.push({
                         id: `AUTO-${emp.id}-${formattedDate}`,
                         empId: emp.id,
