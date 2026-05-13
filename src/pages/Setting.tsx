@@ -22,7 +22,8 @@ export default function Setting() {
         addAllowanceConfig, addDeductionConfig,
         holidays, addHoliday, updateHoliday, deleteHoliday,
         downloadSystemBackup,
-        logSettingChange
+        logSettingChange,
+        shifts, addShift, updateShift, deleteShift,
     } = useAppData();
 
     const [activeTab, setActiveTab] = useState('General & Org');
@@ -71,6 +72,11 @@ export default function Setting() {
     const [newHoliday, setNewHoliday] = useState({ name: '', date: '', isRestricted: true });
     const [editingHolidayStr, setEditingHolidayStr] = useState<string | null>(null);
     const [showAdminPicker, setShowAdminPicker] = useState(false);
+
+    // Shift Management Modals/State
+    const [showShiftModal, setShowShiftModal] = useState(false);
+    const [editingShift, setEditingShift] = useState<any>(null);
+    const [newShift, setNewShift] = useState({ name: '', start: '09:00', end: '18:00', gracePeriod: 15 });
 
     // Allowance Master State
     const [showAlwModal, setShowAlwModal] = useState(false);
@@ -300,6 +306,34 @@ export default function Setting() {
             setAlerts(prev => [{ id: `LOC-DEL-${Date.now()}`, type: 'success', message: res.message, timestamp: getFormattedDate(undefined, 'time'), isRead: false }, ...prev]);
         } else {
             setAlerts(prev => [{ id: `LOC-DEL-ERR-${Date.now()}`, type: 'error', message: res.message, timestamp: getFormattedDate(undefined, 'time'), isRead: false }, ...prev]);
+        }
+    };
+
+    // --- Shift Handlers ---
+    const handleAddShift = () => {
+        if (!newShift.name.trim() || !newShift.start || !newShift.end) return;
+        const res = addShift(newShift);
+        if (res.success) {
+            setAlerts(prev => [{ id: `SHF-ADD-${Date.now()}`, type: 'success', message: res.message, timestamp: getFormattedDate(undefined, 'time'), isRead: false }, ...prev]);
+            setNewShift({ name: '', start: '09:00', end: '18:00', gracePeriod: 15 });
+            setShowShiftModal(false);
+        }
+    };
+    const handleUpdateShift = () => {
+        if (!editingShift || !editingShift.name.trim()) return;
+        const res = updateShift(editingShift);
+        if (res.success) {
+            setAlerts(prev => [{ id: `SHF-UPD-${Date.now()}`, type: 'success', message: res.message, timestamp: getFormattedDate(undefined, 'time'), isRead: false }, ...prev]);
+            setEditingShift(null);
+            setShowShiftModal(false);
+        }
+    };
+    const handleDeleteShift = (id: string) => {
+        const res = deleteShift(id);
+        if (res.success) {
+            setAlerts(prev => [{ id: `SHF-DEL-${Date.now()}`, type: 'success', message: res.message, timestamp: getFormattedDate(undefined, 'time'), isRead: false }, ...prev]);
+        } else {
+            setAlerts(prev => [{ id: `SHF-DEL-ERR-${Date.now()}`, type: 'error', message: res.message, timestamp: getFormattedDate(undefined, 'time'), isRead: false }, ...prev]);
         }
     };
 
@@ -552,7 +586,7 @@ export default function Setting() {
 
 
                         <nav className="flex border-b border-slate-200 dark:border-slate-800 mb-10 gap-8 overflow-x-auto">
-                            {['General & Org', 'Compliance & Tax', 'Locations', 'Departments', 'Positions', 'User Access', 'Onboarding Templates', 'Payment Providers', 'Devices & APIs', 'Holidays & Closures', 'Approval Workflows', 'Audit Registry', 'NRC Registry'].map(tab => (
+                            {['General & Org', 'Compliance & Tax', 'Locations', 'Shifts', 'Departments', 'Positions', 'User Access', 'Onboarding Templates', 'Payment Providers', 'Devices & APIs', 'Holidays & Closures', 'Approval Workflows', 'Audit Registry', 'NRC Registry'].map(tab => (
                                 <button
                                     key={tab}
                                     onClick={() => setActiveTab(tab)}
@@ -563,6 +597,7 @@ export default function Setting() {
                                         {tab === 'General & Org' && 'Profile & Branding'}
                                         {tab === 'Compliance & Tax' && 'Tax & Payroll Defaults'}
                                         {tab === 'Locations' && 'Geofence Zones'}
+                                        {tab === 'Shifts' && 'Work Hour Templates'}
                                         {tab === 'Departments' && 'Org Chart Units'}
                                         {tab === 'Positions' && 'Job Role Titles'}
                                         {tab === 'User Access' && 'RBAC Admin'}
@@ -1300,6 +1335,75 @@ export default function Setting() {
                                             </div>
                                         ))}
                                     </div>
+                                </div>
+                            )}
+
+                            {activeTab === 'Shifts' && (
+                                <div className="space-y-6 animate-fade-in">
+                                    <div className="flex items-center justify-between mb-2">
+                                        <div>
+                                            <h3 className="text-xl font-bold text-slate-900 dark:text-white">Shift Templates</h3>
+                                            <p className="text-xs text-slate-500 font-medium">Define work hour windows used in the Shift Planner and for late/early-out detection.</p>
+                                        </div>
+                                        <button onClick={() => { setEditingShift(null); setShowShiftModal(true); }} className="text-xs font-black bg-[#4F46E5] text-white px-5 py-2.5 rounded-xl shadow-lg shadow-indigo-200 dark:shadow-none hover:opacity-90 transition-all uppercase tracking-widest flex items-center gap-2">
+                                            <span className="material-symbols-outlined text-[18px]">more_time</span>
+                                            Add Shift
+                                        </button>
+                                    </div>
+
+                                    {shifts.length === 0 ? (
+                                        <div className="flex flex-col items-center justify-center py-20 text-center">
+                                            <span className="material-symbols-outlined text-6xl text-slate-200 dark:text-slate-700 mb-4">schedule</span>
+                                            <h4 className="font-bold text-slate-600 dark:text-slate-400">No shift templates yet</h4>
+                                            <p className="text-xs text-slate-400 mt-1 max-w-xs">Create your first shift to define office hours. Employees and the Shift Planner will use these.</p>
+                                        </div>
+                                    ) : (
+                                        <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4 pb-10">
+                                            {shifts.map(shift => {
+                                                const [sh, sm] = shift.start.split(':').map(Number);
+                                                const [eh, em] = shift.end.split(':').map(Number);
+                                                const hours = ((eh * 60 + em) - (sh * 60 + sm)) / 60;
+                                                const empCount = employees.filter(e => e.shiftId === shift.id).length;
+                                                return (
+                                                    <div key={shift.id} className="bg-white dark:bg-slate-900 p-6 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-sm group hover:border-[#4F46E5]/40 transition-all">
+                                                        <div className="flex justify-between items-start mb-4">
+                                                            <div className="flex items-center gap-3">
+                                                                <div className="size-12 rounded-xl bg-indigo-50 dark:bg-indigo-900/20 flex items-center justify-center text-[#4F46E5]">
+                                                                    <span className="material-symbols-outlined">schedule</span>
+                                                                </div>
+                                                                <div>
+                                                                    <h4 className="font-bold text-slate-900 dark:text-white">{shift.name}</h4>
+                                                                    <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">{shift.id}</span>
+                                                                </div>
+                                                            </div>
+                                                            <div className="flex gap-2">
+                                                                <button onClick={() => { setEditingShift({ ...shift }); setShowShiftModal(true); }} className="p-2 text-slate-400 hover:text-[#4F46E5] hover:bg-indigo-50 dark:hover:bg-indigo-900/20 rounded-lg transition-all">
+                                                                    <span className="material-symbols-outlined text-[20px]">edit</span>
+                                                                </button>
+                                                                <button onClick={() => handleDeleteShift(shift.id)} className="p-2 text-slate-400 hover:text-rose-500 hover:bg-rose-50 dark:hover:bg-rose-900/20 rounded-lg transition-all">
+                                                                    <span className="material-symbols-outlined text-[20px]">delete</span>
+                                                                </button>
+                                                            </div>
+                                                        </div>
+                                                        <div className="space-y-2 pt-4 border-t border-slate-50 dark:border-slate-800">
+                                                            <div className="flex items-center justify-between">
+                                                                <span className="text-xs text-slate-500 font-medium">Hours</span>
+                                                                <span className="font-bold text-sm text-slate-900 dark:text-white">{shift.start} – {shift.end} <span className="text-xs text-slate-400">({hours.toFixed(1)}h)</span></span>
+                                                            </div>
+                                                            <div className="flex items-center justify-between">
+                                                                <span className="text-xs text-slate-500 font-medium">Grace Period</span>
+                                                                <span className="font-bold text-sm text-slate-900 dark:text-white">{(shift as any).gracePeriod ?? 15} min</span>
+                                                            </div>
+                                                            <div className="flex items-center justify-between">
+                                                                <span className="text-xs text-slate-500 font-medium">Assigned Employees</span>
+                                                                <span className={`font-bold text-sm ${empCount > 0 ? 'text-emerald-600' : 'text-slate-400'}`}>{empCount}</span>
+                                                            </div>
+                                                        </div>
+                                                    </div>
+                                                );
+                                            })}
+                                        </div>
+                                    )}
                                 </div>
                             )}
 
@@ -2262,6 +2366,73 @@ export default function Setting() {
                                 <div className="flex gap-3 pt-4 border-t border-slate-100 dark:border-slate-800">
                                     <button onClick={editingLoc ? handleUpdateLocation : handleAddLocation} className="flex-1 bg-[#4F46E5] text-white py-2.5 rounded-xl text-sm font-bold shadow-md shadow-indigo-200 dark:shadow-none hover:bg-[#4338CA] transition-colors">{editingLoc ? 'Update' : 'Save'} Location</button>
                                     <button onClick={() => setShowLocationModal(false)} className="flex-1 bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 py-2.5 rounded-xl text-sm font-bold hover:bg-slate-200 dark:hover:bg-slate-700 transition-colors">Cancel</button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                )}
+
+                {/* Shift Modal */}
+                {showShiftModal && (
+                    <div className="fixed inset-0 z-[100] flex items-center justify-center bg-slate-900/40 backdrop-blur-sm animate-in fade-in">
+                        <div className="bg-white dark:bg-slate-900 w-full max-w-md rounded-2xl shadow-2xl border border-slate-200 dark:border-slate-800 p-6">
+                            <div className="flex items-center gap-3 mb-6">
+                                <div className="size-10 rounded-xl bg-indigo-50 dark:bg-indigo-900/20 flex items-center justify-center text-[#4F46E5]">
+                                    <span className="material-symbols-outlined">{editingShift ? 'edit' : 'more_time'}</span>
+                                </div>
+                                <h3 className="text-xl font-bold text-slate-900 dark:text-white">{editingShift ? 'Edit' : 'Add New'} Shift</h3>
+                            </div>
+                            <div className="space-y-4">
+                                <div>
+                                    <label className="text-xs font-bold text-slate-500 uppercase tracking-widest mb-1 block">Shift Name</label>
+                                    <input type="text"
+                                        value={editingShift ? editingShift.name : newShift.name}
+                                        onChange={e => editingShift ? setEditingShift({...editingShift, name: e.target.value}) : setNewShift({...newShift, name: e.target.value})}
+                                        className="w-full px-4 py-3 border border-slate-200 dark:border-slate-700 rounded-xl dark:bg-slate-950 focus:ring-2 focus:ring-[#4F46E5]/20 text-sm font-bold outline-none transition-all shadow-sm"
+                                        placeholder="e.g. Morning Office Shift"
+                                    />
+                                </div>
+                                <div className="grid grid-cols-2 gap-3">
+                                    <div>
+                                        <label className="text-xs font-bold text-slate-500 uppercase tracking-widest mb-1 block">Start Time</label>
+                                        <input type="time"
+                                            value={editingShift ? editingShift.start : newShift.start}
+                                            onChange={e => editingShift ? setEditingShift({...editingShift, start: e.target.value}) : setNewShift({...newShift, start: e.target.value})}
+                                            className="w-full px-3 py-2.5 border border-slate-100 dark:border-slate-700 rounded-xl dark:bg-slate-950 text-sm font-bold outline-none"
+                                        />
+                                    </div>
+                                    <div>
+                                        <label className="text-xs font-bold text-slate-500 uppercase tracking-widest mb-1 block">End Time</label>
+                                        <input type="time"
+                                            value={editingShift ? editingShift.end : newShift.end}
+                                            onChange={e => editingShift ? setEditingShift({...editingShift, end: e.target.value}) : setNewShift({...newShift, end: e.target.value})}
+                                            className="w-full px-3 py-2.5 border border-slate-100 dark:border-slate-700 rounded-xl dark:bg-slate-950 text-sm font-bold outline-none"
+                                        />
+                                    </div>
+                                </div>
+                                <div>
+                                    <label className="text-xs font-bold text-slate-500 uppercase tracking-widest mb-1 block">Grace Period (minutes)</label>
+                                    <div className="relative">
+                                        <input type="number" min="0" max="60" step="5"
+                                            value={editingShift ? (editingShift.gracePeriod ?? 15) : newShift.gracePeriod}
+                                            onChange={e => {
+                                                const v = parseInt(e.target.value, 10);
+                                                editingShift ? setEditingShift({...editingShift, gracePeriod: v}) : setNewShift({...newShift, gracePeriod: v});
+                                            }}
+                                            className="w-full px-3 py-2.5 border border-slate-100 dark:border-slate-700 rounded-xl dark:bg-slate-950 text-sm font-bold outline-none pr-16"
+                                        />
+                                        <span className="absolute right-3 top-1/2 -translate-y-1/2 text-[10px] font-black text-slate-400 uppercase tracking-widest pointer-events-none">min</span>
+                                    </div>
+                                    <p className="text-[10px] text-slate-400 mt-1">Employees clocking in within this window won't be marked late.</p>
+                                </div>
+                                <div className="flex gap-3 pt-4 border-t border-slate-100 dark:border-slate-800">
+                                    <button
+                                        onClick={editingShift ? handleUpdateShift : handleAddShift}
+                                        className="flex-1 bg-[#4F46E5] text-white py-2.5 rounded-xl text-sm font-bold shadow-md shadow-indigo-200 dark:shadow-none hover:bg-[#4338CA] transition-colors"
+                                    >
+                                        {editingShift ? 'Update' : 'Save'} Shift
+                                    </button>
+                                    <button onClick={() => { setShowShiftModal(false); setEditingShift(null); }} className="flex-1 bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 py-2.5 rounded-xl text-sm font-bold hover:bg-slate-200 dark:hover:bg-slate-700 transition-colors">Cancel</button>
                                 </div>
                             </div>
                         </div>

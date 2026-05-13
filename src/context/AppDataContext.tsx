@@ -1688,9 +1688,8 @@ export const AppDataProvider: React.FC<{ children: ReactNode }> = ({ children })
     }, [offlineQueue]);
 
     const [shifts, setShifts] = useState<Types.Shift[]>([
-        { id: 'SH-GEN-96', name: 'General Office (9-6)', start: '09:00', end: '18:00' },
-        { id: 'SH-FAC-85', name: 'Factory 8-5', start: '08:00', end: '17:00' },
-        { id: 'S-7', name: 'Flexible Office Hours', start: '10:00', end: '18:30', startTime: '10:00', endTime: '18:30', gracePeriod: 20, type: 'Flexible', active: true }
+        // Intentionally empty — manage shifts via Settings > Shift Templates.
+        // Do NOT add hardcoded entries here; use the UI to create your shifts.
     ]);
 
 
@@ -5250,6 +5249,23 @@ export const AppDataProvider: React.FC<{ children: ReactNode }> = ({ children })
         return { success: true, message: 'Position deleted.' };
     };
 
+    // --- Shift CRUD ---
+    const addShift = (shift: { name: string; start: string; end: string; gracePeriod?: number }): { success: boolean; message: string } => {
+        const newShift: Types.Shift = { ...shift, id: `SH-${Date.now()}`, active: true } as Types.Shift;
+        setShifts(prev => [...prev, newShift]);
+        return { success: true, message: `Shift "${shift.name}" created.` };
+    };
+    const updateShift = (shift: Types.Shift): { success: boolean; message: string } => {
+        setShifts(prev => prev.map(s => s.id === shift.id ? { ...s, ...shift } : s));
+        return { success: true, message: `Shift "${shift.name}" updated.` };
+    };
+    const deleteShift = (id: string): { success: boolean; message: string } => {
+        const inUse = employees.some(e => e.shiftId === id);
+        if (inUse) return { success: false, message: 'Cannot delete: shift is assigned to one or more employees. Re-assign them first.' };
+        setShifts(prev => prev.filter(s => s.id !== id));
+        return { success: true, message: 'Shift deleted.' };
+    };
+
     const logSettingChange = (field: string, oldVal: any, newVal: any) => {
         addSecurityLog({
             deviceId: 'ADMIN-PORTAL',
@@ -5375,7 +5391,7 @@ export const AppDataProvider: React.FC<{ children: ReactNode }> = ({ children })
         addLeaveRequest,
         terminateEmployee,
         finalizeReview,
-        shifts,
+        shifts, addShift, updateShift, deleteShift,
         checkIn,
         checkOut,
         onboardingRecords, setOnboardingRecords,
