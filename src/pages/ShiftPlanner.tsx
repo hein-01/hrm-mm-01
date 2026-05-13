@@ -496,21 +496,30 @@ export default function ShiftPlanner() {
 
                                             {/* Shift picker — suppressed when week is published */}
                                             {!isPublished && (
-                                                <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl shadow-xl p-2 opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all z-20 flex flex-col gap-1 w-36">
-                                                    {shifts.map(s => {
+                                                <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl shadow-xl p-2 opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all z-20 flex flex-col gap-1 w-48">
+                                                    {shifts.length === 0 ? (
+                                                        <div className="px-3 py-3 text-center">
+                                                            <span className="material-symbols-outlined text-slate-300 dark:text-slate-600 text-2xl block mb-1">schedule</span>
+                                                            <p className="text-[9px] font-bold text-slate-400 uppercase tracking-widest">No shifts configured</p>
+                                                            <p className="text-[9px] text-slate-400 mt-0.5 leading-tight">Go to Settings → Shifts to create one.</p>
+                                                        </div>
+                                                    ) : shifts.map(s => {
                                                         const restWarn = wouldViolateRest(emp.id, w.date, s.id);
                                                         return (
                                                             <button
                                                                 key={s.id}
                                                                 onClick={() => handleAssignShift(emp.id, w.date, s.id)}
-                                                                className={`text-left px-3 py-1.5 rounded-lg text-xs font-bold hover:bg-slate-100 dark:hover:bg-slate-700 flex items-center gap-1 ${
+                                                                className={`text-left px-3 py-2 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-700 flex flex-col gap-0.5 ${
                                                                     restWarn ? 'text-red-500 dark:text-red-400' :
                                                                     s.id === activeShiftId ? 'text-[#4F46E5] bg-[#4F46E5]/10' :
                                                                     'text-slate-700 dark:text-slate-200'
                                                                 }`}
                                                             >
-                                                                {restWarn && <span className="material-symbols-outlined text-[11px]">warning</span>}
-                                                                {s.name}
+                                                                <span className="flex items-center gap-1 text-xs font-bold">
+                                                                    {restWarn && <span className="material-symbols-outlined text-[11px]">warning</span>}
+                                                                    {s.name}
+                                                                </span>
+                                                                <span className="text-[10px] font-medium opacity-60">{s.start} – {s.end}</span>
                                                             </button>
                                                         );
                                                     })}
