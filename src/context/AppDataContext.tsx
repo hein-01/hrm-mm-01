@@ -741,6 +741,11 @@ export const AppDataProvider: React.FC<{ children: ReactNode }> = ({ children })
         return () => { supabase.removeChannel(channel); };
     }, []);
 
+    // Ref to suppress self-triggered realtime bounce-backs.
+    // When this session upserts systemSettings, the realtime channel fires an UPDATE
+    // event back at us — overwriting our already-correct local state. We skip it.
+    const skipNextRealtimeUpdate = React.useRef(false);
+
     // Fetch system_settings from Supabase + realtime
     useEffect(() => {
         const fetchSettings = async () => {
@@ -761,6 +766,11 @@ export const AppDataProvider: React.FC<{ children: ReactNode }> = ({ children })
         const channel = supabase
             .channel('system_settings-changes')
             .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'system_settings' }, (payload) => {
+                // Skip events triggered by this session's own upsert
+                if (skipNextRealtimeUpdate.current) {
+                    skipNextRealtimeUpdate.current = false;
+                    return;
+                }
                 if (payload.new?.data) {
                     const s = payload.new.data as Types.SystemSettings;
                     setSystemSettings(s);
@@ -1647,15 +1657,21 @@ export const AppDataProvider: React.FC<{ children: ReactNode }> = ({ children })
 
     // attendanceRequests is now persisted in Supabase – localStorage sync removed
 
-    // Sync systemSettings to Supabase (JSONB upsert) whenever it changes
+    // Sync systemSettings to Supabase (JSONB upsert) whenever it changes.
+    // Mark the ref BEFORE the upsert so the realtime echo is suppressed.
     useEffect(() => {
         const merged = { ...systemSettings, compliance: complianceSettings };
+        skipNextRealtimeUpdate.current = true;
         supabase.from('system_settings').upsert({
             id: 'default',
             data: merged,
             updatedAt: new Date().toISOString()
         }).then(({ error }) => {
-            if (error) console.error('Supabase system_settings upsert error:', error.message);
+            if (error) {
+                console.error('Supabase system_settings upsert error:', error.message);
+                // If the upsert failed, we won't get a realtime event — reset the flag
+                skipNextRealtimeUpdate.current = false;
+            }
         });
     }, [systemSettings, complianceSettings]);
 
