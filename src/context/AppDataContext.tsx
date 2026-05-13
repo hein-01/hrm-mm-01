@@ -5179,15 +5179,15 @@ export const AppDataProvider: React.FC<{ children: ReactNode }> = ({ children })
     // --- Settings CRUD stubs (Location, Department, Position) ---
     const addLocation = (loc: Omit<Types.OfficeLocation, 'id'>): { success: boolean; message: string } => {
         const newLoc: Types.OfficeLocation = { ...loc, id: `LOC-${Date.now()}` } as Types.OfficeLocation;
-        setSystemSettings((prev: Types.SystemSettings) => ({ ...prev, locations: [...(prev.locations || []), newLoc] }));
+        setSystemSettings((prev: Types.SystemSettings) => ({ ...prev, officeLocations: [...(prev.officeLocations || []), newLoc] }));
         return { success: true, message: 'Location added.' };
     };
     const updateLocation = (loc: Types.OfficeLocation): { success: boolean; message: string } => {
-        setSystemSettings((prev: Types.SystemSettings) => ({ ...prev, locations: (prev.locations || []).map((l: Types.OfficeLocation) => l.id === loc.id ? loc : l) }));
+        setSystemSettings((prev: Types.SystemSettings) => ({ ...prev, officeLocations: (prev.officeLocations || []).map((l: Types.OfficeLocation) => l.id === loc.id ? loc : l) }));
         return { success: true, message: 'Location updated.' };
     };
     const deleteLocation = (id: string): { success: boolean; message: string } => {
-        setSystemSettings((prev: Types.SystemSettings) => ({ ...prev, locations: (prev.locations || []).filter((l: Types.OfficeLocation) => l.id !== id) }));
+        setSystemSettings((prev: Types.SystemSettings) => ({ ...prev, officeLocations: (prev.officeLocations || []).filter((l: Types.OfficeLocation) => l.id !== id) }));
         return { success: true, message: 'Location deleted.' };
     };
     const addDepartment = (dept: Omit<Types.Department, 'id' | 'order'>): { success: boolean; message: string } => {
