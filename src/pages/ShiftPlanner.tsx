@@ -486,87 +486,46 @@ export default function ShiftPlanner() {
                                     const sa = shiftAssignments.find(a => a.empId === emp.id && a.date === w.date);
                                     const activeShiftId = sa ? sa.shiftId : emp.shiftId;
                                     const shiftObj = shifts.find(s => s.id === activeShiftId);
-
-                                    // Render cell
                                     const isHoliday = holidays.some(h => h.date === w.date);
-                                    const pickerId = `${emp.id}-${w.date}`;
-                                    const isPickerOpen = openPickerId === pickerId;
 
                                     return (
-                                        <div key={w.date} className={`p-2 min-w-[130px] relative transition-colors ${isHoliday ? 'bg-red-50/50 dark:bg-red-900/10' : ''}`}>
-                                            {/* Cell card — click opens picker */}
+                                        <div key={w.date} className={`p-2 min-w-[130px] flex flex-col gap-1.5 ${isHoliday ? 'bg-red-50/50 dark:bg-red-900/10' : ''}`}>
+                                            {/* Current shift chip */}
                                             {shiftObj ? (
-                                                <div
-                                                    onClick={() => !isPublished && setOpenPickerId(isPickerOpen ? null : pickerId)}
-                                                    className={`border-2 rounded-lg p-2 h-full min-h-[50px] transition-all ${isPublished ? 'cursor-default border-dashed' : 'cursor-pointer border-solid hover:shadow-md'} ${isPickerOpen ? 'border-[#4F46E5] shadow-md' : 'border-dashed'} ${getShiftStyling(shiftObj.name).base}`}
-                                                >
-                                                    <div className={`text-[10px] font-bold flex items-center gap-1 ${getShiftStyling(shiftObj.name).core}`}>
-                                                        {shiftObj.name}
-                                                        {isPublished && <span className="material-symbols-outlined text-[11px] opacity-50">lock</span>}
-                                                    </div>
-                                                    <div className="text-xs font-bold opacity-80 mt-0.5">{shiftObj.start} – {shiftObj.end}</div>
+                                                <div className={`border rounded-lg px-2 py-1 flex flex-col justify-center ${getShiftStyling(shiftObj.name).base}`}>
+                                                    <div className={`text-[10px] font-bold leading-tight ${getShiftStyling(shiftObj.name).core}`}>{shiftObj.name}</div>
+                                                    <div className="text-[10px] opacity-60 font-medium">{shiftObj.start} – {shiftObj.end}</div>
                                                 </div>
                                             ) : (
-                                                <div
-                                                    onClick={() => !isPublished && setOpenPickerId(isPickerOpen ? null : pickerId)}
-                                                    className={`flex flex-col items-center justify-center h-full min-h-[50px] gap-1 border-2 border-dashed rounded-lg transition-all ${isPublished ? 'text-slate-200 dark:text-slate-700 cursor-default' : `cursor-pointer ${isPickerOpen ? 'border-[#4F46E5] text-[#4F46E5]' : 'border-transparent text-slate-300 dark:text-slate-600 hover:border-slate-200 dark:hover:border-slate-700 hover:text-[#4F46E5]'}`}`}
-                                                >
-                                                    <span className="material-symbols-outlined text-sm">{isPublished ? 'lock' : 'add_circle'}</span>
-                                                    <span className="text-[9px] font-bold uppercase tracking-wider">{isPublished ? 'Locked' : 'Assign'}</span>
+                                                <div className="border border-dashed border-slate-200 dark:border-slate-700 rounded-lg px-2 py-1 flex items-center justify-center min-h-[32px]">
+                                                    <span className="text-[9px] text-slate-400 font-bold uppercase tracking-wider">
+                                                        {isPublished ? 'Locked' : 'Unassigned'}
+                                                    </span>
                                                 </div>
                                             )}
-
-                                            {/* Shift picker — click-controlled, no hover dependency */}
-                                            {!isPublished && isPickerOpen && (
-                                                <div
-                                                    data-shift-picker="true"
-                                                    className="absolute top-full left-1/2 -translate-x-1/2 mt-1 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl shadow-2xl p-2 z-30 flex flex-col gap-1 w-52 min-w-max"
+                                            {/* Native select — simple, always works */}
+                                            {!isPublished && (
+                                                <select
+                                                    value={activeShiftId && shifts.find(s => s.id === activeShiftId) ? activeShiftId : ''}
+                                                    onChange={e => {
+                                                        const val = e.target.value;
+                                                        if (val === '__unassign__') handleUnassignShift(emp.id, w.date);
+                                                        else if (val) handleAssignShift(emp.id, w.date, val);
+                                                    }}
+                                                    className="w-full text-[10px] font-semibold border border-slate-200 dark:border-slate-700 rounded-lg px-1.5 py-1 bg-white dark:bg-slate-900 text-slate-600 dark:text-slate-300 cursor-pointer focus:ring-2 focus:ring-[#4F46E5]/30 focus:border-[#4F46E5] outline-none"
                                                 >
-                                                    {shifts.length === 0 ? (
-                                                        <div className="px-3 py-3 text-center">
-                                                            <span className="material-symbols-outlined text-slate-300 dark:text-slate-600 text-2xl block mb-1">schedule</span>
-                                                            <p className="text-[9px] font-bold text-slate-400 uppercase tracking-widest">No shifts configured</p>
-                                                            <p className="text-[9px] text-slate-400 mt-0.5 leading-tight">Go to Settings → Shifts to create one.</p>
-                                                        </div>
-                                                    ) : shifts.map(s => {
-                                                        const restWarn = wouldViolateRest(emp.id, w.date, s.id);
-                                                        return (
-                                                            <button
-                                                                key={s.id}
-                                                                data-shift-picker="true"
-                                                                onClick={() => {
-                                                                    handleAssignShift(emp.id, w.date, s.id);
-                                                                    setOpenPickerId(null);
-                                                                }}
-                                                                className={`text-left px-3 py-2 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-700 flex flex-col gap-0.5 ${
-                                                                    restWarn ? 'text-red-500 dark:text-red-400' :
-                                                                    s.id === activeShiftId ? 'text-[#4F46E5] bg-[#4F46E5]/10 font-bold' :
-                                                                    'text-slate-700 dark:text-slate-200'
-                                                                }`}
-                                                            >
-                                                                <span className="flex items-center gap-1 text-xs font-bold">
-                                                                    {restWarn && <span className="material-symbols-outlined text-[11px]">warning</span>}
-                                                                    {s.id === activeShiftId && <span className="material-symbols-outlined text-[11px]">check</span>}
-                                                                    {s.name}
-                                                                </span>
-                                                                <span className="text-[10px] font-medium opacity-60">{s.start} – {s.end}</span>
-                                                            </button>
-                                                        );
-                                                    })}
-                                                    {shiftObj && (
-                                                        <button
-                                                            data-shift-picker="true"
-                                                            onClick={() => { handleUnassignShift(emp.id, w.date); setOpenPickerId(null); }}
-                                                            className="text-left px-3 py-1.5 rounded-lg text-xs font-bold text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20 flex items-center gap-1 border-t border-slate-100 dark:border-slate-700 mt-1 pt-1"
-                                                        >
-                                                            <span className="material-symbols-outlined text-[11px]">delete</span>
-                                                            Unassign
-                                                        </button>
-                                                    )}
-                                                </div>
+                                                    <option value="">— Pick shift —</option>
+                                                    {shifts.map(s => (
+                                                        <option key={s.id} value={s.id}>
+                                                            {s.name} ({s.start}–{s.end})
+                                                        </option>
+                                                    ))}
+                                                    {shiftObj && <option value="__unassign__">✕ Remove</option>}
+                                                </select>
                                             )}
                                         </div>
                                     );
+
                                 })}
                             </div>
                             );
