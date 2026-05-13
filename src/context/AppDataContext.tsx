@@ -813,10 +813,9 @@ export const AppDataProvider: React.FC<{ children: ReactNode }> = ({ children })
         ssbEmployerId: 'SSB-YGN-00123',
         taxId: '123456789',
         headquarters: 'No. 123, Pyay Road, Kamayut Township, Yangon, Myanmar',
-        officeLocations: [
-            { id: 'LOC-HQ', name: 'HQ Office (Yangon)', coords: { lat: 16.8201, lng: 96.1604 }, radius: 500 },
-            { id: 'LOC-FAC', name: 'Factory (Bago)', coords: { lat: 17.3333, lng: 96.4833 }, radius: 1000 }
-        ],
+        // Intentionally empty — Supabase is the source of truth for locations.
+        // Do NOT add hardcoded entries here; they would reappear after every hot reload.
+        officeLocations: [],
         adminIds: ['ADM-001', 'FIN-MGR-001'],
         atsCredits: 12,
         compliance: complianceSettings,
