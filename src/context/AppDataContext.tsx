@@ -5193,13 +5193,27 @@ export const AppDataProvider: React.FC<{ children: ReactNode }> = ({ children })
     };
 
     // --- Settings CRUD stubs (Location, Department, Position) ---
-    const addLocation = (loc: Omit<Types.OfficeLocation, 'id'>): { success: boolean; message: string } => {
-        const newLoc: Types.OfficeLocation = { ...loc, id: `LOC-${Date.now()}` } as Types.OfficeLocation;
+    const addLocation = (loc: any): { success: boolean; message: string } => {
+        // The modal stores lat/lng as flat fields; normalize to coords: { lat, lng }
+        const { lat, lng, address, ...rest } = loc;
+        const newLoc: Types.OfficeLocation = {
+            ...rest,
+            id: `LOC-${Date.now()}`,
+            address: address || '',
+            coords: { lat: lat ?? 0, lng: lng ?? 0 },
+        } as Types.OfficeLocation;
         setSystemSettings((prev: Types.SystemSettings) => ({ ...prev, officeLocations: [...(prev.officeLocations || []), newLoc] }));
         return { success: true, message: 'Location added.' };
     };
-    const updateLocation = (loc: Types.OfficeLocation): { success: boolean; message: string } => {
-        setSystemSettings((prev: Types.SystemSettings) => ({ ...prev, officeLocations: (prev.officeLocations || []).map((l: Types.OfficeLocation) => l.id === loc.id ? loc : l) }));
+    const updateLocation = (loc: any): { success: boolean; message: string } => {
+        // Also normalize flat lat/lng from editing state into coords shape
+        const { lat, lng, address, ...rest } = loc;
+        const normalized: Types.OfficeLocation = {
+            ...rest,
+            address: address || '',
+            coords: lat !== undefined ? { lat, lng: lng ?? 0 } : loc.coords,
+        } as Types.OfficeLocation;
+        setSystemSettings((prev: Types.SystemSettings) => ({ ...prev, officeLocations: (prev.officeLocations || []).map((l: Types.OfficeLocation) => l.id === normalized.id ? normalized : l) }));
         return { success: true, message: 'Location updated.' };
     };
     const deleteLocation = (id: string): { success: boolean; message: string } => {
