@@ -2234,6 +2234,25 @@ export default function Setting() {
                                         <input type="number" step="any" value={editingLoc ? editingLoc.lng : newLoc.lng} onChange={e => editingLoc ? setEditingLoc({...editingLoc, lng: parseFloat(e.target.value)}) : setNewLoc({...newLoc, lng: parseFloat(e.target.value)})} className="w-full px-3 py-2.5 border border-slate-100 dark:border-slate-700 rounded-xl dark:bg-slate-950 text-xs font-bold" />
                                     </div>
                                 </div>
+                                <div>
+                                    <label className="text-xs font-bold text-slate-500 uppercase tracking-widest mb-1 block">Geofence Radius (meters)</label>
+                                    <div className="relative">
+                                        <input
+                                            type="number"
+                                            min="50"
+                                            max="10000"
+                                            step="50"
+                                            value={editingLoc ? (editingLoc.radius ?? 500) : newLoc.radius}
+                                            onChange={e => {
+                                                const v = parseInt(e.target.value, 10);
+                                                editingLoc ? setEditingLoc({...editingLoc, radius: v}) : setNewLoc({...newLoc, radius: v});
+                                            }}
+                                            className="w-full px-3 py-2.5 border border-slate-100 dark:border-slate-700 rounded-xl dark:bg-slate-950 text-xs font-bold pr-16"
+                                        />
+                                        <span className="absolute right-3 top-1/2 -translate-y-1/2 text-[10px] font-black text-slate-400 uppercase tracking-widest pointer-events-none">meters</span>
+                                    </div>
+                                    <p className="text-[10px] text-slate-400 mt-1">Recommended: 100–500m for office, 500–2000m for factory/site.</p>
+                                </div>
                                 {(editingLoc ? editingLoc.lat === 0 : newLoc.lat === 0) && (
                                     <div className="p-3 bg-amber-50 dark:bg-amber-900/20 border border-amber-100 dark:border-amber-900/40 rounded-xl flex gap-2">
                                         <span className="material-symbols-outlined text-amber-600 text-sm">warning</span>
