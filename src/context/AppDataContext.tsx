@@ -4429,16 +4429,22 @@ export const AppDataProvider: React.FC<{ children: ReactNode }> = ({ children })
         return { success: true, message: `Document "${doc.title}" permanently deleted.` };
     };
 
-    const createAnnouncement = (ann: Omit<Types.Announcement, 'id' | 'createdAt' | 'status' | 'sourceType'> & { isHoliday?: boolean, holidayDate?: string }) => {
+    const createAnnouncement = (ann: any) => {
         const id = `ANN-${Math.floor(Math.random() * 10000).toString().padStart(4, '0')}`;
         const newAnn: Types.Announcement = {
-            ...ann,
             id,
+            title: ann.title,
+            content: ann.content,
+            priority: ann.priority || 'Medium',
+            targetAudience: ann.targetAudience || (ann.targetFilters?.dept ? 'Department' : 'All'),
+            targetDept: ann.targetDept || ann.targetFilters?.dept,
+            targetRole: ann.targetRole || ann.targetFilters?.role,
+            createdBy: ann.createdBy || 'Admin',
             status: 'Published',
             createdAt: new Date().toISOString(),
             sourceType: 'Manual',
             requiresAcknowledgement: ann.requiresAcknowledgement || false,
-            acknowledgements: ann.requiresAcknowledgement ? [] : []
+            acknowledgements: []
         };
 
         if (ann.isHoliday && ann.holidayDate) {
@@ -4465,6 +4471,7 @@ export const AppDataProvider: React.FC<{ children: ReactNode }> = ({ children })
             sourceType: newAnn.sourceType,
             requiresAcknowledgement: newAnn.requiresAcknowledgement,
             acknowledgements: newAnn.acknowledgements || [],
+            createdAt: newAnn.createdAt,
         }).then(({ error }) => {
             if (error) console.error('Supabase announcement insert error:', error.message);
         });

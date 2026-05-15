@@ -659,23 +659,7 @@ export type JobActivityChange = {
     resignationReason?: string;
 };
 
-export type Announcement = {
-    id: string;
-    title: string;
-    content: string;
-    dept?: string;
-    status: 'Pending' | 'Published';
-    createdAt: string;
-    sourceType: 'Promotion' | 'Manual';
-    sourceId?: string;
-    targetFilters?: {
-        dept?: string;
-        location?: string;
-        empType?: string;
-    };
-    acknowledgmentRequired?: boolean;
-    acknowledgedBy?: string[];
-};
+// Removed legacy Announcement type to prevent ambiguity
 
 export type RecruitmentAction = {
     id: string;
