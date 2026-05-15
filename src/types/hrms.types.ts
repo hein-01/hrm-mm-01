@@ -186,6 +186,7 @@ export type Shift = {
     name: string;
     start: string;
     end: string;
+    color?: string;
 };
 
 export type ShiftAssignment = {
@@ -762,6 +763,7 @@ export type SystemSettings = {
     taxId: string;
     headquarters: string;
     officeLocations: OfficeLocation[];
+    shifts?: Shift[];
     adminIds: string[];
     atsCredits: number;
     compliance: ComplianceSettings;

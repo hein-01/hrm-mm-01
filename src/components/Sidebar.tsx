@@ -139,7 +139,7 @@ export default function Sidebar({ activeTab }: SidebarProps) {
                     <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest px-2 mb-3">Main Menu</p>
                     <NavLink to="/home" tabName="Home" icon="home" label="Home" activeTab={activeTab} activeRef={activeRef} />
                     <NavLink to="/reports" tabName="Reports" icon="assessment" label="Reports" activeTab={activeTab} activeRef={activeRef} />
-                    <NavLink to="/tickets" tabName="Tickets" icon="support_agent" label={`Help Desk${tickets.filter(t => t.status === 'Open').length > 0 ? ` (${tickets.filter(t => t.status === 'Open').length})` : ''}`} activeTab={activeTab} activeRef={activeRef} />
+                    <NavLink to="/tickets" tabName="Tickets" icon="support_agent" label={`Help Desk${tickets.filter(t => ['Open', 'Pending', 'On Hold'].includes(t.status)).length > 0 ? ` (${tickets.filter(t => ['Open', 'Pending', 'On Hold'].includes(t.status)).length})` : ''}`} activeTab={activeTab} activeRef={activeRef} />
                 </div>
 
                 {/* Time & Attendance */}

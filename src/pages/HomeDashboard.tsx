@@ -4,6 +4,7 @@ import Sidebar from '../components/Sidebar';
 import Header from '../components/Header';
 import { useAppData } from '../context/AppDataContext';
 import { useSystemCalendar } from '../context/SystemCalendarContext';
+import { useUserAccess } from '../context/UserAccessProvider';
 
 const generateAuditHash = async (adminId: string, timestamp: string, dataLength: number): Promise<string> => {
     const rawString = `${adminId}-${timestamp}-${dataLength}`;
@@ -40,12 +41,13 @@ export default function HomeDashboard() {
         attendanceLogs, shiftAssignments, holidays, shifts, securityAuditLogs, subscriptionTier, gpsLogs, addDocumentToLibrary
     } = useAppData();
     const { getFormattedDate, parseGregorianDate, getCurrentDateISO } = useSystemCalendar();
+    const { isAdmin } = useUserAccess();
 
     const currentAdminId = 'EMP-001';
 
     // RBAC: Derive access scope from the current user's employee record
     const currentUser = employees.find(e => e.id === currentAdminId) ?? null;
-    const isCompanyWideAdmin = !currentUser ||
+    const isCompanyWideAdmin = isAdmin(currentAdminId) || !currentUser ||
         ['Admin', 'HR Director', 'CEO', 'Director', 'HR Manager'].some(r => (currentUser.role || '').includes(r));
     const scopedDept: string | null = isCompanyWideAdmin ? null : (currentUser?.dept ?? null);
 

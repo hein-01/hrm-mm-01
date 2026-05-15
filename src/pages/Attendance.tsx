@@ -37,7 +37,17 @@ export default function Attendance() {
     const [showDevSettings, setShowDevSettings] = useState(false);
 
     // Personal Mobile Simulator State
-    const [simLocation, setSimLocation] = useState(systemSettings.officeLocations[0]?.id ?? '');
+    // Derive the active employee's assigned location ID so the simulator
+    // defaults to the correct geofence rather than always using [0].
+    const [simLocation, setSimLocation] = useState(() => {
+        const activeEmp = employees.find(e => e.id === 'EMP-001');
+        const assignedLocName = (activeEmp as any)?.officeLocation;
+        if (assignedLocName) {
+            const matched = systemSettings.officeLocations.find(l => l.name === assignedLocName);
+            if (matched) return matched.id;
+        }
+        return systemSettings.officeLocations[0]?.id ?? '';
+    });
     const [isDevModeOverride, setIsDevModeOverride] = useState(false);
     const [isPunching, setIsPunching] = useState(false);
     const [punchSuccess, setPunchSuccess] = useState(false);
@@ -293,6 +303,73 @@ export default function Attendance() {
     const kpiMissing = kpiBase.filter(l => l.status === 'Missing Out').length;
     const kpiOnLeave = kpiBase.filter(l => l.status === 'On Leave').length;
 
+    const handlePrintReport = () => {
+        const printWindow = window.open('', '_blank');
+        if (!printWindow) return;
+        const tableRows = filteredLogs.map(log => `
+            <tr>
+                <td>${log.name}<br><small>${log.empId} - ${log.dept}</small></td>
+                <td>${log.checkIn}</td>
+                <td>${log.checkOut}</td>
+                <td>${log.project || '-'}</td>
+                <td>${log.totalHours > 0 ? log.totalHours + 'h' : '-'}</td>
+                <td>${log.status}</td>
+                <td>${getPenalty(log.id) > 0 ? getPenalty(log.id).toLocaleString() + ' MMK' : '-'}</td>
+            </tr>
+        `).join('');
+        printWindow.document.write(`
+            <html>
+                <head>
+                    <title>Attendance Report - ${dateFilter}</title>
+                    <style>
+                        body { font-family: Arial, sans-serif; padding: 20px; }
+                        table { width: 100%; border-collapse: collapse; margin-top: 20px; }
+                        th, td { border: 1px solid #ddd; padding: 8px; text-align: left; font-size: 11px; }
+                        th { background-color: #4F46E5; color: white; }
+                        tr:nth-child(even) { background-color: #f9f9f9; }
+                        .header { text-align: center; margin-bottom: 20px; }
+                        .kpi-row { margin-bottom: 20px; }
+                        .kpi { display: inline-block; margin: 5px 15px; padding: 8px 15px; background: #f0f0f0; border-radius: 4px; }
+                        @media print { body { -webkit-print-color-adjust: exact; } }
+                    </style>
+                </head>
+                <body>
+                    <div class="header">
+                        <h1>Attendance Report</h1>
+                        <p>Date: ${dateFilter}</p>
+                        <div class="kpi-row">
+                            <span class="kpi"><strong>Present:</strong> ${kpiPresent}</span>
+                            <span class="kpi"><strong>Late:</strong> ${kpiLate}</span>
+                            <span class="kpi"><strong>Missing:</strong> ${kpiMissing}</span>
+                            <span class="kpi"><strong>On Leave:</strong> ${kpiOnLeave}</span>
+                        </div>
+                    </div>
+                    <table>
+                        <thead>
+                            <tr>
+                                <th>Employee</th>
+                                <th>Check-In</th>
+                                <th>Check-Out</th>
+                                <th>Project</th>
+                                <th>Hours</th>
+                                <th>Status</th>
+                                <th>Penalty</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            ${tableRows}
+                        </tbody>
+                    </table>
+                    <p style="margin-top:20px; font-size:10px; color:#888;">Generated on ${new Date().toLocaleString()}</p>
+                </body>
+            </html>
+        `);
+        printWindow.document.close();
+        setTimeout(() => {
+            printWindow.print();
+        }, 100);
+    };
+
     const renderMethodBadge = (method: string) => {
         const configs: Record<string, { icon: string; label: string; cls: string }> = {
             'QR':         { icon: 'qr_code_scanner', label: 'QR Scan',   cls: 'bg-blue-50 text-blue-600 border-blue-200 dark:bg-blue-900/20 dark:text-blue-400 dark:border-blue-900/30' },
@@ -484,83 +561,12 @@ export default function Attendance() {
                                     {/* Import + Sync grouped right */}
                                     <div className="flex items-center gap-1.5 ml-auto h-full">
                                         <button
-                                            onClick={() => window.print()}
+                                            onClick={handlePrintReport}
                                             className="h-full flex items-center gap-1.5 px-3 rounded-md text-slate-600 dark:text-slate-400 border border-slate-300 dark:border-slate-600 text-[13px] font-semibold hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors bg-transparent shadow-sm whitespace-nowrap"
-                                            title="Print Attendance Report"
+                                            title="Print or Save as PDF"
                                         >
                                             <span className="material-symbols-outlined text-[18px]">print</span>
                                             Print
-                                        </button>
-                                        <button
-                                            onClick={() => {
-                                                const printWindow = window.open('', '_blank');
-                                                if (!printWindow) return;
-                                                const tableRows = filteredLogs.map(log => `
-                                                    <tr>
-                                                        <td>${log.name}<br><small>${log.empId} - ${log.dept}</small></td>
-                                                        <td>${log.checkIn}</td>
-                                                        <td>${log.checkOut}</td>
-                                                        <td>${log.project || '-'}</td>
-                                                        <td>${log.totalHours > 0 ? log.totalHours + 'h' : '-'}</td>
-                                                        <td>${log.status}</td>
-                                                        <td>${getPenalty(log.id) > 0 ? getPenalty(log.id).toLocaleString() + ' MMK' : '-'}</td>
-                                                    </tr>
-                                                `).join('');
-                                                printWindow.document.write(`
-                                                    <html>
-                                                        <head>
-                                                            <title>Attendance Report - ${dateFilter}</title>
-                                                            <style>
-                                                                body { font-family: Arial, sans-serif; padding: 20px; }
-                                                                table { width: 100%; border-collapse: collapse; margin-top: 20px; }
-                                                                th, td { border: 1px solid #ddd; padding: 8px; text-align: left; font-size: 11px; }
-                                                                th { background-color: #4F46E5; color: white; }
-                                                                tr:nth-child(even) { background-color: #f9f9f9; }
-                                                                .header { text-align: center; margin-bottom: 20px; }
-                                                                .kpi-row { margin-bottom: 20px; }
-                                                                .kpi { display: inline-block; margin: 5px 15px; padding: 8px 15px; background: #f0f0f0; border-radius: 4px; }
-                                                                @media print { body { -webkit-print-color-adjust: exact; } }
-                                                            </style>
-                                                        </head>
-                                                        <body>
-                                                            <div class="header">
-                                                                <h1>Attendance Report</h1>
-                                                                <p>Date: ${dateFilter}</p>
-                                                                <div class="kpi-row">
-                                                                    <span class="kpi"><strong>Present:</strong> ${kpiPresent}</span>
-                                                                    <span class="kpi"><strong>Late:</strong> ${kpiLate}</span>
-                                                                    <span class="kpi"><strong>Missing:</strong> ${kpiMissing}</span>
-                                                                    <span class="kpi"><strong>On Leave:</strong> ${kpiOnLeave}</span>
-                                                                </div>
-                                                            </div>
-                                                            <table>
-                                                                <thead>
-                                                                    <tr>
-                                                                        <th>Employee</th>
-                                                                        <th>Check-In</th>
-                                                                        <th>Check-Out</th>
-                                                                        <th>Project</th>
-                                                                        <th>Hours</th>
-                                                                        <th>Status</th>
-                                                                        <th>Penalty</th>
-                                                                    </tr>
-                                                                </thead>
-                                                                <tbody>
-                                                                    ${tableRows}
-                                                                </tbody>
-                                                            </table>
-                                                            <p style="margin-top:20px; font-size:10px; color:#888;">Generated on ${new Date().toLocaleString()}</p>
-                                                        </body>
-                                                    </html>
-                                                `);
-                                                printWindow.document.close();
-                                                printWindow.print();
-                                            }}
-                                            className="h-full flex items-center gap-1.5 px-3 rounded-md text-slate-600 dark:text-slate-400 border border-slate-300 dark:border-slate-600 text-[13px] font-semibold hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors bg-transparent shadow-sm whitespace-nowrap"
-                                            title="Export as PDF (via Print)"
-                                        >
-                                            <span className="material-symbols-outlined text-[18px]">picture_as_pdf</span>
-                                            PDF
                                         </button>
                                         <button
                                             onClick={handleExportXLSX}
@@ -578,7 +584,7 @@ export default function Attendance() {
                                             CSV
                                         </button>
                                         <label className="h-full flex items-center justify-center gap-1.5 px-3 rounded-md text-slate-600 dark:text-slate-400 border border-slate-300 dark:border-slate-600 text-[13px] font-semibold hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors bg-transparent shadow-sm cursor-pointer whitespace-nowrap">
-                                            <span className="material-symbols-outlined text-[18px]">upload</span>
+                                            <span className="material-symbols-outlined text-[18px]">upload_file</span>
                                             Import
                                             <input type="file" accept=".csv" className="hidden" onChange={handleFileUpload} />
                                         </label>

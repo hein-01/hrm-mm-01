@@ -238,49 +238,6 @@ export const PayrollProvider: React.FC<PayrollProviderProps> = ({
         return () => { supabase.removeChannel(channel); };
     }, []);
 
-    // Fetch and subscribe to Payroll Groups
-    useEffect(() => {
-        const fetchGroups = async () => {
-            const { data, error } = await supabase.from('payroll_groups').select('*').order('createdAt', { ascending: false });
-            if (!error && data) setPayrollGroups(data);
-        };
-        fetchGroups();
-
-        const channel = supabase.channel('payroll_groups-changes')
-            .on('postgres_changes', { event: '*', schema: 'public', table: 'payroll_groups' }, (payload) => {
-                if (payload.eventType === 'INSERT') {
-                    setPayrollGroups(prev => prev.some(r => r.id === payload.new.id) ? prev : [payload.new as Types.PayrollGroup, ...prev]);
-                } else if (payload.eventType === 'UPDATE') {
-                    setPayrollGroups(prev => prev.map(r => r.id === payload.new.id ? payload.new as Types.PayrollGroup : r));
-                } else if (payload.eventType === 'DELETE') {
-                    setPayrollGroups(prev => prev.filter(r => r.id !== payload.old.id));
-                }
-            }).subscribe();
-
-        return () => { supabase.removeChannel(channel); };
-    }, []);
-
-    // Fetch and subscribe to Payroll Records
-    useEffect(() => {
-        const fetchRecords = async () => {
-            const { data, error } = await supabase.from('payroll_records').select('*').order('createdAt', { ascending: false }).limit(200);
-            if (!error && data) setPayrollRecords(data);
-        };
-        fetchRecords();
-
-        const channel = supabase.channel('payroll_records-changes')
-            .on('postgres_changes', { event: '*', schema: 'public', table: 'payroll_records' }, (payload) => {
-                if (payload.eventType === 'INSERT') {
-                    setPayrollRecords(prev => prev.some(r => r.id === payload.new.id) ? prev : [payload.new as Types.PayrollRecord, ...prev]);
-                } else if (payload.eventType === 'UPDATE') {
-                    setPayrollRecords(prev => prev.map(r => r.id === payload.new.id ? payload.new as Types.PayrollRecord : r));
-                } else if (payload.eventType === 'DELETE') {
-                    setPayrollRecords(prev => prev.filter(r => r.id !== payload.old.id));
-                }
-            }).subscribe();
-
-        return () => { supabase.removeChannel(channel); };
-    }, []);
 
     // Fetch and subscribe to Disbursement Batches
     useEffect(() => {

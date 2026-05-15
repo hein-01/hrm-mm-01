@@ -426,15 +426,15 @@ export default function PayrollRun() {
                                                             </td>
                                                             <td className="px-4 py-4 text-right font-medium text-slate-600 dark:text-slate-400 tabular-nums">{rec.salary.toLocaleString()}</td>
                                                             <td className={`px-4 py-4 text-right text-emerald-600 font-black tabular-nums ${(currentStep === 3 || currentStep === 5) ? 'bg-emerald-100 dark:bg-emerald-900/30 border-l-2 border-r-2 border-emerald-300' : ''}`}>
-                                                                +{currentStep === 3
-                                                                    ? 0  // Attendance step: no additions
+                                                                +{((currentStep === 3 || currentStep === 4 || currentStep === 6)
+                                                                    ? 0  // No additions shown in Attendance, Leaves, or Tax steps
                                                                     : currentStep === 5
                                                                         ? (rec.otherAdditions ?? 0)  // Other Adjustments step
                                                                         : rec.additions  // Default: total additions
-                                                                .toLocaleString()}
+                                                                ).toLocaleString()}
                                                             </td>
                                                             <td className={`px-4 py-4 text-right text-rose-500 font-black tabular-nums ${(currentStep === 3 || currentStep === 4 || currentStep === 5 || currentStep === 6) ? 'bg-rose-100 dark:bg-rose-900/30 border-l-2 border-r-2 border-rose-300' : ''}`}>
-                                                                -{currentStep === 3
+                                                                -{(currentStep === 3
                                                                     ? (rec.attendanceDeductions ?? 0)  // Attendance: late/absent penalties
                                                                     : currentStep === 4
                                                                         ? (rec.leaveDeductions ?? 0)  // Leaves: unpaid leave
@@ -443,7 +443,7 @@ export default function PayrollRun() {
                                                                             : currentStep === 6
                                                                                 ? (rec.ssb + rec.pit)  // Tax & SSB
                                                                                 : (rec.deductions + rec.ssb + rec.pit)  // Default: total
-                                                                .toLocaleString()}
+                                                                ).toLocaleString()}
                                                             </td>
                                                             <td className="px-4 py-4 text-right">
                                                                 <span className="px-3 py-1 bg-slate-900 dark:bg-indigo-950 text-white rounded-lg font-black text-xs tabular-nums">

@@ -13,6 +13,7 @@ interface DropdownMenuProps {
   className?: string;
   triggerClassName?: string;
   align?: 'left' | 'right';
+  customTrigger?: React.ReactNode;
 }
 
 export default function DropdownMenu({
@@ -22,6 +23,7 @@ export default function DropdownMenu({
   className = '',
   triggerClassName = '',
   align = 'left',
+  customTrigger,
 }: DropdownMenuProps) {
   const [isOpen, setIsOpen] = useState(false);
   const containerRef = useRef<HTMLDivElement>(null);
@@ -51,20 +53,31 @@ export default function DropdownMenu({
   return (
     <div ref={containerRef} className={`relative ${className}`}>
       {/* Trigger button */}
-      <button
-        type="button"
-        onClick={() => setIsOpen(prev => !prev)}
-        aria-haspopup="listbox"
-        aria-expanded={isOpen}
-        className={`flex items-center gap-2 px-3 py-2 rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 text-sm font-medium text-slate-700 dark:text-slate-200 hover:border-indigo-400 hover:bg-indigo-50/40 dark:hover:bg-slate-700 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 transition-all shadow-sm whitespace-nowrap ${triggerClassName}`}
-      >
-        <span className="truncate max-w-[180px]">{selected?.label ?? value}</span>
-        <span
-          className={`material-symbols-outlined text-[16px] text-slate-400 transition-transform duration-200 ${isOpen ? 'rotate-180' : ''}`}
+      {customTrigger ? (
+        <div 
+            onClick={() => setIsOpen(prev => !prev)} 
+            aria-haspopup="listbox" 
+            aria-expanded={isOpen} 
+            className="cursor-pointer"
         >
-          keyboard_arrow_down
-        </span>
-      </button>
+            {customTrigger}
+        </div>
+      ) : (
+          <button
+            type="button"
+            onClick={() => setIsOpen(prev => !prev)}
+            aria-haspopup="listbox"
+            aria-expanded={isOpen}
+            className={`flex items-center gap-2 px-3 py-2 rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 text-sm font-medium text-slate-700 dark:text-slate-200 hover:border-indigo-400 hover:bg-indigo-50/40 dark:hover:bg-slate-700 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 transition-all shadow-sm whitespace-nowrap ${triggerClassName}`}
+          >
+            <span className="truncate max-w-[180px]">{selected?.label ?? value}</span>
+            <span
+              className={`material-symbols-outlined text-[16px] text-slate-400 transition-transform duration-200 ${isOpen ? 'rotate-180' : ''}`}
+            >
+              keyboard_arrow_down
+            </span>
+          </button>
+      )}
 
       {/* Floating panel */}
       {isOpen && (

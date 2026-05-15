@@ -57,7 +57,8 @@ export default function ShiftPlanner() {
         systemSettings,
         publishedWeeks,
         assignDepartmentShift,
-        publishWeek
+        publishWeek,
+        unpublishWeek
     } = useAppData();
 
     const [toast, setToast] = useState<{message: string, type: 'success' | 'error'} | null>(null);
@@ -422,11 +423,25 @@ export default function ShiftPlanner() {
 
                     {/* Published Banner */}
                     {isPublished && (
-                        <div className="flex items-center gap-3 px-5 py-3 bg-emerald-50 dark:bg-emerald-900/20 border border-emerald-200 dark:border-emerald-800/50 rounded-t-xl border-b-0">
-                            <span className="material-symbols-outlined text-emerald-600 text-xl">verified</span>
-                            <p className="text-sm font-bold text-emerald-800 dark:text-emerald-300">
-                                Schedule Published — employees have been notified for the week of {weekLabel}.
-                            </p>
+                        <div className="flex items-center justify-between px-5 py-3 bg-emerald-50 dark:bg-emerald-900/20 border border-emerald-200 dark:border-emerald-800/50 rounded-t-xl border-b-0">
+                            <div className="flex items-center gap-3">
+                                <span className="material-symbols-outlined text-emerald-600 text-xl">verified</span>
+                                <p className="text-sm font-bold text-emerald-800 dark:text-emerald-300">
+                                    Schedule Published — employees have been notified for the week of {weekLabel}.
+                                </p>
+                            </div>
+                            <button
+                                onClick={() => {
+                                    if (window.confirm('Are you sure you want to unlock this schedule? This will allow edits again.')) {
+                                        const res = unpublishWeek(weekKey, 'ADM-001');
+                                        setToast({ message: res.message, type: res.success ? 'success' : 'error' });
+                                    }
+                                }}
+                                className="px-3 py-1.5 bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-200 border border-emerald-200 dark:border-emerald-800 rounded-lg text-xs font-bold hover:bg-slate-50 dark:hover:bg-slate-700 transition-colors flex items-center gap-1.5 shadow-sm"
+                            >
+                                <span className="material-symbols-outlined text-[16px]">lock_open</span>
+                                Unlock / Revise
+                            </button>
                         </div>
                     )}
 
@@ -489,39 +504,49 @@ export default function ShiftPlanner() {
                                     const isHoliday = holidays.some(h => h.date === w.date);
 
                                     return (
-                                        <div key={w.date} className={`p-2 min-w-[130px] flex flex-col gap-1.5 ${isHoliday ? 'bg-red-50/50 dark:bg-red-900/10' : ''}`}>
-                                            {/* Current shift chip */}
-                                            {shiftObj ? (
-                                                <div className={`border rounded-lg px-2 py-1 flex flex-col justify-center ${getShiftStyling(shiftObj.name).base}`}>
-                                                    <div className={`text-[10px] font-bold leading-tight ${getShiftStyling(shiftObj.name).core}`}>{shiftObj.name}</div>
-                                                    <div className="text-[10px] opacity-60 font-medium">{shiftObj.start} – {shiftObj.end}</div>
-                                                </div>
+                                        <div key={w.date} className={`p-2 min-w-[130px] flex flex-col justify-center ${isHoliday ? 'bg-red-50/50 dark:bg-red-900/10' : ''}`}>
+                                            {isPublished ? (
+                                                // Locked state: no select, no chevron
+                                                shiftObj ? (
+                                                    <div className={`border rounded-xl px-3 py-2 flex flex-col justify-center ${getShiftStyling(shiftObj.name).base}`}>
+                                                        <div className={`text-[11px] font-bold leading-tight ${getShiftStyling(shiftObj.name).core}`}>{shiftObj.name}</div>
+                                                        <div className="text-[10px] opacity-70 font-medium mt-0.5">{shiftObj.start} – {shiftObj.end}</div>
+                                                    </div>
+                                                ) : (
+                                                    <div className="border border-dashed border-slate-200 dark:border-slate-700 rounded-xl px-3 py-2 flex items-center justify-center min-h-[46px]">
+                                                        <span className="text-[9px] text-slate-400 font-bold uppercase tracking-wider">Locked</span>
+                                                    </div>
+                                                )
                                             ) : (
-                                                <div className="border border-dashed border-slate-200 dark:border-slate-700 rounded-lg px-2 py-1 flex items-center justify-center min-h-[32px]">
-                                                    <span className="text-[9px] text-slate-400 font-bold uppercase tracking-wider">
-                                                        {isPublished ? 'Locked' : 'Unassigned'}
-                                                    </span>
-                                                </div>
-                                            )}
-                                            {/* Native select — simple, always works */}
-                                            {!isPublished && (
-                                                <select
+                                                // Editable state: unified button with modern DropdownMenu list
+                                                <DropdownMenu
                                                     value={activeShiftId && shifts.find(s => s.id === activeShiftId) ? activeShiftId : ''}
-                                                    onChange={e => {
-                                                        const val = e.target.value;
+                                                    onChange={val => {
                                                         if (val === '__unassign__') handleUnassignShift(emp.id, w.date);
                                                         else if (val) handleAssignShift(emp.id, w.date, val);
                                                     }}
-                                                    className="w-full text-[10px] font-semibold border border-slate-200 dark:border-slate-700 rounded-lg px-1.5 py-1 bg-white dark:bg-slate-900 text-slate-600 dark:text-slate-300 cursor-pointer focus:ring-2 focus:ring-[#4F46E5]/30 focus:border-[#4F46E5] outline-none"
-                                                >
-                                                    <option value="">— Pick shift —</option>
-                                                    {shifts.map(s => (
-                                                        <option key={s.id} value={s.id}>
-                                                            {s.name} ({s.start}–{s.end})
-                                                        </option>
-                                                    ))}
-                                                    {shiftObj && <option value="__unassign__">✕ Remove</option>}
-                                                </select>
+                                                    className="w-full group"
+                                                    options={[
+                                                        ...shifts.map(s => ({ value: s.id, label: s.name, subLabel: `${s.start}–${s.end}` })),
+                                                        ...(shiftObj ? [{ value: '__unassign__', label: '✕ Remove Shift' }] : [])
+                                                    ]}
+                                                    customTrigger={
+                                                        shiftObj ? (
+                                                            <div className={`border rounded-xl px-3 py-2 flex items-center justify-between transition-colors ${getShiftStyling(shiftObj.name).base} group-hover:ring-2 ring-black/5 dark:ring-white/10`}>
+                                                                <div className="flex flex-col items-start pr-2">
+                                                                    <div className={`text-[11px] font-bold leading-tight ${getShiftStyling(shiftObj.name).core}`}>{shiftObj.name}</div>
+                                                                    <div className="text-[10px] opacity-70 font-medium mt-0.5">{shiftObj.start} – {shiftObj.end}</div>
+                                                                </div>
+                                                                <span className="material-symbols-outlined text-[18px] opacity-50">expand_more</span>
+                                                            </div>
+                                                        ) : (
+                                                            <div className="border border-dashed border-slate-300 dark:border-slate-600 rounded-xl px-3 py-2 flex items-center justify-between bg-white/50 dark:bg-slate-800/50 transition-colors group-hover:border-slate-400 dark:group-hover:border-slate-500 min-h-[46px]">
+                                                                <span className="text-[10px] text-slate-400 font-bold">Unassigned</span>
+                                                                <span className="material-symbols-outlined text-[18px] text-slate-400">expand_more</span>
+                                                            </div>
+                                                        )
+                                                    }
+                                                />
                                             )}
                                         </div>
                                     );

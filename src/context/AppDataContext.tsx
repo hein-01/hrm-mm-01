@@ -93,6 +93,7 @@ type AppDataContextType = {
     publishedWeeks: string[];
     assignDepartmentShift: (deptId: string, shiftId: string, date: string, adminId?: string) => { success: boolean; message: string; skippedNames: string[] };
     publishWeek: (weekStart: string, adminId?: string) => { success: boolean; message: string };
+    unpublishWeek: (weekStart: string, adminId?: string) => { success: boolean; message: string };
     addManualPunch: (empId: string, date: string, shiftId: string, checkIn: string, checkOut: string, reason: string, adminId: string, customStart?: string, customEnd?: string, workType?: 'Regular' | 'Overtime') => { success: boolean; message: string };
     onboardingRecords: Types.OnboardingRecord[];
     setOnboardingRecords: React.Dispatch<React.SetStateAction<Types.OnboardingRecord[]>>;
@@ -298,45 +299,7 @@ export const AppDataProvider: React.FC<{ children: ReactNode }> = ({ children })
         };
     }, []);
 
-    // Fetch shift assignments from Supabase
-    const fetchShiftAssignments = async () => {
-        try {
-            const { data, error } = await supabase.from('shift_assignments').select('*').limit(500);
-            if (data && data.length > 0 && !error) {
-                const mapped: Types.ShiftAssignment[] = data.map((sa: any) => ({
-                    id: sa.id,
-                    empId: sa.empId,
-                    date: sa.date,
-                    shiftId: sa.shiftId,
-                    modifiedByHr: sa.modifiedByHr,
-                    reason: sa.reason,
-                    adminId: sa.adminId,
-                    oldShiftId: sa.oldShiftId,
-                    customStart: sa.customStart,
-                    customEnd: sa.customEnd,
-                    workType: sa.workType,
-                    source: sa.source
-                }));
-                setShiftAssignments(mapped);
-            }
-        } catch (err) {
-            console.log('Using local shift assignments:', err);
-        }
-    };
-    fetchShiftAssignments();
 
-    // Fetch published weeks from Supabase
-    const fetchPublishedWeeks = async () => {
-        try {
-            const { data, error } = await supabase.from('published_weeks').select('*');
-            if (data && data.length > 0 && !error) {
-                setPublishedWeeks(data.map((pw: any) => pw.weekKey));
-            }
-        } catch (err) {
-            console.log('Using local published weeks:', err);
-        }
-    };
-    fetchPublishedWeeks();
 
     const [reviews, setReviews] = useState<Types.Review[]>([]);
 
@@ -754,7 +717,9 @@ export const AppDataProvider: React.FC<{ children: ReactNode }> = ({ children })
                 if (error) throw error;
                 if (data?.data && Object.keys(data.data).length > 0) {
                     const s = data.data as Types.SystemSettings;
-                    setSystemSettings(s);
+                    // Merge carefully — do NOT overwrite officeLocations; those
+                    // are managed separately by the office_locations table.
+                    setSystemSettings(prev => ({ ...s, officeLocations: prev.officeLocations }));
                     if (s.compliance) setComplianceSettings(s.compliance);
                 }
             } catch (err) {
@@ -773,7 +738,8 @@ export const AppDataProvider: React.FC<{ children: ReactNode }> = ({ children })
                 }
                 if (payload.new?.data) {
                     const s = payload.new.data as Types.SystemSettings;
-                    setSystemSettings(s);
+                    // Same guard — preserve officeLocations from the dedicated table
+                    setSystemSettings(prev => ({ ...s, officeLocations: prev.officeLocations }));
                     if (s.compliance) setComplianceSettings(s.compliance);
                 }
             })
@@ -813,9 +779,16 @@ export const AppDataProvider: React.FC<{ children: ReactNode }> = ({ children })
         ssbEmployerId: 'SSB-YGN-00123',
         taxId: '123456789',
         headquarters: 'No. 123, Pyay Road, Kamayut Township, Yangon, Myanmar',
-        // Intentionally empty — Supabase is the source of truth for locations.
-        // Do NOT add hardcoded entries here; they would reappear after every hot reload.
-        officeLocations: [],
+        // We initialize from localStorage to prevent flash of empty content (FOEC) before Supabase responds.
+        officeLocations: (() => {
+            try {
+                const saved = localStorage.getItem('hrms_cached_office_locations');
+                if (saved) return JSON.parse(saved);
+            } catch (e) {
+                console.error('Failed to parse cached locations', e);
+            }
+            return [];
+        })(),
         adminIds: ['ADM-001', 'FIN-MGR-001'],
         atsCredits: 12,
         compliance: complianceSettings,
@@ -1363,11 +1336,9 @@ export const AppDataProvider: React.FC<{ children: ReactNode }> = ({ children })
         return () => { supabase.removeChannel(channel); };
     }, []);
 
-    const [jobActivityChanges, setJobActivityChanges] = useState<Types.JobActivityChange[]>([
-
-        { id: 'JAC-001', empId: 'EMP-004', name: 'Thida', type: 'Promotion', detail: 'From Junior UI Designer to UI Designer', effectiveDate: '2023-11-01', status: 'Pending', submittedDate: '2023-10-20', priority: 'High', category: 'Staffing', newRole: 'UI Designer', newDept: 'Design' },
-        { id: 'JAC-002', empId: 'EMP-012', name: 'Maung Maung', type: 'Transfer', detail: 'Transfer from Engineering to R&D', effectiveDate: '2023-11-15', status: 'Pending', submittedDate: '2023-10-22', priority: 'Medium', category: 'Staffing', newDept: 'R&D' }
-    ]);
+    // NOTE: No hardcoded mock defaults here — Supabase fetch is the single source of truth.
+    // Seeding defaults here caused a FOEC race: mocks rendered briefly, then overwritten by fetch.
+    const [jobActivityChanges, setJobActivityChanges] = useState<Types.JobActivityChange[]>([]);
 
     // Fetch job_activity_changes from Supabase + realtime
     useEffect(() => {
@@ -1401,7 +1372,8 @@ export const AppDataProvider: React.FC<{ children: ReactNode }> = ({ children })
             try {
                 const { data, error } = await supabase.from('job_activity_changes').select('*').order('createdAt', { ascending: false });
                 if (error) throw error;
-                if (data && data.length > 0) setJobActivityChanges(data.map(mapJacFromDb));
+                // Always set from Supabase (even if empty) — this is the authoritative source
+                setJobActivityChanges(data.map(mapJacFromDb));
             } catch (err) {
                 console.log('Using local job_activity_changes (Supabase not ready yet):', err);
             }
@@ -1687,10 +1659,126 @@ export const AppDataProvider: React.FC<{ children: ReactNode }> = ({ children })
         return () => window.removeEventListener('online', handleOnline);
     }, [offlineQueue]);
 
-    const [shifts, setShifts] = useState<Types.Shift[]>([
-        // Intentionally empty — manage shifts via Settings > Shift Templates.
-        // Do NOT add hardcoded entries here; use the UI to create your shifts.
-    ]);
+    const [shifts, setShifts] = useState<Types.Shift[]>([]);
+
+    // Fetch shifts from Supabase + realtime
+    useEffect(() => {
+        const mapShiftFromDb = (r: any): Types.Shift => ({
+            id: r.id,
+            name: r.name,
+            start: r.startTime || r.starttime,
+            end: r.endTime || r.endtime,
+            color: r.color,
+        });
+
+        const fetchShifts = async () => {
+            try {
+                const { data, error } = await supabase.from('shifts').select('*').order('name', { ascending: true });
+                if (error) throw error;
+                if (data && data.length > 0) setShifts(data.map(mapShiftFromDb));
+            } catch (err) {
+                console.log('Error fetching shifts from Supabase:', err);
+            }
+        };
+        fetchShifts();
+
+        const channel = supabase
+            .channel('shifts-changes')
+            .on('postgres_changes', { event: '*', schema: 'public', table: 'shifts' }, (payload) => {
+                const mapS = (r: any) => ({
+                    id: r.id,
+                    name: r.name,
+                    start: r.startTime || r.starttime,
+                    end: r.endTime || r.endtime,
+                    color: r.color,
+                });
+
+                if (payload.eventType === 'INSERT' && payload.new) {
+                    const mapped = mapS(payload.new);
+                    setShifts(prev => prev.some(s => s.id === mapped.id) ? prev : [...prev, mapped]);
+                } else if (payload.eventType === 'UPDATE' && payload.new) {
+                    const mapped = mapS(payload.new);
+                    setShifts(prev => prev.map(s => s.id === mapped.id ? { ...s, ...mapped } : s));
+                } else if (payload.eventType === 'DELETE' && payload.old) {
+                    const id = (payload.old as any).id;
+                    setShifts(prev => prev.filter(s => s.id !== id));
+                }
+            })
+            .subscribe();
+
+        return () => { supabase.removeChannel(channel); };
+    }, []);
+
+    // Fetch office locations from Supabase + realtime
+    useEffect(() => {
+        const mapLocFromDb = (r: any): Types.OfficeLocation => ({
+            id: r.id,
+            name: r.name,
+            coords: { lat: Number(r.lat), lng: Number(r.lng) },
+            radius: Number(r.radius),
+            address: r.address || '',
+        });
+
+        const fetchLocations = async () => {
+            try {
+                const { data, error } = await supabase.from('office_locations').select('*').order('name', { ascending: true });
+                if (error) throw error;
+                if (data && data.length > 0) {
+                    setSystemSettings(prev => ({ ...prev, officeLocations: data.map(mapLocFromDb) }));
+                }
+            } catch (err) {
+                console.log('Error fetching office_locations from Supabase:', err);
+            }
+        };
+        fetchLocations();
+
+        const channel = supabase
+            .channel('office_locations-changes')
+            .on('postgres_changes', { event: '*', schema: 'public', table: 'office_locations' }, (payload) => {
+                const mapL = (r: any) => ({
+                    id: r.id,
+                    name: r.name,
+                    coords: { lat: Number(r.lat), lng: Number(r.lng) },
+                    radius: Number(r.radius),
+                    address: r.address || '',
+                });
+
+                if (payload.eventType === 'INSERT' && payload.new) {
+                    const mapped = mapL(payload.new);
+                    setSystemSettings(prev => {
+                        const locs = prev.officeLocations || [];
+                        return locs.some(l => l.id === mapped.id) ? prev : { ...prev, officeLocations: [...locs, mapped] };
+                    });
+                } else if (payload.eventType === 'UPDATE' && payload.new) {
+                    const mapped = mapL(payload.new);
+                    setSystemSettings(prev => {
+                        const locs = prev.officeLocations || [];
+                        return { ...prev, officeLocations: locs.map(l => l.id === mapped.id ? mapped : l) };
+                    });
+                } else if (payload.eventType === 'DELETE' && payload.old) {
+                    const id = (payload.old as any).id;
+                    setSystemSettings(prev => {
+                        const locs = prev.officeLocations || [];
+                        return { ...prev, officeLocations: locs.filter(l => l.id !== id) };
+                    });
+                }
+            })
+            .subscribe();
+
+        return () => { supabase.removeChannel(channel); };
+    }, []);
+
+    // Cache office locations to prevent FOEC on reload
+    useEffect(() => {
+        try {
+            if (systemSettings.officeLocations) {
+                localStorage.setItem('hrms_cached_office_locations', JSON.stringify(systemSettings.officeLocations));
+            }
+        } catch (e) {
+            console.error('Failed to cache office locations', e);
+        }
+    }, [systemSettings.officeLocations]);
+
 
 
 
@@ -2491,7 +2579,8 @@ export const AppDataProvider: React.FC<{ children: ReactNode }> = ({ children })
             }
         }
 
-        const saId = `SA-${Date.now()}`;
+        // Reuse existing ID if updating, to prevent duplicate rows masking each other on reload
+        const saId = existingIdx !== -1 ? shiftAssignments[existingIdx].id : `SA-${Date.now()}`;
         setShiftAssignments(prev => {
             const next = [...prev];
             const newAssignment: ShiftAssignment = { 
@@ -2709,6 +2798,25 @@ export const AppDataProvider: React.FC<{ children: ReactNode }> = ({ children })
         });
 
         return { success: true, message: `Week of ${weekStart} published. ${affectedEmpIds.length} employee(s) notified.` };
+    };
+
+    const unpublishWeek = (weekStart: string, adminId?: string): { success: boolean; message: string } => {
+        if (!publishedWeeks.includes(weekStart)) {
+            return { success: false, message: 'This week schedule is not currently published.' };
+        }
+        
+        setPublishedWeeks(prev => prev.filter(w => w !== weekStart));
+
+        // Sync to Supabase
+        supabase.from('published_weeks').delete().eq('weekKey', weekStart).then(({ error }) => {
+            if (error) console.error('Supabase published week delete error:', error.message);
+        }).catch(err => console.error('Failed to delete published week from Supabase:', err));
+
+        // Note: We intentionally do NOT delete the Expected attendance logs generated by publishWeek here.
+        // It's safer to leave them, as removing them might cause data loss if real attendance logs 
+        // have already started mingling with them. We just unlock the UI for editing.
+
+        return { success: true, message: 'Schedule unlocked. You can now revise the shifts.' };
     };
 
     const calculateDistance = (lat1: number, lon1: number, lat2: number, lon2: number) => {
@@ -5037,6 +5145,7 @@ export const AppDataProvider: React.FC<{ children: ReactNode }> = ({ children })
             if (updates.leaveBalances !== undefined) supabaseUpdates.leaveBalances = updates.leaveBalances;
             if (updates.reliefs !== undefined) supabaseUpdates.reliefs = updates.reliefs;
             if (updates.officeLocation !== undefined) supabaseUpdates.officeLocation = updates.officeLocation;
+            if (updates.officeCoords !== undefined) supabaseUpdates.officeCoords = updates.officeCoords;
             if (updates.reportingManagerId !== undefined) supabaseUpdates.reportingManagerId = updates.reportingManagerId;
             if (updates.separationReason !== undefined) supabaseUpdates.separationReason = updates.separationReason;
             if (updates.separationDate !== undefined) supabaseUpdates.separationDate = updates.separationDate;
@@ -5196,28 +5305,82 @@ export const AppDataProvider: React.FC<{ children: ReactNode }> = ({ children })
     const addLocation = (loc: any): { success: boolean; message: string } => {
         // The modal stores lat/lng as flat fields; normalize to coords: { lat, lng }
         const { lat, lng, address, ...rest } = loc;
+        const newLocId = `LOC-${Date.now()}`;
+        const finalLat = Number(lat) || 0;
+        const finalLng = Number(lng) || 0;
+        const finalRadius = Number(loc.radius) || 100;
+        
         const newLoc: Types.OfficeLocation = {
             ...rest,
-            id: `LOC-${Date.now()}`,
+            id: newLocId,
             address: address || '',
-            coords: { lat: lat ?? 0, lng: lng ?? 0 },
+            coords: { lat: finalLat, lng: finalLng },
+            radius: finalRadius,
         } as Types.OfficeLocation;
+        
+        // Optimistic update
         setSystemSettings((prev: Types.SystemSettings) => ({ ...prev, officeLocations: [...(prev.officeLocations || []), newLoc] }));
+
+        // Supabase sync
+        supabase.from('office_locations').insert({
+            id: newLocId,
+            name: newLoc.name,
+            lat: newLoc.coords.lat,
+            lng: newLoc.coords.lng,
+            radius: newLoc.radius,
+            address: newLoc.address
+        }).then(({ error, data }) => {
+            if (error) {
+                console.error('Supabase addLocation error:', error.message, error.details, error.hint);
+            } else {
+                console.log('Supabase addLocation SUCCESS:', newLocId);
+            }
+        });
+
         return { success: true, message: 'Location added.' };
     };
+
     const updateLocation = (loc: any): { success: boolean; message: string } => {
         // Also normalize flat lat/lng from editing state into coords shape
         const { lat, lng, address, ...rest } = loc;
+        
+        const finalLat = lat !== undefined ? (Number(lat) || 0) : loc.coords?.lat || 0;
+        const finalLng = lat !== undefined ? (Number(lng) || 0) : loc.coords?.lng || 0;
+        const finalRadius = Number(loc.radius) || 100;
+
         const normalized: Types.OfficeLocation = {
             ...rest,
             address: address || '',
-            coords: lat !== undefined ? { lat, lng: lng ?? 0 } : loc.coords,
+            coords: { lat: finalLat, lng: finalLng },
+            radius: finalRadius,
         } as Types.OfficeLocation;
+        
+        // Optimistic update
         setSystemSettings((prev: Types.SystemSettings) => ({ ...prev, officeLocations: (prev.officeLocations || []).map((l: Types.OfficeLocation) => l.id === normalized.id ? normalized : l) }));
+
+        // Supabase sync
+        supabase.from('office_locations').update({
+            name: normalized.name,
+            lat: normalized.coords.lat,
+            lng: normalized.coords.lng,
+            radius: normalized.radius,
+            address: normalized.address
+        }).eq('id', normalized.id).then(({ error }) => {
+            if (error) console.error('Supabase updateLocation error:', error.message);
+        });
+
         return { success: true, message: 'Location updated.' };
     };
+
     const deleteLocation = (id: string): { success: boolean; message: string } => {
+        // Optimistic update
         setSystemSettings((prev: Types.SystemSettings) => ({ ...prev, officeLocations: (prev.officeLocations || []).filter((l: Types.OfficeLocation) => l.id !== id) }));
+
+        // Supabase sync
+        supabase.from('office_locations').delete().eq('id', id).then(({ error }) => {
+            if (error) console.error('Supabase deleteLocation error:', error.message);
+        });
+
         return { success: true, message: 'Location deleted.' };
     };
     const addDepartment = (dept: Omit<Types.Department, 'id' | 'order'>): { success: boolean; message: string } => {
@@ -5252,21 +5415,61 @@ export const AppDataProvider: React.FC<{ children: ReactNode }> = ({ children })
     };
 
     // --- Shift CRUD ---
-    const addShift = (shift: { name: string; start: string; end: string; gracePeriod?: number }): { success: boolean; message: string } => {
-        const newShift: Types.Shift = { ...shift, id: `SH-${Date.now()}`, active: true } as Types.Shift;
+    const addShift = (shift: { name: string; start: string; end: string; color?: string; gracePeriod?: number }): { success: boolean; message: string } => {
+        const newShiftId = `SH-${Date.now()}`;
+        const newShift: Types.Shift = { ...shift, id: newShiftId } as Types.Shift;
+        
+        // Optimistic update
         setShifts(prev => [...prev, newShift]);
+
+        // Supabase sync
+        supabase.from('shifts').insert({
+            id: newShiftId,
+            name: shift.name,
+            startTime: shift.start,
+            endTime: shift.end,
+            color: shift.color || '#4F46E5'
+        }).then(({ error }) => {
+            if (error) console.error('Supabase addShift error:', error.message);
+        });
+
         return { success: true, message: `Shift "${shift.name}" created.` };
     };
+
     const updateShift = (shift: Types.Shift): { success: boolean; message: string } => {
+        // Optimistic update
         setShifts(prev => prev.map(s => s.id === shift.id ? { ...s, ...shift } : s));
+
+        // Supabase sync
+        supabase.from('shifts').update({
+            name: shift.name,
+            startTime: shift.start,
+            endTime: shift.end,
+            color: shift.color
+        }).eq('id', shift.id).then(({ error }) => {
+            if (error) console.error('Supabase updateShift error:', error.message);
+        });
+
         return { success: true, message: `Shift "${shift.name}" updated.` };
     };
+
     const deleteShift = (id: string): { success: boolean; message: string } => {
         const inUse = employees.some(e => e.shiftId === id);
         if (inUse) return { success: false, message: 'Cannot delete: shift is assigned to one or more employees. Re-assign them first.' };
+        
+        const shiftToDelete = shifts.find(s => s.id === id);
+        
+        // Optimistic update
         setShifts(prev => prev.filter(s => s.id !== id));
-        return { success: true, message: 'Shift deleted.' };
+
+        // Supabase sync
+        supabase.from('shifts').delete().eq('id', id).then(({ error }) => {
+            if (error) console.error('Supabase deleteShift error:', error.message);
+        });
+
+        return { success: true, message: shiftToDelete ? `Shift "${shiftToDelete.name}" deleted.` : 'Shift deleted.' };
     };
+
 
     const logSettingChange = (field: string, oldVal: any, newVal: any) => {
         addSecurityLog({
@@ -5398,7 +5601,7 @@ export const AppDataProvider: React.FC<{ children: ReactNode }> = ({ children })
         checkOut,
         onboardingRecords, setOnboardingRecords,
         shiftAssignments, setShiftAssignments, assignShift, addManualPunch,
-        publishedWeeks, assignDepartmentShift, publishWeek,
+        publishedWeeks, assignDepartmentShift, publishWeek, unpublishWeek,
         jobPostings, setJobPostings, createJobPosting, toggleJobPortalStatus,
         fieldAgents, setFieldAgents, gpsLogs, setGpsLogs, offlineQueue, logFieldAgentLocation, optimizeFieldRoutes,
         laborContracts, setLaborContracts, addLaborContract,

@@ -2285,11 +2285,13 @@ export default function Employee() {
                                         </button>
                                         <button 
                                             onClick={async () => {
+                                                const resolvedLocation = systemSettings.officeLocations.find(l => l.name === editLocation);
                                                 const result = await updateEmployee(employee.id, {
                                                     name: editName,
                                                     role: editRole,
                                                     dept: editDept,
-                                                    officeLocation: editLocation as any
+                                                    officeLocation: editLocation as any,
+                                                    officeCoords: resolvedLocation?.coords ?? undefined,
                                                 }, currentUser?.id || 'EMP-001');
                                                 if (result.success) {
                                                     closeModal();
