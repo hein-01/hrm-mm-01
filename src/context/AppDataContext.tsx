@@ -515,20 +515,20 @@ export const AppDataProvider: React.FC<{ children: ReactNode }> = ({ children })
         const mapLeave = (r: any): Types.LeaveRequest => ({
             ...r,
             empId: r.empId || r.empid,
-            durationStr: r.durationStr || r.durationstr,
-            totalDays: Number(r.totalDays || r.totaldays || 0),
+            durationStr: r.durationStr || r.durationstr || '',
+            totalDays: Number(r.days || r.totalDays || r.totaldays || 0),
             startDate: r.startDate || r.startdate,
             endDate: r.endDate || r.enddate,
-            relieverId: r.relieverId || r.relieverid || '',
-            relieverName: r.relieverName || r.relievername || '',
+            relieverId: r.relieverid || r.relieverId || r.reliever_id || '',
+            relieverName: r.relievername || r.relieverName || '',
             hasCert: r.hasCert || r.hascert || false,
             isAdminOverride: r.isAdminOverride || r.isadminoverride || false,
             certFileName: r.certFileName || r.certfilename || '',
-            rejectionReason: r.rejectionReason || r.rejectionreason || '',
+            rejectionReason: r.rejectionreason || r.rejectionReason || '',
             approvedBy: r.approvedBy || r.approvedby || '',
             approvedAt: r.approvedAt || r.approvedat || '',
-            rejectedBy: r.rejectedBy || r.rejectedby || '',
-            rejectedAt: r.rejectedAt || r.rejectedat || '',
+            rejectedBy: r.rejectedby || r.rejectedBy || '',
+            rejectedAt: r.rejectedat || r.rejectedAt || '',
             avatar: ''
         });
 
@@ -3229,7 +3229,7 @@ export const AppDataProvider: React.FC<{ children: ReactNode }> = ({ children })
                     status: 'Approved',
                     approvedBy: adminId,
                     approvedAt: new Date().toISOString(),
-                    isAdminOverride: !!forceOverride
+                    updatedAt: new Date().toISOString()
                 }).eq('id', reqId);
                 
                 if (leaveErr) console.error('Supabase leave approval error:', leaveErr.message);
@@ -3307,14 +3307,14 @@ export const AppDataProvider: React.FC<{ children: ReactNode }> = ({ children })
                     type: newReq.type,
                     startDate: newReq.startDate,
                     endDate: newReq.endDate,
-                    totalDays: newReq.totalDays,
+                    days: newReq.totalDays,
                     reason: newReq.reason,
                     status: 'Pending',
-                    durationStr: newReq.durationStr,
-                    relieverId: newReq.relieverId,
-                    relieverName: newReq.relieverName,
+                    relieverid: newReq.relieverId,
+                    relievername: newReq.relieverName,
                     priority: newReq.priority,
-                    category: newReq.category
+                    category: newReq.category,
+                    createdAt: new Date().toISOString()
                 });
                 if (error) console.error('Supabase insert leave_requests failed:', error.message);
             } catch (err) {
@@ -3341,9 +3341,10 @@ export const AppDataProvider: React.FC<{ children: ReactNode }> = ({ children })
             try {
                 const { error } = await supabase.from('leave_requests').update({
                     status: 'Rejected',
-                    rejectedBy: adminId,
-                    rejectedAt: new Date().toISOString(),
-                    rejectionReason: reason || null,
+                    rejectedby: adminId,
+                    rejectedat: new Date().toISOString(),
+                    rejectionreason: reason || null,
+                    updatedAt: new Date().toISOString()
                 }).eq('id', reqId);
                 if (error) console.error('Supabase update leave_requests (reject) failed:', error.message);
             } catch (err) {
