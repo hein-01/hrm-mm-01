@@ -92,6 +92,20 @@ export default function HomeDashboard() {
     const [isHoliday, setIsHoliday] = useState(false);
     const [holidayDate, setHolidayDate] = useState('');
     const [editingAnnId, setEditingAnnId] = useState<string | null>(null);
+    const [confirmModal, setConfirmModal] = useState<{
+        isOpen: boolean;
+        title: string;
+        message: string;
+        confirmLabel?: string;
+        cancelLabel?: string;
+        onConfirm: () => void;
+        severity?: 'danger' | 'warning' | 'info';
+    }>({
+        isOpen: false,
+        title: '',
+        message: '',
+        onConfirm: () => {},
+    });
 
     const [inboxFilter, setInboxFilter] = useState<string>('All');
     const [showFilterDropdown, setShowFilterDropdown] = useState(false);
@@ -590,9 +604,17 @@ export default function HomeDashboard() {
     };
 
     const handleDeleteAnnouncement = (id: string) => {
-        if (confirm("Are you sure you want to permanently delete this announcement?")) {
-            deleteAnnouncement(id);
-        }
+        setConfirmModal({
+            isOpen: true,
+            title: "Delete Announcement",
+            message: "Are you sure you want to permanently delete this announcement? This action is irreversible and it will instantly disappear from all employee feeds.",
+            confirmLabel: "Delete",
+            cancelLabel: "Keep Announcement",
+            severity: 'danger',
+            onConfirm: () => {
+                deleteAnnouncement(id);
+            }
+        });
     };
 
     const submitAnnouncement = () => {
@@ -1782,6 +1804,64 @@ export default function HomeDashboard() {
                                         Confirm Rejection
                                     </>
                                 )}
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {/* Custom High-Fidelity Confirmation Modal */}
+            {confirmModal.isOpen && (
+                <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/60 backdrop-blur-md animate-fade-in px-4">
+                    <div className="bg-white dark:bg-[#1e293b] w-full max-w-md rounded-3xl shadow-2xl overflow-hidden border border-slate-200 dark:border-slate-800 flex flex-col p-6 animate-scale-in">
+                        {/* Icon & Title */}
+                        <div className="flex items-start gap-4 text-left">
+                            <div className={`size-12 rounded-2xl flex items-center justify-center shrink-0 ${
+                                confirmModal.severity === 'danger'
+                                    ? 'bg-rose-50 dark:bg-rose-950/50 text-rose-600 dark:text-rose-400 animate-pulse'
+                                    : confirmModal.severity === 'warning'
+                                    ? 'bg-amber-50 dark:bg-amber-950/50 text-amber-600 dark:text-amber-400'
+                                    : 'bg-indigo-50 dark:bg-indigo-950/50 text-indigo-600 dark:text-indigo-400'
+                            }`}>
+                                <span className="material-symbols-outlined text-[24px]">
+                                    {confirmModal.severity === 'danger' ? 'delete_forever' : confirmModal.severity === 'warning' ? 'warning' : 'info'}
+                                </span>
+                            </div>
+                            <div className="space-y-1">
+                                <h3 className="text-lg font-extrabold text-slate-900 dark:text-white tracking-tight">
+                                    {confirmModal.title}
+                                </h3>
+                                <p className="text-sm text-slate-500 dark:text-slate-400 leading-relaxed font-medium">
+                                    {confirmModal.message}
+                                </p>
+                            </div>
+                        </div>
+
+                        {/* Actions */}
+                        <div className="flex items-center justify-end gap-3 mt-6">
+                            <button
+                                onClick={() => setConfirmModal(prev => ({ ...prev, isOpen: false }))}
+                                className="px-5 py-2.5 rounded-xl text-sm font-bold text-slate-500 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800 transition-all active:scale-[0.98]"
+                            >
+                                {confirmModal.cancelLabel || 'Cancel'}
+                            </button>
+                            <button
+                                onClick={() => {
+                                    confirmModal.onConfirm();
+                                    setConfirmModal(prev => ({ ...prev, isOpen: false }));
+                                }}
+                                className={`px-5 py-2.5 rounded-xl text-sm font-bold text-white transition-all active:scale-[0.98] shadow-lg flex items-center gap-2 ${
+                                    confirmModal.severity === 'danger'
+                                        ? 'bg-rose-600 hover:bg-rose-700 shadow-rose-500/20'
+                                        : confirmModal.severity === 'warning'
+                                        ? 'bg-amber-600 hover:bg-amber-700 shadow-amber-500/20'
+                                        : 'bg-[#4F46E5] hover:bg-[#4338CA] shadow-[#4F46E5]/20'
+                                }`}
+                            >
+                                <span className="material-symbols-outlined text-[18px]">
+                                    {confirmModal.severity === 'danger' ? 'delete' : 'check_circle'}
+                                </span>
+                                {confirmModal.confirmLabel || 'Confirm'}
                             </button>
                         </div>
                     </div>

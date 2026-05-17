@@ -62,6 +62,20 @@ export default function ShiftPlanner() {
     } = useAppData();
 
     const [toast, setToast] = useState<{message: string, type: 'success' | 'error'} | null>(null);
+    const [confirmModal, setConfirmModal] = useState<{
+        isOpen: boolean;
+        title: string;
+        message: string;
+        confirmLabel?: string;
+        cancelLabel?: string;
+        onConfirm: () => void;
+        severity?: 'danger' | 'warning' | 'info';
+    }>({
+        isOpen: false,
+        title: '',
+        message: '',
+        onConfirm: () => {},
+    });
     const [searchQuery, setSearchQuery] = useState('');
     const [selectedDept, setSelectedDept] = useState('');
     const [currentWeekStart, setCurrentWeekStart] = useState<Date>(() => getMonday(new Date()));
@@ -434,10 +448,18 @@ export default function ShiftPlanner() {
                             </div>
                             <button
                                 onClick={() => {
-                                    if (window.confirm('Are you sure you want to unlock this schedule? This will allow edits again.')) {
-                                        const res = unpublishWeek(weekKey, 'ADM-001');
-                                        setToast({ message: res.message, type: res.success ? 'success' : 'error' });
-                                    }
+                                    setConfirmModal({
+                                        isOpen: true,
+                                        title: "Unlock Weekly Schedule",
+                                        message: "Are you sure you want to unlock this schedule? This will allow managers to edit shifts again, and status will revert to Draft.",
+                                        confirmLabel: "Unlock Schedule",
+                                        cancelLabel: "Keep Locked",
+                                        severity: 'warning',
+                                        onConfirm: () => {
+                                            const res = unpublishWeek(weekKey, 'ADM-001');
+                                            setToast({ message: res.message, type: res.success ? 'success' : 'error' });
+                                        }
+                                    });
                                 }}
                                 className="px-3 py-1.5 bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-200 border border-emerald-200 dark:border-emerald-800 rounded-lg text-xs font-bold hover:bg-slate-50 dark:hover:bg-slate-700 transition-colors flex items-center gap-1.5 shadow-sm"
                             >
@@ -710,6 +732,64 @@ export default function ShiftPlanner() {
             )}
 
             {toast && <Toast message={toast.message} type={toast.type} onClose={() => setToast(null)} />}
+
+            {/* Custom High-Fidelity Confirmation Modal */}
+            {confirmModal.isOpen && (
+                <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/60 backdrop-blur-md animate-fade-in px-4">
+                    <div className="bg-white dark:bg-[#1e293b] w-full max-w-md rounded-3xl shadow-2xl overflow-hidden border border-slate-200 dark:border-slate-800 flex flex-col p-6 animate-scale-in">
+                        {/* Icon & Title */}
+                        <div className="flex items-start gap-4 text-left">
+                            <div className={`size-12 rounded-2xl flex items-center justify-center shrink-0 ${
+                                confirmModal.severity === 'danger'
+                                    ? 'bg-rose-50 dark:bg-rose-950/50 text-rose-600 dark:text-rose-400 animate-pulse'
+                                    : confirmModal.severity === 'warning'
+                                    ? 'bg-amber-50 dark:bg-amber-950/50 text-amber-600 dark:text-amber-400'
+                                    : 'bg-indigo-50 dark:bg-indigo-950/50 text-indigo-600 dark:text-indigo-400'
+                            }`}>
+                                <span className="material-symbols-outlined text-[24px]">
+                                    {confirmModal.severity === 'danger' ? 'delete_forever' : confirmModal.severity === 'warning' ? 'warning' : 'info'}
+                                </span>
+                            </div>
+                            <div className="space-y-1">
+                                <h3 className="text-lg font-extrabold text-slate-900 dark:text-white tracking-tight">
+                                    {confirmModal.title}
+                                </h3>
+                                <p className="text-sm text-slate-500 dark:text-slate-400 leading-relaxed font-medium">
+                                    {confirmModal.message}
+                                </p>
+                            </div>
+                        </div>
+
+                        {/* Actions */}
+                        <div className="flex items-center justify-end gap-3 mt-6">
+                            <button
+                                onClick={() => setConfirmModal(prev => ({ ...prev, isOpen: false }))}
+                                className="px-5 py-2.5 rounded-xl text-sm font-bold text-slate-500 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800 transition-all active:scale-[0.98]"
+                            >
+                                {confirmModal.cancelLabel || 'Cancel'}
+                            </button>
+                            <button
+                                onClick={() => {
+                                    confirmModal.onConfirm();
+                                    setConfirmModal(prev => ({ ...prev, isOpen: false }));
+                                }}
+                                className={`px-5 py-2.5 rounded-xl text-sm font-bold text-white transition-all active:scale-[0.98] shadow-lg flex items-center gap-2 ${
+                                    confirmModal.severity === 'danger'
+                                        ? 'bg-rose-600 hover:bg-rose-700 shadow-rose-500/20'
+                                        : confirmModal.severity === 'warning'
+                                        ? 'bg-amber-600 hover:bg-amber-700 shadow-amber-500/20'
+                                        : 'bg-[#4F46E5] hover:bg-[#4338CA] shadow-[#4F46E5]/20'
+                                }`}
+                            >
+                                <span className="material-symbols-outlined text-[18px]">
+                                    {confirmModal.severity === 'danger' ? 'delete' : 'check_circle'}
+                                </span>
+                                {confirmModal.confirmLabel || 'Confirm'}
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
         </div>
     );
 }
