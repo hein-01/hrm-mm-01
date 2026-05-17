@@ -141,6 +141,8 @@ type AppDataContextType = {
     announcements: Types.Announcement[];
     setAnnouncements: React.Dispatch<React.SetStateAction<Types.Announcement[]>>;
     createAnnouncement: (ann: Omit<Types.Announcement, 'id' | 'createdAt' | 'status' | 'sourceType'>) => { success: boolean; id: string };
+    updateAnnouncement: (id: string, updatedFields: Partial<Types.Announcement>) => { success: boolean };
+    deleteAnnouncement: (id: string) => { success: boolean };
     acknowledgeAnnouncement: (annId: string, empId: string) => void;
     toggleAutoAttendance: (empId: string, adminId: string) => { success: boolean; message: string };
     addAllowanceConfig: (config: Omit<Types.AllowanceConfig, 'id'>) => void;
@@ -4568,6 +4570,28 @@ export const AppDataProvider: React.FC<{ children: ReactNode }> = ({ children })
         return { success: true, id };
     };
 
+    const updateAnnouncement = (id: string, updatedFields: Partial<Types.Announcement>) => {
+        setAnnouncements(prev => prev.map(a => a.id === id ? { ...a, ...updatedFields } : a));
+        
+        // Sync update to Supabase
+        supabase.from('announcements').update(updatedFields).eq('id', id).then(({ error }) => {
+            if (error) console.error('Supabase announcement update error:', error.message);
+        });
+
+        return { success: true };
+    };
+
+    const deleteAnnouncement = (id: string) => {
+        setAnnouncements(prev => prev.filter(a => a.id !== id));
+
+        // Sync delete to Supabase
+        supabase.from('announcements').delete().eq('id', id).then(({ error }) => {
+            if (error) console.error('Supabase announcement delete error:', error.message);
+        });
+
+        return { success: true };
+    };
+
     const acknowledgeAnnouncement = (annId: string, empId: string) => {
         const emp = employees.find(e => e.id === empId);
         setAnnouncements(prev => prev.map(a => {
@@ -5720,6 +5744,8 @@ export const AppDataProvider: React.FC<{ children: ReactNode }> = ({ children })
         approveJobActivityChange,
         announcements, setAnnouncements,
         createAnnouncement,
+        updateAnnouncement,
+        deleteAnnouncement,
         acknowledgeAnnouncement,
         toggleAutoAttendance,
         addHoliday, updateHoliday, deleteHoliday,
@@ -5733,7 +5759,7 @@ export const AppDataProvider: React.FC<{ children: ReactNode }> = ({ children })
         onboardingRecords, jobPostings, fieldAgents, laborContracts, 
         disciplinaryActions, archivedDocuments, policies, holidays, bulkImportAttendance, addDocumentToLibrary, deleteArchivedDocument,
         locationSnapshots, jobActivityChanges, profileChangeRequests, recruitmentActions, attendanceRequests,
-        performanceReviewRequests, submitReview, addJobActivityChange, announcements, createAnnouncement, acknowledgeAnnouncement,
+        performanceReviewRequests, submitReview, addJobActivityChange, announcements, createAnnouncement, updateAnnouncement, deleteAnnouncement, acknowledgeAnnouncement,
         objectives, keyResults,
         toggleAutoAttendance, reorderDepartments, policyVersion,
         isAdmin, subscriptionTier, securityAuditLogs, verifyLocalAuth, addSecurityLog, logSettingChange

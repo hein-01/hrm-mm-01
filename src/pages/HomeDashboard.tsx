@@ -37,7 +37,7 @@ export default function HomeDashboard() {
         employees, leaveRequests, otRequests, loans, adjustments, projectPayments,
         locationSnapshots, jobActivityChanges, recruitmentActions,
         attendanceRequests, expenses, systemSettings, handleInboxAction, resolveOTConflict, lastPayrollStatus, lastPayrollTotal,
-        alerts, setAlerts, addAuditLog, auditLogs, announcements, createAnnouncement,
+        alerts, setAlerts, addAuditLog, auditLogs, announcements, createAnnouncement, updateAnnouncement, deleteAnnouncement,
         attendanceLogs, shiftAssignments, holidays, shifts, securityAuditLogs, subscriptionTier, gpsLogs, addDocumentToLibrary,
         payrollGroups
     } = useAppData();
@@ -91,6 +91,7 @@ export default function HomeDashboard() {
     const [newAnnAckRequired, setNewAnnAckRequired] = useState(false);
     const [isHoliday, setIsHoliday] = useState(false);
     const [holidayDate, setHolidayDate] = useState('');
+    const [editingAnnId, setEditingAnnId] = useState<string | null>(null);
 
     const [inboxFilter, setInboxFilter] = useState<string>('All');
     const [showFilterDropdown, setShowFilterDropdown] = useState(false);
@@ -568,29 +569,66 @@ export default function HomeDashboard() {
     [announcements]);
 
     const handlePostAnnouncement = () => {
+        setEditingAnnId(null);
+        setNewAnnSubject(''); setNewAnnBody(''); setNewAnnTargetDept('All');
+        setNewAnnTargetLoc('All'); setNewAnnTargetEmpType('All');
+        setNewAnnAckRequired(false); setIsHoliday(false); setHolidayDate('');
         setIsAnnouncementModalOpen(true);
+    };
+
+    const handleEditAnnouncement = (ann: any) => {
+        setEditingAnnId(ann.id);
+        setNewAnnSubject(ann.title);
+        setNewAnnBody(ann.content);
+        setNewAnnTargetDept(ann.targetFilters?.dept || 'All');
+        setNewAnnTargetLoc(ann.targetFilters?.location || 'All');
+        setNewAnnTargetEmpType(ann.targetFilters?.empType || 'All');
+        setNewAnnAckRequired(ann.requiresAcknowledgement || false);
+        setIsHoliday(false);
+        setHolidayDate('');
+        setIsAnnouncementModalOpen(true);
+    };
+
+    const handleDeleteAnnouncement = (id: string) => {
+        if (confirm("Are you sure you want to permanently delete this announcement?")) {
+            deleteAnnouncement(id);
+        }
     };
 
     const submitAnnouncement = () => {
         if (!newAnnSubject || !newAnnBody) return;
         
-        createAnnouncement({
-            title: newAnnSubject,
-            content: newAnnBody,
-            targetFilters: {
-                dept: newAnnTargetDept === 'All' ? undefined : newAnnTargetDept,
-                location: newAnnTargetLoc === 'All' ? undefined : newAnnTargetLoc,
-                empType: newAnnTargetEmpType === 'All' ? undefined : newAnnTargetEmpType
-            },
-            requiresAcknowledgement: newAnnAckRequired,
-            isHoliday,
-            holidayDate: isHoliday ? holidayDate : undefined
-        } as any);
+        if (editingAnnId) {
+            updateAnnouncement(editingAnnId, {
+                title: newAnnSubject,
+                content: newAnnBody,
+                targetFilters: {
+                    dept: newAnnTargetDept === 'All' ? undefined : newAnnTargetDept,
+                    location: newAnnTargetLoc === 'All' ? undefined : newAnnTargetLoc,
+                    empType: newAnnTargetEmpType === 'All' ? undefined : newAnnTargetEmpType
+                },
+                requiresAcknowledgement: newAnnAckRequired
+            } as any);
+        } else {
+            createAnnouncement({
+                title: newAnnSubject,
+                content: newAnnBody,
+                targetFilters: {
+                    dept: newAnnTargetDept === 'All' ? undefined : newAnnTargetDept,
+                    location: newAnnTargetLoc === 'All' ? undefined : newAnnTargetLoc,
+                    empType: newAnnTargetEmpType === 'All' ? undefined : newAnnTargetEmpType
+                },
+                requiresAcknowledgement: newAnnAckRequired,
+                isHoliday,
+                holidayDate: isHoliday ? holidayDate : undefined
+            } as any);
+        }
 
         // Reset
         setNewAnnSubject(''); setNewAnnBody(''); setNewAnnTargetDept('All');
         setNewAnnTargetLoc('All'); setNewAnnTargetEmpType('All');
         setNewAnnAckRequired(false); setIsHoliday(false); setHolidayDate('');
+        setEditingAnnId(null);
         setIsAnnouncementModalOpen(false);
     };
 
@@ -1182,12 +1220,22 @@ export default function HomeDashboard() {
                                                     </div>
                                                     <p className="text-[11px] text-slate-600 dark:text-slate-300 leading-snug line-clamp-2">{ann.content}</p>
                                                     
-                                                    {ann.targetFilters && (Object.values(ann.targetFilters).some(v => v !== undefined)) && (
-                                                        <div className="flex flex-wrap gap-1 mt-1">
-                                                            {ann.targetFilters.dept && <span className="text-[9px] bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400 px-1.5 py-0.5 rounded border border-slate-200 dark:border-slate-700 flex items-center gap-1"><span className="material-symbols-outlined text-[10px]">domain</span>{ann.targetFilters.dept}</span>}
-                                                            {ann.targetFilters.location && <span className="text-[9px] bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400 px-1.5 py-0.5 rounded border border-slate-200 dark:border-slate-700 flex items-center gap-1"><span className="material-symbols-outlined text-[10px]">location_on</span>{ann.targetFilters.location}</span>}
+                                                    <div className="flex items-center justify-between mt-1 pt-1.5 border-t border-slate-100 dark:border-slate-800/40">
+                                                        <div className="flex flex-wrap gap-1">
+                                                            {ann.targetFilters?.dept && <span className="text-[9px] bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400 px-1.5 py-0.5 rounded border border-slate-200 dark:border-slate-700 flex items-center gap-1"><span className="material-symbols-outlined text-[10px]">domain</span>{ann.targetFilters.dept}</span>}
+                                                            {ann.targetFilters?.location && <span className="text-[9px] bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400 px-1.5 py-0.5 rounded border border-slate-200 dark:border-slate-700 flex items-center gap-1"><span className="material-symbols-outlined text-[10px]">location_on</span>{ann.targetFilters.location}</span>}
                                                         </div>
-                                                    )}
+                                                        {isCompanyWideAdmin && (
+                                                            <div className="flex items-center gap-1 shrink-0">
+                                                                <button onClick={() => handleEditAnnouncement(ann)} className="p-0.5 text-slate-400 hover:text-[#4F46E5] rounded transition-colors" title="Edit Announcement">
+                                                                    <span className="material-symbols-outlined text-[14px]">edit</span>
+                                                                </button>
+                                                                <button onClick={() => handleDeleteAnnouncement(ann.id)} className="p-0.5 text-slate-400 hover:text-rose-600 rounded transition-colors" title="Delete Announcement">
+                                                                    <span className="material-symbols-outlined text-[14px]">delete</span>
+                                                                </button>
+                                                            </div>
+                                                        )}
+                                                    </div>
                                                 </div>
                                             </div>
                                         ))}
@@ -1546,9 +1594,9 @@ export default function HomeDashboard() {
                         <div className="p-5 border-b border-slate-100 dark:border-slate-800 flex justify-between items-center bg-slate-50 dark:bg-[#182130] shrink-0">
                             <div>
                                 <h3 className="font-bold text-slate-900 dark:text-white text-lg flex items-center gap-2">
-                                    <span className="material-symbols-outlined text-[#4F46E5]">campaign</span> Targeted Announcement Dispatcher
+                                    <span className="material-symbols-outlined text-[#4F46E5]">{editingAnnId ? 'edit_note' : 'campaign'}</span> {editingAnnId ? 'Edit Announcement' : 'Targeted Announcement Dispatcher'}
                                 </h3>
-                                <p className="text-xs text-slate-500 mt-0.5 font-medium">Reach specific departments or locations instantly</p>
+                                <p className="text-xs text-slate-500 mt-0.5 font-medium">{editingAnnId ? 'Modify the contents and settings of this announcement' : 'Reach specific departments or locations instantly'}</p>
                             </div>
                             <button onClick={() => setIsAnnouncementModalOpen(false)} className="text-slate-400 hover:text-slate-600 transition-colors">
                                 <span className="material-symbols-outlined">close</span>
@@ -1632,8 +1680,8 @@ export default function HomeDashboard() {
                                 disabled={!newAnnSubject || !newAnnBody}
                                 className="px-6 py-2.5 rounded-xl text-sm font-bold text-white bg-indigo-600 hover:bg-indigo-700 transition-colors shadow-lg shadow-indigo-200 flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
                             >
-                                <span className="material-symbols-outlined text-[18px]">send</span>
-                                Dispatch Announcement
+                                <span className="material-symbols-outlined text-[18px]">{editingAnnId ? 'save' : 'send'}</span>
+                                {editingAnnId ? 'Save Changes' : 'Dispatch Announcement'}
                             </button>
                         </div>
                     </div>
