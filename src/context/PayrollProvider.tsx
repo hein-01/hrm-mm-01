@@ -1078,7 +1078,8 @@ STATUS: Finalized & Locked
 
     const disbursePayroll = (adminId: string, groupId?: string): { success: boolean; message: string } => {
         if (!isAdmin(adminId)) return { success: false, message: `Unauthorized: '${adminId}' does not have Finance Manager or Super-Admin privileges. Disbursement blocked.` };
-        const group  = payrollGroups.find(g => g.id === (groupId ?? activePayrollGroupId));
+        const targetGroupId = groupId ?? activePayrollGroupId;
+        const group  = payrollGroups.find(g => g.id === targetGroupId);
         const period = group?.period ?? 'Unknown';
         setLastPayrollStatus('Disbursed');
         setPayrollRecords(prev => {
@@ -1091,6 +1092,20 @@ STATUS: Finalized & Locked
             });
             return next;
         });
+
+        // Sync the payroll group status update back to the database as 'Disbursed'
+        if (targetGroupId) {
+            supabase.from('payroll_groups')
+                .update({ status: 'Disbursed' })
+                .eq('id', targetGroupId)
+                .then(({ error }) => {
+                    if (error) console.error('Failed to update payroll group status to Disbursed in Supabase:', error.message);
+                });
+            
+            // Also update local cache state immediately for real-time reactivity
+            setPayrollGroups(prev => prev.map(g => g.id === targetGroupId ? { ...g, status: 'Disbursed' } : g));
+        }
+
         addAuditLog({
             adminId,
             actionType: 'Financial Disbursement',
