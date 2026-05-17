@@ -2,6 +2,7 @@ import React, { useMemo, useState } from 'react';
 import { TableVirtuoso } from 'react-virtuoso';
 import Layout from '../layouts/Layout';
 import Header from '../components/Header';
+import DropdownMenu from '../components/DropdownMenu';
 import { useAppData } from '../context/AppDataContext';
 import { generateDocumentContent } from '../utils/pdfGenerator';
 import type { LaborContract } from '../types/hrms.types';
@@ -337,8 +338,8 @@ Signed Date: ${contract.signedDate}
 
       {showAddModal && (
         <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/40 backdrop-blur-sm">
-          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-2xl overflow-hidden border border-slate-200">
-            <div className="p-6 border-b border-slate-100 bg-slate-50/50 flex items-center justify-between">
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-2xl overflow-visible border border-slate-200">
+            <div className="p-6 border-b border-slate-100 bg-slate-50/50 flex items-center justify-between rounded-t-2xl">
               <h3 className="text-lg font-bold text-slate-900">New Labor Contract</h3>
               <button onClick={closeModal} className="text-slate-400 hover:text-slate-600 transition-colors">
                 <span className="material-symbols-outlined text-[24px]">close</span>
@@ -348,33 +349,37 @@ Signed Date: ${contract.signedDate}
             <form className="p-6 space-y-5" onSubmit={handleSubmit}>
               <div>
                 <label className="text-xs font-bold text-slate-600 block mb-1">Employee *</label>
-                <select
-                  className="w-full p-3 bg-slate-50 border border-slate-200 rounded-xl text-sm font-semibold"
+                <DropdownMenu
                   value={formState.empId}
-                  onChange={event => updateFormField('empId', event.target.value)}
-                >
-                  <option value="">Select target employee...</option>
-                  {employees.map(employee => (
-                    <option key={employee.id} value={employee.id}>
-                      {employee.name} ({employee.id})
-                    </option>
-                  ))}
-                </select>
+                  onChange={val => updateFormField('empId', val)}
+                  className="w-full"
+                  triggerClassName="w-full justify-between h-[46px] text-slate-700 dark:text-slate-200 font-bold"
+                  options={[
+                    { value: '', label: 'Select target employee...' },
+                    ...employees.map(employee => ({
+                      value: employee.id,
+                      label: `${employee.name} (${employee.id})`,
+                      subLabel: `Dept: ${employee.dept} · Role: ${employee.role || 'Personnel'}`
+                    }))
+                  ]}
+                />
               </div>
 
               <div className="grid grid-cols-2 gap-4">
                 <div>
                   <label className="text-xs font-bold text-slate-600 block mb-1">Contract Type</label>
-                  <select
-                    className="w-full p-3 bg-slate-50 border border-slate-200 rounded-xl text-sm font-semibold"
+                  <DropdownMenu
                     value={formState.type}
-                    onChange={event => updateFormField('type', event.target.value as LaborContract['type'])}
-                  >
-                    <option value="Probation">Probation</option>
-                    <option value="Fixed Term">Fixed Term</option>
-                    <option value="Open Ended">Open Ended</option>
-                    <option value="Casual">Casual</option>
-                  </select>
+                    onChange={val => updateFormField('type', val as LaborContract['type'])}
+                    className="w-full"
+                    triggerClassName="w-full justify-between h-[46px] text-slate-700 dark:text-slate-200 font-bold"
+                    options={[
+                      { value: 'Probation', label: 'Probation', subLabel: 'PROBATION PERIOD · STANDARD 3 MONTHS' },
+                      { value: 'Fixed Term', label: 'Fixed Term', subLabel: 'FIXED CONTRACT · RENEWABLE CYCLE' },
+                      { value: 'Open Ended', label: 'Open Ended', subLabel: 'PERMANENT CONTRACT · INDEFINITE TERM' },
+                      { value: 'Casual', label: 'Casual', subLabel: 'CASUAL / SEASONAL EMPLOYMENT' }
+                    ]}
+                  />
                 </div>
                 <div>
                   <label className="text-xs font-bold text-slate-600 block mb-1">Sign Date</label>
