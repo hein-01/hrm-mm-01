@@ -1244,85 +1244,6 @@ export default function HomeDashboard() {
                                         )}
                                     </div>
                                 </div>
-                                <div className="bg-white dark:bg-[#182130] rounded-xl border border-slate-100 dark:border-slate-800 shadow-sm flex flex-col h-full max-h-[400px]">
-                                    <div className="px-6 py-5 border-b border-slate-100 dark:border-slate-800 shrink-0">
-                                        <h3 className="font-bold text-slate-900 dark:text-white flex items-center gap-2">
-                                            <span className="material-symbols-outlined text-rose-500">gpp_bad</span>
-                                            Security & Auth Logs
-                                        </h3>
-                                    </div>
-                                    <div className="p-6 space-y-3 flex-1 overflow-y-auto">
-                                        {securityAuditLogs && securityAuditLogs.length > 0 ? (
-                                            [...securityAuditLogs].reverse().slice(0, 10).map((log) => (
-                                                <div key={log.id} className="flex items-start gap-3 border-b border-slate-50 dark:border-slate-800/50 pb-3 last:border-0 last:pb-0">
-                                                    <div className={`size-8 rounded-lg flex items-center justify-center shrink-0 mt-0.5 ${log.status === 'Failed' ? 'bg-rose-50 dark:bg-rose-900/40 text-rose-500' : 'bg-emerald-50 dark:bg-emerald-900/40 text-emerald-500'}`}>
-                                                        <span className="material-symbols-outlined text-[18px]">
-                                                            {log.status === 'Failed' ? 'gpp_maybe' : 'verified_user'}
-                                                        </span>
-                                                    </div>
-                                                    <div className="flex-1 min-w-0">
-                                                        <div className="flex items-center justify-between gap-1">
-                                                            <p className={`text-xs font-bold truncate ${log.status === 'Failed' ? 'text-rose-600 dark:text-rose-400' : 'text-slate-900 dark:text-white'}`}>
-                                                                {log.status === 'Failed' ? 'Failed Auth Attempt' : 'Auth Success'}
-                                                            </p>
-                                                            <span className="text-[9px] text-slate-400 shrink-0">{log.timestamp.includes('T') ? log.timestamp.split('T')[1].substring(0, 5) : log.timestamp}</span>
-                                                        </div>
-                                                        <div className="flex items-center gap-1.5 mt-1 flex-wrap">
-                                                            <span className="text-[10px] font-medium text-slate-500 bg-slate-50 dark:bg-slate-800 px-1.5 py-0.5 rounded">{log.authMethod}</span>
-                                                            <span className="text-[10px] text-slate-400 truncate max-w-[80px]">via {log.deviceId}</span>
-                                                            {log.empId && (
-                                                                <>
-                                                                    <span className="text-[10px] text-slate-300">•</span>
-                                                                    <span className="text-[10px] font-bold text-indigo-500">ID: {log.empId}</span>
-                                                                </>
-                                                            )}
-                                                        </div>
-                                                    </div>
-                                                </div>
-                                            ))
-                                        ) : (
-                                            <div className="py-8 text-center flex flex-col items-center justify-center h-full opacity-60">
-                                                <span className="material-symbols-outlined text-slate-300 text-4xl mb-2">security</span>
-                                                <p className="text-xs text-slate-500 font-medium">No recent security events</p>
-                                            </div>
-                                        )}
-                                    </div>
-                                </div>
-                                <div className="bg-white dark:bg-[#182130] rounded-xl border border-slate-100 dark:border-slate-800 shadow-sm flex flex-col">
-                                    <div className="px-6 py-5 border-b border-slate-100 dark:border-slate-800">
-                                        <h3 className="font-bold text-slate-900 dark:text-white flex items-center gap-2">
-                                            <span className="material-symbols-outlined text-slate-400">timer</span>
-                                            Overtime Monitor
-                                        </h3>
-                                    </div>
-                                    <div className="p-6 flex flex-col justify-center gap-4 h-full">
-                                        <div>
-                                            <div className="flex justify-between text-xs mb-2">
-                                                <span className="text-slate-500">Budget (This Month)</span>
-                                                <span className="font-medium text-slate-900 dark:text-white">{otMonitorData.budget} hrs</span>
-                                            </div>
-                                            <div className="w-full h-2 bg-slate-100 dark:bg-slate-700 rounded-full overflow-hidden">
-                                                <div className="h-full bg-slate-300 dark:bg-slate-500" style={{ width: '100%' }}></div>
-                                            </div>
-                                        </div>
-                                        <div>
-                                            <div className="flex justify-between text-xs mb-2">
-                                                <span className="text-slate-500">Actual Approved</span>
-                                                <span className={`font-medium ${otMonitorData.overBudget ? 'text-rose-600' : 'text-emerald-600'}`}>
-                                                    {otMonitorData.approved} hrs
-                                                </span>
-                                            </div>
-                                            <div className="w-full h-2 bg-slate-100 dark:bg-slate-700 rounded-full overflow-hidden">
-                                                <div className={`h-full ${otMonitorData.overBudget ? 'bg-rose-500' : 'bg-emerald-500'}`} style={{ width: `${otMonitorData.pct}%` }}></div>
-                                            </div>
-                                            {otMonitorData.overBudget && (
-                                                <p className="text-[11px] font-medium text-rose-600 mt-2 flex items-center gap-1.5 bg-rose-50 dark:bg-rose-900/20 px-2 py-1 rounded border border-rose-100 dark:border-rose-900/30 w-fit">
-                                                    ⚠️ {scopedDept || 'Organization'} is {otMonitorData.pct - 100}% over budget
-                                                </p>
-                                            )}
-                                        </div>
-                                    </div>
-                                </div>
                             </div>
                         </div>
 
@@ -1335,7 +1256,7 @@ export default function HomeDashboard() {
                                     </div>
                                     <div>
                                         <h3 className="text-base font-bold text-slate-900 dark:text-white">Daily Absences by Location & Department</h3>
-                                        <p className="text-xs text-slate-500 font-medium tracking-tight">Real-time staffing visibility based on {liveNowTime} check-in status ({systemSettings.compliance.attendanceGracePeriod}m grace)</p>
+                                        <p className="text-xs text-slate-500 font-medium tracking-tight">Real-time staffing visibility for today's active scheduled shifts ({systemSettings.compliance.attendanceGracePeriod}m grace)</p>
                                     </div>
                                 </div>
                                 <div className="flex items-center gap-2">

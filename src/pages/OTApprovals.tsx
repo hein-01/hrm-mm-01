@@ -43,7 +43,8 @@ export default function OTApprovals() {
         employees, 
         approveOT, 
         rejectOT, 
-        bulkApproveOT 
+        bulkApproveOT,
+        systemSettings
     } = useAppData();
     const { pushNotification } = useNotifications();
 
@@ -117,6 +118,18 @@ export default function OTApprovals() {
             violationCount: violationEmps.size
         };
     }, [otRequests]);
+
+    // ── OT Monitor calculation ──
+    const otMonitorData = useMemo(() => {
+        const now = new Date();
+        const ym = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
+        const approved = otRequests
+            .filter(r => r.status === 'Approved' && r.date?.startsWith(ym))
+            .reduce((s, r) => s + (r.otHours || 0), 0);
+        const budget = (systemSettings as any)?.compliance?.otBudgetHours ?? (systemSettings as any)?.otBudgetHours ?? 80;
+        const pct = budget > 0 ? Math.min(Math.round((approved / budget) * 100), 120) : 0;
+        return { approved, budget, overBudget: approved > budget, pct };
+    }, [otRequests, systemSettings]);
 
     // Actions
     const handleApprove = (id: string) => {
@@ -294,50 +307,99 @@ export default function OTApprovals() {
                         </button>
                         
                     </div>
-                    {/* KPI Cards */}
-                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-                        <div className="bg-white dark:bg-slate-900 p-6 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-sm cursor-pointer hover:border-indigo-500/30 transition-colors" onClick={() => setStatusFilter('Pending')}>
-                            <div className="flex items-center justify-between mb-4">
-                                <div className="bg-amber-100 dark:bg-amber-900/30 p-2 rounded-lg">
-                                    <span className="material-symbols-outlined text-amber-600 dark:text-amber-400">pending_actions</span>
+                    {/* Stats & Budget Monitor Grid */}
+                    <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                        {/* KPI Cards (Left 2/3) */}
+                        <div className="lg:col-span-2 grid grid-cols-1 sm:grid-cols-2 gap-4">
+                            <div className="bg-white dark:bg-slate-900 p-6 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-sm cursor-pointer hover:border-indigo-500/30 transition-colors" onClick={() => setStatusFilter('Pending')}>
+                                <div className="flex items-center justify-between mb-4">
+                                    <div className="bg-amber-100 dark:bg-amber-900/30 p-2 rounded-lg">
+                                        <span className="material-symbols-outlined text-amber-600 dark:text-amber-400">pending_actions</span>
+                                    </div>
+                                    {statusFilter === 'Pending' && <span className="text-[10px] font-bold text-indigo-600 dark:text-indigo-400 uppercase tracking-widest bg-indigo-50 dark:bg-indigo-900/20 px-2 py-1 rounded">Active Filter</span>}
                                 </div>
-                                {statusFilter === 'Pending' && <span className="text-[10px] font-bold text-indigo-600 dark:text-indigo-400 uppercase tracking-widest bg-indigo-50 dark:bg-indigo-900/20 px-2 py-1 rounded">Active Filter</span>}
+                                <p className="text-slate-500 dark:text-slate-400 text-sm font-medium">Pending OT</p>
+                                <p className="text-2xl font-bold mt-1 text-slate-900 dark:text-white">{kpiData.pendingCount} <span className="text-sm font-medium text-slate-400">Req</span></p>
                             </div>
-                            <p className="text-slate-500 dark:text-slate-400 text-sm font-medium">Pending OT</p>
-                            <p className="text-2xl font-bold mt-1 text-slate-900 dark:text-white">{kpiData.pendingCount} <span className="text-sm font-medium text-slate-400">Req</span></p>
+
+                            <div className="bg-white dark:bg-slate-900 p-6 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-sm cursor-pointer hover:border-indigo-500/30 transition-colors" onClick={() => setStatusFilter('Approved')}>
+                                <div className="flex items-center justify-between mb-4">
+                                    <div className="bg-blue-100 dark:bg-blue-900/30 p-2 rounded-lg">
+                                        <span className="material-symbols-outlined text-blue-600 dark:text-blue-400">hourglass_empty</span>
+                                    </div>
+                                    {statusFilter === 'Approved' && <span className="text-[10px] font-bold text-indigo-600 dark:text-indigo-400 uppercase tracking-widest bg-indigo-50 dark:bg-indigo-900/20 px-2 py-1 rounded">Active Filter</span>}
+                                </div>
+                                <p className="text-slate-500 dark:text-slate-400 text-sm font-medium">Approved Hours (Week)</p>
+                                <p className="text-2xl font-bold mt-1 text-slate-900 dark:text-white">{kpiData.totalHours}h</p>
+                            </div>
+
+                            <div className="bg-white dark:bg-slate-900 p-6 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-sm">
+                                <div className="flex items-center justify-between mb-4">
+                                    <div className="bg-emerald-100 dark:bg-emerald-900/30 p-2 rounded-lg">
+                                        <span className="material-symbols-outlined text-emerald-600 dark:text-emerald-400">payments</span>
+                                    </div>
+                                    <span className="text-[10px] font-bold text-emerald-600 dark:text-emerald-400 uppercase tracking-widest bg-emerald-50 dark:bg-emerald-900/20 px-2 py-1 rounded">Est. Burden</span>
+                                </div>
+                                <p className="text-slate-500 dark:text-slate-400 text-sm font-medium">Estimated OT Payout</p>
+                                <p className="text-2xl font-bold mt-1 text-slate-900 dark:text-white">{formatCurrency(kpiData.estCost)}</p>
+                            </div>
+
+                            <div className="bg-white dark:bg-slate-900 p-6 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-sm ring-1 ring-red-100 dark:ring-red-900/20">
+                                <div className="flex items-center justify-between mb-4">
+                                    <div className="bg-red-100 dark:bg-red-900/30 p-2 rounded-lg">
+                                        <span className="material-symbols-outlined text-red-600 dark:text-red-400">warning</span>
+                                    </div>
+                                    <span className="text-xs font-bold text-red-600 dark:text-red-400 uppercase tracking-tighter">Urgent</span>
+                                </div>
+                                <p className="text-slate-500 dark:text-slate-400 text-sm font-medium">Violation Flags</p>
+                                <p className="text-2xl font-bold mt-1 text-slate-900 dark:text-white">{kpiData.violationCount} <span className="text-sm font-medium text-slate-400">Staff</span></p>
+                            </div>
                         </div>
 
-                        <div className="bg-white dark:bg-slate-900 p-6 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-sm cursor-pointer hover:border-indigo-500/30 transition-colors" onClick={() => setStatusFilter('Approved')}>
+                        {/* Overtime Monitor Widget (Right 1/3) */}
+                        <div className="bg-white dark:bg-slate-900 p-6 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-sm flex flex-col justify-between h-full">
                             <div className="flex items-center justify-between mb-4">
-                                <div className="bg-blue-100 dark:bg-blue-900/30 p-2 rounded-lg">
-                                    <span className="material-symbols-outlined text-blue-600 dark:text-blue-400">hourglass_empty</span>
-                                </div>
-                                {statusFilter === 'Approved' && <span className="text-[10px] font-bold text-indigo-600 dark:text-indigo-400 uppercase tracking-widest bg-indigo-50 dark:bg-indigo-900/20 px-2 py-1 rounded">Active Filter</span>}
+                                <h3 className="font-bold text-slate-900 dark:text-white flex items-center gap-2 text-sm">
+                                    <span className="material-symbols-outlined text-slate-400 text-[20px]">timer</span>
+                                    Overtime Budget Monitor
+                                </h3>
+                                <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full uppercase tracking-wider ${
+                                    otMonitorData.overBudget ? 'bg-red-50 text-red-600 dark:bg-red-900/30 dark:text-red-400' : 'bg-emerald-50 text-emerald-600 dark:bg-emerald-900/30 dark:text-emerald-400'
+                                }`}>
+                                    {otMonitorData.overBudget ? 'Over Budget' : 'On Track'}
+                                </span>
                             </div>
-                            <p className="text-slate-500 dark:text-slate-400 text-sm font-medium">Approved Hours (Week)</p>
-                            <p className="text-2xl font-bold mt-1 text-slate-900 dark:text-white">{kpiData.totalHours}h</p>
-                        </div>
-
-                        <div className="bg-white dark:bg-slate-900 p-6 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-sm">
-                            <div className="flex items-center justify-between mb-4">
-                                <div className="bg-emerald-100 dark:bg-emerald-900/30 p-2 rounded-lg">
-                                    <span className="material-symbols-outlined text-emerald-600 dark:text-emerald-400">payments</span>
+                            <div className="space-y-4">
+                                <div>
+                                    <div className="flex justify-between text-xs mb-1.5 font-medium">
+                                        <span className="text-slate-500">Monthly Budget Cap</span>
+                                        <span className="font-bold text-slate-900 dark:text-white">{otMonitorData.budget} hrs</span>
+                                    </div>
+                                    <div className="w-full h-2.5 bg-slate-100 dark:bg-slate-800 rounded-full overflow-hidden">
+                                        <div className="h-full bg-slate-300 dark:bg-slate-600" style={{ width: '100%' }}></div>
+                                    </div>
                                 </div>
-                                <span className="text-[10px] font-bold text-emerald-600 dark:text-emerald-400 uppercase tracking-widest bg-emerald-50 dark:bg-emerald-900/20 px-2 py-1 rounded">Est. Burden</span>
-                            </div>
-                            <p className="text-slate-500 dark:text-slate-400 text-sm font-medium">Estimated OT Payout</p>
-                            <p className="text-2xl font-bold mt-1 text-slate-900 dark:text-white">{formatCurrency(kpiData.estCost)}</p>
-                        </div>
-
-                        <div className="bg-white dark:bg-slate-900 p-6 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-sm ring-1 ring-red-100 dark:ring-red-900/20">
-                            <div className="flex items-center justify-between mb-4">
-                                <div className="bg-red-100 dark:bg-red-900/30 p-2 rounded-lg">
-                                    <span className="material-symbols-outlined text-red-600 dark:text-red-400">warning</span>
+                                <div>
+                                    <div className="flex justify-between text-xs mb-1.5 font-medium">
+                                        <span className="text-slate-500">Actual Approved</span>
+                                        <span className={`font-bold ${otMonitorData.overBudget ? 'text-rose-600' : 'text-emerald-600'}`}>
+                                            {otMonitorData.approved} hrs
+                                        </span>
+                                    </div>
+                                    <div className="w-full h-2.5 bg-slate-100 dark:bg-slate-800 rounded-full overflow-hidden">
+                                        <div className={`h-full ${otMonitorData.overBudget ? 'bg-rose-500' : 'bg-emerald-500'}`} style={{ width: `${otMonitorData.pct}%` }}></div>
+                                    </div>
+                                    {otMonitorData.overBudget ? (
+                                        <p className="text-[11px] font-medium text-rose-600 mt-2 flex items-center gap-1.5 bg-rose-50 dark:bg-rose-900/20 px-2 py-1 rounded border border-rose-100 dark:border-rose-900/30 w-fit">
+                                            ⚠️ Organization is {otMonitorData.pct - 100}% over budget
+                                        </p>
+                                    ) : (
+                                        <p className="text-[11px] font-medium text-emerald-600 mt-2 flex items-center gap-1.5 bg-emerald-50 dark:bg-emerald-900/20 px-2 py-1 rounded border border-emerald-100 dark:border-emerald-900/30 w-fit">
+                                            ✅ {100 - otMonitorData.pct}% remaining budget headroom
+                                        </p>
+                                    )}
                                 </div>
-                                <span className="text-xs font-bold text-red-600 dark:text-red-400 uppercase tracking-tighter">Urgent</span>
                             </div>
-                            <p className="text-slate-500 dark:text-slate-400 text-sm font-medium">Violation Flags</p>
-                            <p className="text-2xl font-bold mt-1 text-slate-900 dark:text-white">{kpiData.violationCount} <span className="text-sm font-medium text-slate-400">Staff</span></p>
                         </div>
                     </div>
 
