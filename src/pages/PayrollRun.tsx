@@ -4,6 +4,7 @@ import Sidebar from '../components/Sidebar';
 import Header from '../components/Header';
 import { useAppData } from '../context/AppDataContext';
 import { exportSSBForm13CSV, exportPITReportCSV, downloadCSV } from '../utils/taxExport';
+import { useNotifications } from '../context/NotificationProvider';
 
 export default function PayrollRun() {
     const navigate = useNavigate();
@@ -26,6 +27,7 @@ export default function PayrollRun() {
         setAlerts,
         complianceSettings
     } = useAppData();
+    const { pushNotification } = useNotifications();
     
     const [currentStep, setCurrentStep] = useState(1);
     const [searchQuery, setSearchQuery] = useState('');
@@ -600,6 +602,22 @@ export default function PayrollRun() {
                                 if (activePayrollGroupId) {
                                     updatePayrollGroupStatus(activePayrollGroupId, 'Approved');
                                 }
+                                const group = payrollGroups.find(g => g.id === activePayrollGroupId);
+                                const period = group?.period ?? 'Current Period';
+                                const totalAmt = payrollRecords.reduce((s, r) => s + Math.round(r.netPay), 0);
+                                pushNotification({
+                                    title: `💰 Payroll Ready for Payout — ${period}`,
+                                    body: `The payrun calculations for ${group?.name || 'Monthly Group'} have been finalized by HR and are ready for bank disbursement. Total: ${totalAmt.toLocaleString()} MMK.`,
+                                    category: 'Financial',
+                                    priority: 'high',
+                                    icon: 'account_balance',
+                                    iconBg: 'bg-indigo-100 dark:bg-indigo-900/30',
+                                    iconColor: 'text-indigo-600 dark:text-indigo-400',
+                                    actionRoute: '/bank-disbursements',
+                                    actionLabel: 'Disburse Payout',
+                                    badge: 'Approved',
+                                    badgeColor: 'indigo'
+                                });
                                 navigate('/bank-disbursements');
                             }}
                             className="px-10 py-4 bg-[#4F46E5] text-white rounded-2xl text-sm font-black uppercase tracking-[0.1em] shadow-2xl shadow-indigo-200 dark:shadow-indigo-900/20 hover:scale-105 transition-all active:scale-95 flex items-center gap-3"
