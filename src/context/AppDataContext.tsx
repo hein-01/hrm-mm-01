@@ -159,6 +159,7 @@ type AppDataContextType = {
     loadingTickets: boolean;
     updateTicketStatus: (id: string, status: Types.Ticket['status']) => Promise<void>;
     loadingEmployees: boolean;
+    deletePayrollGroup: (groupId: string) => Promise<{ success: boolean; message: string }>;
 };
 
 const AppDataContext = createContext<AppDataContextType | undefined>(undefined);
@@ -236,17 +237,30 @@ export const AppDataProvider: React.FC<{ children: ReactNode }> = ({ children })
 
     // ── Employees: Supabase fetch + realtime ──────────────────────────────────
     useEffect(() => {
-        const mapEmp = (emp: any): Types.Employee => ({
-            ...emp,
-            mobile: emp.mobile || emp.phone || '',
-            avatar: emp.avatar || emp.profileImage || null,
-            initials: emp.name?.split(' ').map((n: string) => n[0]).join('').toUpperCase() || 'EM',
-            colorClass: 'bg-blue-100 text-blue-600',
-            documents: emp.documents || [],
-            enrolledCourses: emp.enrolledCourses || [],
-            leaveBalances: emp.leaveBalances || { Casual: 6, Medical: 30, Earned: 0 },
-            reliefs: emp.reliefs || { spouse: false, parentsCount: 0, childrenCount: 0 }
-        });
+        const mapEmp = (emp: any): Types.Employee => {
+            const resolvedId = emp.id || emp.Id || emp.empId || emp.employee_id || `EMP-ERR-${Math.random().toString(36).substr(2, 4)}`;
+            return {
+                ...emp,
+                id: resolvedId,
+                name: emp.name || emp.Name || 'Unknown Employee',
+                dept: emp.dept || emp.Dept || emp.department || 'General',
+                role: emp.role || emp.Role || emp.position || 'Staff',
+                status: emp.status || emp.Status || 'Active',
+                mobile: emp.mobile || emp.phone || emp.Mobile || emp.Phone || '',
+                avatar: emp.avatar || emp.profileImage || emp.profileimage || emp.Avatar || null,
+                initials: (emp.name || emp.Name)?.split(' ').map((n: string) => n[0]).join('').toUpperCase() || resolvedId.slice(-2).toUpperCase() || 'EM',
+                colorClass: emp.colorClass || 'bg-blue-100 text-blue-600',
+                nrcNumber: emp.nrcNumber || emp.nrcnumber || emp.nrc || '',
+                ssbNumber: emp.ssbNumber || emp.ssbnumber || emp.ssb || '',
+                taxId: emp.taxId || emp.taxid || '',
+                joinDate: emp.joinDate || emp.joindate || emp.createdat || '',
+                baseSalary: emp.baseSalary || emp.basesalary || 0,
+                documents: emp.documents || [],
+                enrolledCourses: emp.enrolledCourses || [],
+                leaveBalances: emp.leaveBalances || { Casual: 6, Medical: 30, Earned: 0 },
+                reliefs: emp.reliefs || { spouse: emp.has_spouse || false, parentsCount: emp.parentscount || 0, childrenCount: emp.childrencount || 0 }
+            };
+        };
 
         const assetChannel = supabase.channel('assets-changes')
             .on('postgres_changes', { event: '*', schema: 'public', table: 'hrms_assets' }, (payload) => {
@@ -263,10 +277,32 @@ export const AppDataProvider: React.FC<{ children: ReactNode }> = ({ children })
         const fetchEmployees = async () => {
             setLoadingEmployees(true);
             try {
-                const { data, error } = await supabase.from('employees').select('*');
-                if (!error && data) setEmployees(data.map(mapEmp));
+                console.log('Fetching employees from Supabase table: Employees...');
+                const { data, error } = await supabase.from('Employees').select('*');
+                
+                if (error) {
+                    console.error('Supabase Employees fetch error:', error.message, error.details);
+                    // Try lowercase fallback if capitalized fails
+                    const { data: dataLow, error: errorLow } = await supabase.from('employees').select('*');
+                    if (!errorLow && dataLow) {
+                        console.log('Fallback to lowercase "employees" successful.');
+                        setEmployees(dataLow.map(mapEmp));
+                        return;
+                    }
+                    setEmployees(DEFAULT_EMPLOYEES);
+                    return;
+                }
+
+                if (data && data.length > 0) {
+                    console.log(`Successfully loaded ${data.length} employees from Supabase.`);
+                    setEmployees(data.map(mapEmp));
+                } else {
+                    console.warn('Supabase returned 0 employees for table "Employees". Checking RLS or empty table.');
+                    setEmployees(DEFAULT_EMPLOYEES);
+                }
             } catch (err) {
-                console.log('Employee fetch error:', err);
+                console.error('Critical Employee fetch error:', err);
+                setEmployees(DEFAULT_EMPLOYEES);
             } finally {
                 setLoadingEmployees(false);
             }
@@ -279,7 +315,7 @@ export const AppDataProvider: React.FC<{ children: ReactNode }> = ({ children })
         fetchAssets();
 
         const channel = supabase.channel('employees-changes')
-            .on('postgres_changes', { event: '*', schema: 'public', table: 'employees' }, (payload) => {
+            .on('postgres_changes', { event: '*', schema: 'public', table: 'Employees' }, (payload) => {
                 if (payload.eventType === 'INSERT' || payload.eventType === 'UPDATE') {
                     const rec = mapEmp(payload.new);
                     setEmployees(prev => {
@@ -307,30 +343,30 @@ export const AppDataProvider: React.FC<{ children: ReactNode }> = ({ children })
     useEffect(() => {
         const mapReviewFromDb = (r: any): Types.Review => ({
             id: r.id,
-            empId: r.empId || r.empid,
-            revieweeId: r.revieweeId || r.revieweeid,
-            reviewerId: r.reviewerId || r.reviewerid,
+            empId: r.emp_id || r.empId || r.empid,
+            revieweeId: r.reviewee_id || r.revieweeId || r.revieweeid,
+            reviewerId: r.reviewer_id || r.reviewerId || r.reviewerid,
             name: r.name,
             dept: r.dept,
             period: r.period,
             progress: Array.isArray(r.progress) ? r.progress : [],
             rating: r.rating ?? null,
-            competencyScores: r.competencyScores || r.competencyscores || {},
-            selfRating: r.selfRating ?? r.selfrating,
-            managerRating: r.managerRating ?? r.managerrating,
-            managerComments: r.managerComments || r.managercomments,
-            peerRatings: Array.isArray(r.peerRatings || r.peerratings) ? (r.peerRatings || r.peerratings) : undefined,
-            bonusEligible: r.bonusEligible ?? r.bonuseligible ?? false,
+            competencyScores: r.competency_scores || r.competencyScores || r.competencyscores || {},
+            selfRating: r.self_rating ?? r.selfRating ?? r.selfrating,
+            managerRating: r.manager_rating ?? r.managerRating ?? r.managerrating,
+            managerComments: r.manager_comments || r.managerComments || r.managercomments,
+            peerRatings: Array.isArray(r.peer_ratings || r.peerRatings || r.peerratings) ? (r.peer_ratings || r.peerRatings || r.peerratings) : undefined,
+            bonusEligible: r.bonus_eligible ?? r.bonusEligible ?? r.bonuseligible ?? false,
             status: r.status || 'Pending',
             checksum: r.checksum,
             initials: r.initials,
-            colorClass: r.colorClass || r.colorclass,
-            hasReminderSent: r.hasReminderSent ?? r.hasremindersent ?? false,
+            colorClass: r.color_class || r.colorClass || r.colorclass,
+            hasReminderSent: r.has_reminder_sent ?? r.hasReminderSent ?? r.hasremindersent ?? false,
         });
 
         const fetchReviews = async () => {
             try {
-                const { data, error } = await supabase.from('reviews').select('*').order('createdAt', { ascending: false });
+                const { data, error } = await supabase.from('reviews').select('*').order('created_at', { ascending: false });
                 if (error) throw error;
                 if (data && data.length > 0) setReviews(data.map(mapReviewFromDb));
             } catch (err) {
@@ -475,7 +511,7 @@ export const AppDataProvider: React.FC<{ children: ReactNode }> = ({ children })
         const mapHolFromDb = (r: any): Types.Holiday => ({
             date: r.date,
             name: r.name,
-            isRestricted: r.isRestricted ?? r.isrestricted ?? false,
+            isRestricted: r.is_restricted ?? r.isRestricted ?? r.isrestricted ?? false,
         });
 
         const fetchHolidays = async () => {
@@ -514,26 +550,27 @@ export const AppDataProvider: React.FC<{ children: ReactNode }> = ({ children })
     useEffect(() => {
         const mapLeave = (r: any): Types.LeaveRequest => ({
             ...r,
-            empId: r.empId || r.empid,
-            durationStr: r.durationStr || r.durationstr || '',
-            totalDays: Number(r.days || r.totalDays || r.totaldays || 0),
-            startDate: r.startDate || r.startdate,
-            endDate: r.endDate || r.enddate,
-            relieverId: r.relieverid || r.relieverId || r.reliever_id || '',
-            relieverName: r.relievername || r.relieverName || '',
-            hasCert: r.hasCert || r.hascert || false,
-            isAdminOverride: r.isAdminOverride || r.isadminoverride || false,
-            certFileName: r.certFileName || r.certfilename || '',
-            rejectionReason: r.rejectionreason || r.rejectionReason || '',
-            approvedBy: r.approvedBy || r.approvedby || '',
-            approvedAt: r.approvedAt || r.approvedat || '',
-            rejectedBy: r.rejectedby || r.rejectedBy || '',
-            rejectedAt: r.rejectedat || r.rejectedAt || '',
+            empId: r.emp_id || r.empId || r.empid,
+            name: r.name || r.Name || r.employeeName || r.employee_name || 'Unknown',
+            durationStr: r.duration_str || r.durationStr || r.durationstr || '',
+            totalDays: Number(r.total_days || r.days || r.totalDays || r.totaldays || 0),
+            startDate: r.start_date || r.startDate || r.startdate,
+            endDate: r.end_date || r.endDate || r.enddate,
+            relieverId: r.reliever_id || r.relieverid || r.relieverId || r.reliever_id || '',
+            relieverName: r.reliever_name || r.relievername || r.relieverName || '',
+            hasCert: r.has_cert ?? r.hasCert ?? r.hascert ?? false,
+            isAdminOverride: r.is_admin_override ?? r.isAdminOverride ?? r.isadminoverride ?? false,
+            certFileName: r.cert_file_name || r.certFileName || r.certfilename || '',
+            rejectionReason: r.rejection_reason || r.rejectionreason || r.rejectionReason || '',
+            approvedBy: r.approved_by || r.approvedBy || r.approvedby || '',
+            approvedAt: r.approved_at || r.approvedAt || r.approvedat || '',
+            rejectedBy: r.rejected_by || r.rejectedby || r.rejectedBy || '',
+            rejectedAt: r.rejected_at || r.rejectedat || r.rejectedAt || '',
             avatar: ''
         });
 
         const fetchLeave = async () => {
-            const { data, error } = await supabase.from('leave_requests').select('*').order('createdAt', { ascending: false });
+            const { data, error } = await supabase.from('leave_requests').select('*').order('created_at', { ascending: false });
             if (!error && data) setLeaveRequests(data.map(mapLeave));
         };
         fetchLeave();
@@ -574,28 +611,28 @@ export const AppDataProvider: React.FC<{ children: ReactNode }> = ({ children })
     useEffect(() => {
         const mapFromDb = (r: any): Types.AttendanceLog => ({
             id: r.id,
-            empId: r.empid || r.empId,
+            empId: r.emp_id || r.empid || r.empId,
             name: r.name || '',
             dept: r.dept || '',
-            checkIn: r.checkin || r.checkIn || '-- : --',
-            checkOut: r.checkout || r.checkOut || '-- : --',
+            checkIn: r.check_in || r.checkin || r.checkIn || '-- : --',
+            checkOut: r.check_out || r.checkout || r.checkOut || '-- : --',
             location: r.location || '',
-            gps: (r.gpslat != null || r.gpslng != null) ? { lat: r.gpslat ?? 0, lng: r.gpslng ?? 0 } : undefined,
-            geofenceStatus: r.geofencestatus || r.geofenceStatus || 'N/A',
+            gps: (r.gps_lat != null || r.gps_lng != null || r.gpslat != null || r.gpslng != null) ? { lat: r.gps_lat ?? r.gpslat ?? 0, lng: r.gps_lng ?? r.gpslng ?? 0 } : undefined,
+            geofenceStatus: r.geofence_status || r.geofencestatus || r.geofenceStatus || 'N/A',
             status: r.status || 'Present',
-            adminAuditId: r.adminauditid || r.adminAuditId,
-            adminAuditReason: r.adminauditreason || r.adminAuditReason,
-            totalHours: Number(r.totalhours ?? r.totalHours ?? 0),
-            checkInMethod: r.checkinmethod || r.checkInMethod || 'Web Portal',
-            isManual: r.ismanual ?? r.isManual ?? false,
-            penaltyRuleId: r.penaltyruleid || r.penaltyRuleId,
-            penaltyAmount: Number(r.penaltyamount ?? r.penaltyAmount ?? 0),
+            adminAuditId: r.admin_audit_id || r.adminauditid || r.adminAuditId,
+            adminAuditReason: r.admin_audit_reason || r.adminauditreason || r.adminAuditReason,
+            totalHours: Number(r.total_hours ?? r.totalhours ?? r.totalHours ?? 0),
+            checkInMethod: r.check_in_method || r.checkinmethod || r.checkInMethod || 'Web Portal',
+            isManual: r.is_manual ?? r.ismanual ?? r.isManual ?? false,
+            penaltyRuleId: r.penalty_rule_id || r.penaltyruleid || r.penaltyRuleId,
+            penaltyAmount: Number(r.penalty_amount ?? r.penaltyamount ?? r.penaltyAmount ?? 0),
             date: r.date || '',
-            deviceCheckIn: r.devicecheckin || r.deviceCheckIn,
-            syncCheckIn: r.synccheckin || r.syncCheckIn,
-            deviceCheckOut: r.devicecheckout || r.deviceCheckOut,
-            syncCheckOut: r.synccheckout || r.syncCheckOut,
-            biometricDeviceId: r.biometricdeviceid || r.biometricDeviceId,
+            deviceCheckIn: r.device_check_in || r.devicecheckin || r.deviceCheckIn,
+            syncCheckIn: r.sync_check_in || r.synccheckin || r.syncCheckIn,
+            deviceCheckOut: r.device_check_out || r.devicecheckout || r.deviceCheckOut,
+            syncCheckOut: r.sync_check_out || r.synccheckout || r.syncCheckOut,
+            biometricDeviceId: r.biometric_device_id || r.biometricdeviceid || r.biometricDeviceId,
             project: r.project,
         });
 
@@ -605,8 +642,8 @@ export const AppDataProvider: React.FC<{ children: ReactNode }> = ({ children })
                 const { data, error } = await supabase
                     .from('attendance_logs')
                     .select('*')
-                    .gte('createdAt', cutoff)
-                    .order('createdAt', { ascending: false })
+                    .gte('created_at', cutoff)
+                    .order('created_at', { ascending: false })
                     .limit(200);
                 if (error) throw error;
                 if (data && data.length > 0) {
@@ -650,15 +687,15 @@ export const AppDataProvider: React.FC<{ children: ReactNode }> = ({ children })
     useEffect(() => {
         const mapRequestFromDb = (r: any): Types.AttendanceRequest => ({
             id: r.id,
-            empId: r.empId,
-            name: r.name,
-            type: r.type,
-            time: r.time,
-            shiftTime: r.shiftTime,
-            location: r.location,
-            reason: r.reason,
-            status: r.status,
-            submittedDate: r.submittedDate,
+            empId: r.emp_id || r.empId || r.empid,
+            name: r.name || '',
+            type: r.type || 'Regularization',
+            time: r.time || '',
+            shiftTime: r.shift_time || r.shiftTime || r.shifttime,
+            location: r.location || '',
+            reason: r.reason || '',
+            status: r.status || 'Pending',
+            submittedDate: r.submitted_date || r.submittedDate || r.submitteddate || '',
             priority: r.priority || 'Medium',
             category: 'Attendance',
         });
@@ -668,7 +705,7 @@ export const AppDataProvider: React.FC<{ children: ReactNode }> = ({ children })
                 const { data, error } = await supabase
                     .from('attendance_requests')
                     .select('*')
-                    .order('createdAt', { ascending: false })
+                    .order('created_at', { ascending: false })
                     .limit(200);
                 if (error) throw error;
                 if (data && data.length > 0) {
@@ -917,21 +954,21 @@ export const AppDataProvider: React.FC<{ children: ReactNode }> = ({ children })
     useEffect(() => {
         const mapOnbFromDb = (r: any): Types.OnboardingRecord => ({
             id: r.id,
-            empId: r.empId || r.empid,
-            employee_id: r.empId || r.empid,
+            empId: r.emp_id || r.empId || r.empid,
+            employee_id: r.emp_id || r.empId || r.empid,
             name: r.name || '',
             role: r.role || '',
             supervisor: r.supervisor,
-            startDate: r.startDate || r.startdate,
+            startDate: r.start_date || r.startDate || r.startdate || '',
             status: r.status || 'In Progress',
             tasks: Array.isArray(r.tasks) ? r.tasks : [],
-            created_at: r.createdAt || r.createdat || new Date().toISOString(),
-            isVisibleToEmployee: r.isVisibleToEmployee ?? r.isvisibletoemployee ?? true,
+            created_at: r.created_at || r.createdAt || r.createdat || new Date().toISOString(),
+            isVisibleToEmployee: r.is_visible_to_employee ?? r.isVisibleToEmployee ?? r.isvisibletoemployee ?? true,
         });
 
         const fetchOnboarding = async () => {
             try {
-                const { data, error } = await supabase.from('onboarding_records').select('*').order('createdAt', { ascending: false });
+                const { data, error } = await supabase.from('onboarding_records').select('*').order('created_at', { ascending: false });
                 if (error) throw error;
                 if (data && data.length > 0) {
                     setOnboardingRecords(data.map(mapOnbFromDb));
@@ -978,22 +1015,22 @@ export const AppDataProvider: React.FC<{ children: ReactNode }> = ({ children })
     useEffect(() => {
         const mapContractFromDb = (r: any): Types.LaborContract => ({
             id: r.id,
-            empId: r.empId || r.empid,
-            employeeName: r.employeeName || r.employeename,
-            dept: r.dept,
-            type: r.type,
-            startDate: r.startDate || r.startdate,
-            endDate: r.endDate || r.enddate || null,
+            empId: r.emp_id || r.empId || r.empid,
+            employeeName: r.employee_name || r.employeeName || r.employeename || '',
+            dept: r.dept || '',
+            type: r.type || 'Probation',
+            startDate: r.start_date || r.startDate || r.startdate || '',
+            endDate: r.end_date || r.endDate || r.enddate || null,
             status: r.status || 'Active',
-            documentUrl: r.documentUrl || r.documenturl,
-            signedDate: r.signedDate || r.signeddate,
+            documentUrl: r.document_url || r.documentUrl || r.documenturl || '',
+            signedDate: r.signed_date || r.signedDate || r.signeddate || '',
             salary: r.salary || 0,
-            role: r.role,
+            role: r.role || '',
         });
 
         const fetchContracts = async () => {
             try {
-                const { data, error } = await supabase.from('labor_contracts').select('*').order('createdAt', { ascending: false });
+                const { data, error } = await supabase.from('labor_contracts').select('*').order('created_at', { ascending: false });
                 if (error) throw error;
                 if (data && data.length > 0) setLaborContracts(data.map(mapContractFromDb));
             } catch (err) {
@@ -1032,17 +1069,17 @@ export const AppDataProvider: React.FC<{ children: ReactNode }> = ({ children })
     useEffect(() => {
         const mapObjFromDb = (r: any): Types.Objective => ({
             id: r.id,
-            empId: r.empId || r.empid,
-            title: r.title,
-            period: r.period,
+            empId: r.emp_id || r.empId || r.empid,
+            title: r.title || '',
+            period: r.period || '',
             weight: r.weight || 0,
-            alignment: r.alignment,
+            alignment: r.alignment || '',
             progress: r.progress || 0,
         });
 
         const fetchObjectives = async () => {
             try {
-                const { data, error } = await supabase.from('objectives').select('*').order('createdAt', { ascending: false });
+                const { data, error } = await supabase.from('objectives').select('*').order('created_at', { ascending: false });
                 if (error) throw error;
                 if (data && data.length > 0) setObjectives(data.map(mapObjFromDb));
             } catch (err) {
@@ -1074,15 +1111,15 @@ export const AppDataProvider: React.FC<{ children: ReactNode }> = ({ children })
     useEffect(() => {
         const mapKrFromDb = (r: any): Types.KeyResult => ({
             id: r.id,
-            objectiveId: r.objectiveId || r.objectiveid,
-            title: r.title,
-            targetValue: r.targetValue || r.targetvalue || 0,
-            currentValue: r.currentValue || r.currentvalue || 0,
+            objectiveId: r.objective_id || r.objectiveId || r.objectiveid,
+            title: r.title || '',
+            targetValue: r.target_value || r.targetValue || r.targetvalue || 0,
+            currentValue: r.current_value || r.currentValue || r.currentvalue || 0,
         });
 
         const fetchKeyResults = async () => {
             try {
-                const { data, error } = await supabase.from('key_results').select('*').order('createdAt', { ascending: false });
+                const { data, error } = await supabase.from('key_results').select('*').order('created_at', { ascending: false });
                 if (error) throw error;
                 if (data && data.length > 0) setKeyResults(data.map(mapKrFromDb));
             } catch (err) {
@@ -1190,7 +1227,7 @@ export const AppDataProvider: React.FC<{ children: ReactNode }> = ({ children })
             const shouldRequireAction = currentContractStatus === 'Expired';
             if (employee.contractActionRequired === shouldRequireAction) return employee;
             // Sync contractActionRequired to Supabase
-            supabase.from('employees').update({ contractActionRequired: shouldRequireAction }).eq('id', employee.id).then(({ error }) => {
+            supabase.from('Employees').update({ contractActionRequired: shouldRequireAction }).eq('id', employee.id).then(({ error }) => {
                 if (error) console.error('Supabase contract action required sync error:', error.message);
             });
             return { ...employee, contractActionRequired: shouldRequireAction };
@@ -1205,26 +1242,26 @@ export const AppDataProvider: React.FC<{ children: ReactNode }> = ({ children })
     useEffect(() => {
         const mapDiscFromDb = (r: any): Types.DisciplinaryAction => ({
             id: r.id,
-            empId: r.empId || r.empid,
-            employeeName: r.employeeName || r.employeename,
-            dept: r.dept,
-            type: r.type,
-            category: r.category,
-            issueDate: r.issueDate || r.issuedate,
-            expiryDate: r.expiryDate || r.expirydate,
+            empId: r.emp_id || r.empId || r.empid,
+            employeeName: r.employee_name || r.employeeName || r.employeename || '',
+            dept: r.dept || '',
+            type: r.type || 'Verbal Warning',
+            category: r.category || 'Misconduct',
+            issueDate: r.issue_date || r.issueDate || r.issuedate || '',
+            expiryDate: r.expiry_date || r.expiryDate || r.expirydate || null,
             status: r.status || 'Active',
-            reason: r.reason,
-            actionTaken: r.actionTaken || r.actiontaken,
-            documentUrl: r.documentUrl || r.documenturl,
-            penaltyAmount: r.penaltyAmount ?? r.penaltyamount ?? null,
-            employeeStatement: r.employeeStatement || r.employeestatement || null,
-            resolvedDate: r.resolvedDate || r.resolveddate || null,
-            resolvedBy: r.resolvedBy || r.resolvedby || null,
+            reason: r.reason || '',
+            actionTaken: r.action_taken || r.actionTaken || r.actiontaken || '',
+            documentUrl: r.document_url || r.documentUrl || r.documenturl || '',
+            penaltyAmount: r.penalty_amount ?? r.penaltyAmount ?? r.penaltyamount ?? null,
+            employeeStatement: r.employee_statement || r.employeeStatement || r.employeestatement || null,
+            resolvedDate: r.resolved_date || r.resolvedDate || r.resolveddate || null,
+            resolvedBy: r.resolved_by || r.resolvedBy || r.resolvedby || null,
         });
 
         const fetchDisciplinary = async () => {
             try {
-                const { data, error } = await supabase.from('disciplinary_actions').select('*').order('createdAt', { ascending: false });
+                const { data, error } = await supabase.from('disciplinary_actions').select('*').order('created_at', { ascending: false });
                 if (error) throw error;
                 if (data && data.length > 0) setDisciplinaryActions(data.map(mapDiscFromDb));
             } catch (err) {
@@ -1344,33 +1381,33 @@ export const AppDataProvider: React.FC<{ children: ReactNode }> = ({ children })
     useEffect(() => {
         const mapJacFromDb = (r: any): Types.JobActivityChange => ({
             id: r.id,
-            empId: r.empId || r.empid,
-            name: r.name,
-            type: r.type,
-            detail: r.detail,
-            effectiveDate: r.effectiveDate || r.effectivedate,
+            empId: r.emp_id || r.empId || r.empid,
+            name: r.name || '',
+            type: r.type || 'Adjustment',
+            detail: r.detail || '',
+            effectiveDate: r.effective_date || r.effectiveDate || r.effectivedate || '',
             status: r.status || 'Pending',
-            submittedDate: r.submittedDate || r.submitteddate,
+            submittedDate: r.submitted_date || r.submittedDate || r.submitteddate || '',
             priority: r.priority || 'Medium',
             category: r.category || 'Staffing',
-            newSalary: r.newSalary ?? r.newsalary,
-            oldSalary: r.oldSalary ?? r.oldsalary,
-            newRole: r.newRole || r.newrole,
-            newDept: r.newDept || r.newdept,
-            newManager: r.newManager || r.newmanager,
-            newShiftId: r.newShiftId || r.newshiftid,
-            announcementTitle: r.announcementTitle || r.announcementtitle,
-            jobDescription: r.jobDescription || r.jobdescription,
-            newLocation: r.newLocation || r.newlocation,
-            newOfficeCoords: r.newOfficeCoords || r.newofficecoords,
-            transferReason: r.transferReason || r.transferreason,
-            finalWorkingDate: r.finalWorkingDate || r.finalworkingdate,
-            resignationReason: r.resignationReason || r.resignationreason,
+            newSalary: r.new_salary ?? r.newSalary ?? r.newsalary,
+            oldSalary: r.old_salary ?? r.oldSalary ?? r.oldsalary,
+            newRole: r.new_role || r.newRole || r.newrole,
+            newDept: r.new_dept || r.newDept || r.newdept,
+            newManager: r.new_manager || r.newManager || r.newmanager,
+            newShiftId: r.new_shift_id || r.newShiftId || r.newshiftid,
+            announcementTitle: r.announcement_title || r.announcementTitle || r.announcementtitle,
+            jobDescription: r.job_description || r.jobDescription || r.jobdescription,
+            newLocation: r.new_location || r.newLocation || r.newlocation,
+            newOfficeCoords: r.new_office_coords || r.newOfficeCoords || r.newofficecoords,
+            transferReason: r.transfer_reason || r.transferReason || r.transferreason,
+            finalWorkingDate: r.final_working_date || r.finalWorkingDate || r.finalworkingdate,
+            resignationReason: r.resignation_reason || r.resignationReason || r.resignationreason,
         });
 
         const fetchJac = async () => {
             try {
-                const { data, error } = await supabase.from('job_activity_changes').select('*').order('createdAt', { ascending: false });
+                const { data, error } = await supabase.from('job_activity_changes').select('*').order('created_at', { ascending: false });
                 if (error) throw error;
                 // Always set from Supabase (even if empty) — this is the authoritative source
                 setJobActivityChanges(data.map(mapJacFromDb));
@@ -1408,20 +1445,20 @@ export const AppDataProvider: React.FC<{ children: ReactNode }> = ({ children })
             title: r.title,
             content: r.content,
             priority: r.priority || 'Medium',
-            targetAudience: r.targetAudience || r.targetaudience || 'All',
-            targetDept: r.targetDept || r.targetdept,
-            targetRole: r.targetRole || r.targetrole,
-            createdAt: r.createdAt || r.createdat,
-            createdBy: r.createdBy || r.createdby,
+            targetAudience: r.target_audience || r.targetAudience || r.targetaudience || 'All',
+            targetDept: r.target_dept || r.targetDept || r.targetdept,
+            targetRole: r.target_role || r.targetRole || r.targetrole,
+            createdAt: r.created_at || r.createdAt || r.createdat,
+            createdBy: r.created_by || r.createdBy || r.createdby,
             status: r.status || 'Draft',
-            sourceType: r.sourceType || r.sourcetype || 'Manual',
-            requiresAcknowledgement: r.requiresAcknowledgement ?? r.requiresacknowledgement ?? false,
+            sourceType: r.source_type || r.sourceType || r.sourcetype || 'Manual',
+            requiresAcknowledgement: r.requires_acknowledgement ?? r.requiresAcknowledgement ?? r.requiresacknowledgement ?? false,
             acknowledgements: r.acknowledgements || [],
         });
 
         const fetchAnnouncements = async () => {
             try {
-                const { data, error } = await supabase.from('announcements').select('*').order('createdAt', { ascending: false });
+                const { data, error } = await supabase.from('announcements').select('*').order('created_at', { ascending: false });
                 if (error) throw error;
                 if (data && data.length > 0) {
                     setAnnouncements(data.map(mapAnnFromDb));
@@ -1464,22 +1501,22 @@ export const AppDataProvider: React.FC<{ children: ReactNode }> = ({ children })
     useEffect(() => {
         const mapPrrFromDb = (r: any): Types.PerformanceReviewRequest => ({
             id: r.id,
-            reviewId: r.reviewId || r.reviewid,
-            empId: r.empId || r.empid,
-            name: r.name,
-            dept: r.dept,
-            reviewerId: r.reviewerId || r.reviewerid,
-            period: r.period,
-            competencyScores: r.competencyScores || r.competencyscores || {},
+            reviewId: r.review_id || r.reviewId || r.reviewid,
+            empId: r.emp_id || r.empId || r.empid,
+            name: r.name || '',
+            dept: r.dept || '',
+            reviewerId: r.reviewer_id || r.reviewerId || r.reviewerid,
+            period: r.period || '',
+            competencyScores: r.competency_scores || r.competencyScores || r.competencyscores || {},
             rating: r.rating ?? 0,
-            submittedDate: r.submittedDate || r.submitteddate,
+            submittedDate: r.submitted_date || r.submittedDate || r.submitteddate || '',
             status: r.status || 'Pending',
             priority: r.priority || 'Medium',
         });
 
         const fetchPrr = async () => {
             try {
-                const { data, error } = await supabase.from('performance_review_requests').select('*').order('createdAt', { ascending: false });
+                const { data, error } = await supabase.from('performance_review_requests').select('*').order('created_at', { ascending: false });
                 if (error) throw error;
                 if (data && data.length > 0) setPerformanceReviewRequests(data.map(mapPrrFromDb));
             } catch (err) {
@@ -1518,23 +1555,23 @@ export const AppDataProvider: React.FC<{ children: ReactNode }> = ({ children })
     useEffect(() => {
         const mapDocFromDb = (r: any): Types.ArchivedDocument => ({
             id: r.id,
-            title: r.title,
-            category: r.category,
-            sourceModule: r.sourceModule || r.sourcemodule,
-            description: r.description,
-            period: r.period,
-            generatedBy: r.generatedBy || r.generatedby,
-            generatedAt: r.generatedAt || r.generatedat,
-            checksum: r.checksum,
-            fileContent: r.fileContent || r.filecontent,
-            fileName: r.fileName || r.filename,
-            isMandatory: r.isMandatory ?? r.ismandatory ?? false,
-            relatedRecordId: r.relatedRecordId || r.relatedrecordid || null,
+            title: r.title || '',
+            category: r.category || 'Manual',
+            sourceModule: r.source_module || r.sourceModule || 'Manual',
+            description: r.description || '',
+            period: r.period || '',
+            generatedBy: r.generated_by || r.generatedBy || r.generatedby || '',
+            generatedAt: r.generated_at || r.generatedAt || r.generatedat || '',
+            checksum: r.checksum || '',
+            fileContent: r.file_content || r.fileContent || r.filecontent || '',
+            fileName: r.file_name || r.fileName || r.filename || '',
+            isMandatory: r.is_mandatory ?? r.isMandatory ?? r.ismandatory ?? false,
+            relatedRecordId: r.related_record_id || r.relatedRecordId || r.relatedrecordid || null,
         });
 
         const fetchDocs = async () => {
             try {
-                const { data, error } = await supabase.from('archived_documents').select('*').order('createdAt', { ascending: false });
+                const { data, error } = await supabase.from('archived_documents').select('*').order('created_at', { ascending: false });
                 if (error) throw error;
                 if (data && data.length > 0) setArchivedDocuments(data.map(mapDocFromDb));
             } catch (err) {
@@ -1574,24 +1611,46 @@ export const AppDataProvider: React.FC<{ children: ReactNode }> = ({ children })
 
     // ── Field Force: Supabase fetch + realtime ────────────────────────────────
     useEffect(() => {
+        const mapFaFromDb = (r: any): Types.FieldAgent => ({
+            ...r,
+            empId: r.emp_id || r.empId || r.empid,
+            locationName: r.location_name || r.locationName || r.locationname,
+            mapPosition: r.map_position || r.mapPosition || r.mapposition || { x: 0, y: 0 },
+            lastUpdate: r.last_update || r.lastUpdate || r.lastupdate,
+            routeAssigned: r.route_assigned || r.routeAssigned || r.routeassigned,
+            batteryLevel: r.battery_level ?? r.batteryLevel ?? r.batterylevel,
+            isTrackingActive: r.is_tracking_active ?? r.isTrackingActive ?? r.istrackingactive ?? false,
+            currentSpeed: r.current_speed ?? r.currentSpeed ?? r.currentspeed ?? 0,
+        });
+
+        const mapGlFromDb = (r: any): Types.GPSLog => ({
+            ...r,
+            agentId: r.agent_id || r.agentId || r.agentid,
+            startTime: r.start_time || r.startTime || r.starttime,
+            endTime: r.end_time || r.endTime || r.endtime,
+            durationMins: r.duration_mins ?? r.durationMins ?? r.durationmins,
+            isDwellPoint: r.is_dwell_point ?? r.isDwellPoint ?? r.isdwellpoint ?? false,
+            batteryLevel: r.battery_level ?? r.batteryLevel ?? r.batterylevel,
+        });
+
         const fetchFieldData = async () => {
             const [faRes, glRes] = await Promise.all([
                 supabase.from('field_agents').select('*'),
-                supabase.from('gps_logs').select('*').order('createdAt', { ascending: false }).limit(200)
+                supabase.from('gps_logs').select('*').order('created_at', { ascending: false }).limit(200)
             ]);
-            if (!faRes.error && faRes.data) setFieldAgents(faRes.data as Types.FieldAgent[]);
-            if (!glRes.error && glRes.data) setGpsLogs(glRes.data as Types.GPSLog[]);
+            if (!faRes.error && faRes.data) setFieldAgents(faRes.data.map(mapFaFromDb));
+            if (!glRes.error && glRes.data) setGpsLogs(glRes.data.map(mapGlFromDb));
         };
         fetchFieldData();
 
         const faChannel = supabase.channel('field_agents-changes')
             .on('postgres_changes', { event: '*', schema: 'public', table: 'field_agents' }, (payload) => {
                 if (payload.eventType === 'INSERT' || payload.eventType === 'UPDATE') {
-                    const rec = payload.new as Types.FieldAgent;
+                    const rec = mapFaFromDb(payload.new);
                     setFieldAgents(prev => {
                         const exists = prev.some(a => a.id === rec.id);
                         if (exists) return prev.map(a => a.id === rec.id ? { ...a, ...rec } : a);
-                        return [rec, ...prev];
+                        return [...prev, rec];
                     });
                 } else if (payload.eventType === 'DELETE') {
                     const id = (payload.old as any).id;
@@ -1602,7 +1661,7 @@ export const AppDataProvider: React.FC<{ children: ReactNode }> = ({ children })
         const glChannel = supabase.channel('gps_logs-changes')
             .on('postgres_changes', { event: '*', schema: 'public', table: 'gps_logs' }, (payload) => {
                 if (payload.eventType === 'INSERT' || payload.eventType === 'UPDATE') {
-                    const rec = payload.new as Types.GPSLog;
+                    const rec = mapGlFromDb(payload.new);
                     setGpsLogs(prev => {
                         const exists = prev.some(l => l.id === rec.id);
                         if (exists) return prev.map(l => l.id === rec.id ? { ...l, ...rec } : l);
@@ -1666,8 +1725,8 @@ export const AppDataProvider: React.FC<{ children: ReactNode }> = ({ children })
         const mapShiftFromDb = (r: any): Types.Shift => ({
             id: r.id,
             name: r.name,
-            start: r.startTime || r.starttime,
-            end: r.endTime || r.endtime,
+            start: r.start_time || r.startTime || r.starttime,
+            end: r.end_time || r.endTime || r.endtime,
             color: r.color,
         });
 
@@ -1688,8 +1747,8 @@ export const AppDataProvider: React.FC<{ children: ReactNode }> = ({ children })
                 const mapS = (r: any) => ({
                     id: r.id,
                     name: r.name,
-                    start: r.startTime || r.starttime,
-                    end: r.endTime || r.endtime,
+                    start: r.start_time || r.startTime || r.starttime,
+                    end: r.end_time || r.endTime || r.endtime,
                     color: r.color,
                 });
 
@@ -1815,22 +1874,22 @@ export const AppDataProvider: React.FC<{ children: ReactNode }> = ({ children })
     useEffect(() => {
         const mapCourseFromDb = (r: any): Types.Course => ({
             id: r.id,
-            name: r.name,
-            category: r.category,
-            duration: r.duration,
+            name: r.name || '',
+            category: r.category || 'Standard',
+            duration: r.duration || '',
             enrolled: r.enrolled || 0,
             progress: r.progress || 0,
-            isMandatory: r.isMandatory ?? r.ismandatory ?? false,
-            expiryDays: r.expiryDays ?? r.expirydays,
-            skillTags: Array.isArray(r.skillTags || r.skilltags) ? (r.skillTags || r.skilltags) : [],
-            provider: r.provider,
-            costPerHead: r.costPerHead ?? r.costperhead,
-            minPassingScore: r.minPassingScore ?? r.minpassingscore,
+            isMandatory: r.is_mandatory ?? r.isMandatory ?? r.ismandatory ?? false,
+            expiryDays: r.expiry_days ?? r.expiryDays ?? r.expirydays,
+            skillTags: Array.isArray(r.skill_tags || r.skillTags || r.skilltags) ? (r.skill_tags || r.skillTags || r.skilltags) : [],
+            provider: r.provider || '',
+            costPerHead: r.cost_per_head ?? r.costPerHead ?? r.costperhead,
+            minPassingScore: r.min_passing_score ?? r.minPassingScore ?? r.minpassingscore,
         });
 
         const fetchCourses = async () => {
             try {
-                const { data, error } = await supabase.from('courses').select('*').order('createdAt', { ascending: false });
+                const { data, error } = await supabase.from('courses').select('*').order('created_at', { ascending: false });
                 if (error) throw error;
                 if (data && data.length > 0) setCourses(data.map(mapCourseFromDb));
             } catch (err) {
@@ -1862,17 +1921,17 @@ export const AppDataProvider: React.FC<{ children: ReactNode }> = ({ children })
     useEffect(() => {
         const mapCertFromDb = (r: any): Types.Certification => ({
             id: r.id,
-            name: r.name,
-            employee: r.employee,
-            empId: r.empId || r.empid,
-            expiry: r.expiry,
-            complianceLink: r.complianceLink || r.compliancelink,
+            name: r.name || '',
+            employee: r.employee || '',
+            empId: r.emp_id || r.empId || r.empid,
+            expiry: r.expiry || '',
+            complianceLink: r.compliance_link || r.complianceLink || r.compliancelink || '',
             status: r.status || 'Valid',
         });
 
         const fetchCerts = async () => {
             try {
-                const { data, error } = await supabase.from('certifications').select('*').order('createdAt', { ascending: false });
+                const { data, error } = await supabase.from('certifications').select('*').order('created_at', { ascending: false });
                 if (error) throw error;
                 if (data && data.length > 0) setCerts(data.map(mapCertFromDb));
             } catch (err) {
@@ -1912,7 +1971,7 @@ export const AppDataProvider: React.FC<{ children: ReactNode }> = ({ children })
 
         const fetchAnalytics = async () => {
             try {
-                const { data, error } = await supabase.from('training_analytics').select('*').order('createdAt', { ascending: false });
+                const { data, error } = await supabase.from('training_analytics').select('*').order('created_at', { ascending: false });
                 if (error) throw error;
                 if (data && data.length > 0) setAnalytics(data.map(mapAnalyticFromDb));
             } catch (err) {
@@ -1945,7 +2004,7 @@ export const AppDataProvider: React.FC<{ children: ReactNode }> = ({ children })
             emp.id === empId ? { ...emp, hasCriticalRiskFlag: true, criticalRiskCategory: category } : emp
         ));
         // Sync risk flag to Supabase
-        supabase.from('employees').update({ hasCriticalRiskFlag: true, criticalRiskCategory: category }).eq('id', empId).then(({ error }) => {
+        supabase.from('Employees').update({ hasCriticalRiskFlag: true, criticalRiskCategory: category }).eq('id', empId).then(({ error }) => {
             if (error) console.error('Supabase risk flag sync error:', error.message);
         });
     };
@@ -1984,7 +2043,7 @@ export const AppDataProvider: React.FC<{ children: ReactNode }> = ({ children })
         });
 
         // Sync auto attendance toggle to Supabase
-        supabase.from('employees').update({ autoAttendanceEnabled: newState }).eq('id', empId).then(({ error }) => {
+        supabase.from('Employees').update({ autoAttendanceEnabled: newState }).eq('id', empId).then(({ error }) => {
             if (error) console.error('Supabase auto attendance sync error:', error.message);
         });
 
@@ -2111,7 +2170,7 @@ export const AppDataProvider: React.FC<{ children: ReactNode }> = ({ children })
         
         // Insert to Supabase
         try {
-            await supabase.from('employees').insert({
+            await supabase.from('Employees').insert({
                 id: newEmployee.id,
                 name: newEmployee.name,
                 email: `${newEmployee.id.toLowerCase()}@techdance.hr`,
@@ -2297,7 +2356,7 @@ export const AppDataProvider: React.FC<{ children: ReactNode }> = ({ children })
                         status: 'In Progress'
                     }];
                     // Sync enrolledCourses to Supabase
-                    supabase.from('employees').update({ enrolledCourses: updatedEnrolledCourses }).eq('id', emp.id).then(({ error }) => {
+                    supabase.from('Employees').update({ enrolledCourses: updatedEnrolledCourses }).eq('id', emp.id).then(({ error }) => {
                         if (error) console.error('Supabase course assignment sync error:', error.message);
                     });
                     return {
@@ -2415,7 +2474,7 @@ export const AppDataProvider: React.FC<{ children: ReactNode }> = ({ children })
             const currentSkills = updatedEmp.skills || [];
             const courseSkills = course.skillTags || [];
             const mergedSkills = Array.from(new Set([...currentSkills, ...courseSkills]));
-            supabase.from('employees').update({
+            supabase.from('Employees').update({
                 enrolledCourses: updatedCoursesList,
                 skills: mergedSkills,
             }).eq('id', empId).then(({ error }) => {
@@ -2485,15 +2544,27 @@ export const AppDataProvider: React.FC<{ children: ReactNode }> = ({ children })
 
     // ── Shift Planner: Supabase fetch + realtime ─────────────────────────────
     useEffect(() => {
+        const mapSaFromDb = (r: any): Types.ShiftAssignment => ({
+            ...r,
+            empId: r.emp_id || r.empId || r.empid,
+            shiftId: r.shift_id || r.shiftId || r.shiftid,
+            modifiedByHr: r.modified_by_hr ?? r.modifiedByHr ?? r.modifiedbyhr ?? false,
+            adminId: r.admin_id || r.adminId || r.adminid,
+            oldShiftId: r.old_shift_id || r.oldShiftId || r.oldshiftid,
+            customStart: r.custom_start || r.customStart || r.customstart,
+            customEnd: r.custom_end || r.customEnd || r.customend,
+            workType: r.work_type || r.workType || r.worktype || 'Regular',
+        });
+
         const fetchShiftData = async () => {
             const [saRes, pwRes] = await Promise.all([
                 supabase.from('shift_assignments').select('*').order('date', { ascending: true }),
-                supabase.from('published_weeks').select('weekKey').order('weekKey', { ascending: true }),
+                supabase.from('published_weeks').select('week_key').order('week_key', { ascending: true }),
             ]);
             if (!saRes.error && saRes.data && saRes.data.length > 0)
-                setShiftAssignments(saRes.data as ShiftAssignment[]);
+                setShiftAssignments(saRes.data.map(mapSaFromDb));
             if (!pwRes.error && pwRes.data && pwRes.data.length > 0)
-                setPublishedWeeks(pwRes.data.map((r: any) => r.weekKey));
+                setPublishedWeeks(pwRes.data.map((r: any) => r.week_key || r.weekKey));
         };
         fetchShiftData();
 
@@ -2501,10 +2572,10 @@ export const AppDataProvider: React.FC<{ children: ReactNode }> = ({ children })
             .channel('shift_assignments-changes')
             .on('postgres_changes', { event: '*', schema: 'public', table: 'shift_assignments' }, (payload) => {
                 if (payload.eventType === 'INSERT' && payload.new) {
-                    const rec = payload.new as ShiftAssignment;
+                    const rec = mapSaFromDb(payload.new);
                     setShiftAssignments(prev => prev.some(s => s.id === rec.id) ? prev : [rec, ...prev]);
                 } else if (payload.eventType === 'UPDATE' && payload.new) {
-                    const rec = payload.new as ShiftAssignment;
+                    const rec = mapSaFromDb(payload.new);
                     setShiftAssignments(prev => prev.map(s => s.id === rec.id ? { ...s, ...rec } : s));
                 } else if (payload.eventType === 'DELETE' && payload.old) {
                     const id = (payload.old as any).id;
@@ -2680,7 +2751,7 @@ export const AppDataProvider: React.FC<{ children: ReactNode }> = ({ children })
             }));
 
             // Sync shift assignment to Supabase
-            supabase.from('employees').update({ employmentHistory: employees.find(e => e.id === empId)?.employmentHistory || [] }).eq('id', empId).then(({ error }) => {
+            supabase.from('Employees').update({ employmentHistory: employees.find(e => e.id === empId)?.employmentHistory || [] }).eq('id', empId).then(({ error }) => {
                 if (error) console.error('Supabase shift assignment sync error:', error.message);
             });
         }
@@ -2913,26 +2984,20 @@ export const AppDataProvider: React.FC<{ children: ReactNode }> = ({ children })
             id: newLog.id,
             empId,
             name: emp.name,
+            dept: emp.dept,
+            date: todayStr,
             checkIn: ciStr,
             checkOut: '-- : --',
-            location: locationName,
-            gpsLat: gps.lat,
-            gpsLng: gps.lng,
-            geofenceStatus: newLog.geofenceStatus,
             status: newLog.status,
-            dept: emp.dept,
-            totalHours: 0,
-            checkInMethod: method,
-            isManual: false,
-            penaltyAmount,
-            date: todayStr,
-            project: newLog.project
+            location: locationName,
+            updatedAt: new Date().toISOString()
         }).then(({ error }) => {
-            if (error) console.error('Supabase checkIn sync error:', error.message);
-        }).catch(err => console.error('Failed to sync checkIn to Supabase:', err));
+            if (error) console.error('Supabase attendance log sync error:', error.message);
+        }).catch(err => console.error('Failed to sync attendance log to Supabase:', err));
+
         if (isGeofenceViolation) {
             const newRequest: Types.AttendanceRequest = {
-                id: `AR-${Date.now()}`,
+                id: `REQ-${Date.now()}`,
                 empId,
                 name: emp.name,
                 type: 'Remote Check-In',
@@ -2958,7 +3023,8 @@ export const AppDataProvider: React.FC<{ children: ReactNode }> = ({ children })
                 status: newRequest.status,
                 submittedDate: newRequest.submittedDate,
                 priority: newRequest.priority,
-                category: newRequest.category
+                category: newRequest.category,
+                createdAt: new Date().toISOString()
             }).then(({ error }) => {
                 if (error) console.error('Supabase attendance request sync error:', error.message);
             }).catch(err => console.error('Failed to sync attendance request to Supabase:', err));
@@ -3236,7 +3302,7 @@ export const AppDataProvider: React.FC<{ children: ReactNode }> = ({ children })
 
                 // Update Employee balance and status
                 if (emp) {
-                    const { error: empErr } = await supabase.from('employees').update({
+                    const { error: empErr } = await supabase.from('Employees').update({
                         status: 'On Leave',
                         leaveBalances: { ...emp.leaveBalances, [req.type]: newBalance }
                     }).eq('id', req.empId);
@@ -3485,7 +3551,7 @@ export const AppDataProvider: React.FC<{ children: ReactNode }> = ({ children })
 
         // 4.5 Sync termination to Supabase
         try {
-            const { error } = await supabase.from('employees').update({
+            const { error } = await supabase.from('Employees').update({
                 status: newStatus,
                 separationReason,
                 separationDate,
@@ -4078,7 +4144,7 @@ export const AppDataProvider: React.FC<{ children: ReactNode }> = ({ children })
             } else if (Object.keys(updates).length > 0) {
                 setEmployees(prev => prev.map(e => e.id === req.empId ? { ...e, ...updates } : e));
                 // Sync approved profile changes to Supabase
-                supabase.from('employees').update(updates).eq('id', req.empId)
+                supabase.from('Employees').update(updates).eq('id', req.empId)
                     .then(({ error }) => { if (error) console.error('Supabase profile change sync error:', error.message); })
                     .catch(err => console.error('Failed to sync profile change to Supabase:', err));
             }
@@ -4287,7 +4353,7 @@ export const AppDataProvider: React.FC<{ children: ReactNode }> = ({ children })
             return { ...e, currentContractId: cid, contractActionRequired: newContract.status === 'Expired', documents: docs };
         }));
         // Sync contract fields to Supabase
-        supabase.from('employees').update({
+        supabase.from('Employees').update({
             currentContractId: cid,
             contractActionRequired: newContract.status === 'Expired',
         }).eq('id', contract.empId).then(({ error }) => {
@@ -4509,7 +4575,7 @@ export const AppDataProvider: React.FC<{ children: ReactNode }> = ({ children })
         return { success: false, message: 'Financial operations moved to Payroll Provider.' };
     };
 
-    const handleInboxAction = (type: string, id: string, action: 'Approve' | 'Reject', adminId: string): { success: boolean; message: string } => {
+    const handleInboxAction = (type: string, id: string, action: 'Approve' | 'Reject', adminId: string, reason?: string): { success: boolean; message: string } => {
         if (!isAdmin(adminId)) return { success: false, message: 'Admin privileges required.' };
 
         let success = true;
@@ -4554,7 +4620,7 @@ export const AppDataProvider: React.FC<{ children: ReactNode }> = ({ children })
                     const result = approveLeave(id, adminId);
                     if (!result.success) return result;
                 } else {
-                    const result = rejectLeave(id, adminId, 'Declined via Centralized Inbox.');
+                    const result = rejectLeave(id, adminId, reason || 'Declined via Centralized Inbox.');
                     if (!result.success) return result;
                 }
                 logAction('LeaveRequest', id, item, { ...item, status });
@@ -4604,7 +4670,7 @@ export const AppDataProvider: React.FC<{ children: ReactNode }> = ({ children })
                         addAuditLog({ adminId, actionType: 'Resignation Sync', module: 'Inbox', detail: `Resignation approved. Queued for final settlement processing in Payroll.` });
 
                         // Sync resignation to Supabase
-                        supabase.from('employees').update({
+                        supabase.from('Employees').update({
                             status: 'Terminated',
                         }).eq('id', item.empId).then(({ error }) => {
                             if (error) console.error('Supabase resignation sync error:', error.message);
@@ -4693,7 +4759,7 @@ export const AppDataProvider: React.FC<{ children: ReactNode }> = ({ children })
                         const resolvedNewDept = item.newDept || emp.dept;
                         const resolvedNewShift = item.newShiftId || emp.shiftId;
                         const updatedSalary = item.newSalary || emp.baseSalary;
-                        supabase.from('employees').update({
+                        supabase.from('Employees').update({
                             role: resolvedNewRole,
                             dept: resolvedNewDept,
                             shiftId: resolvedNewShift,
@@ -4788,7 +4854,7 @@ export const AppDataProvider: React.FC<{ children: ReactNode }> = ({ children })
                             return mgr?.status === 'Active' ? item.newManager : emp.reportingManagerId;
                         })();
                         const tNewSalary = item.newSalary || emp.baseSalary;
-                        supabase.from('employees').update({
+                        supabase.from('Employees').update({
                             dept: tNewDept,
                             shiftId: tNewShift,
                             reportingManagerId: tNewManager,
@@ -4820,7 +4886,7 @@ export const AppDataProvider: React.FC<{ children: ReactNode }> = ({ children })
                         }));
 
                         // Sync salary adjustment to Supabase
-                        supabase.from('employees').update({
+                        supabase.from('Employees').update({
                             baseSalary: item.newSalary
                         }).eq('id', item.empId).then(({ error }) => {
                             if (error) console.error('Supabase salary adjustment sync error:', error.message);
@@ -5160,7 +5226,7 @@ export const AppDataProvider: React.FC<{ children: ReactNode }> = ({ children })
             if (updates.eligibleForRehire !== undefined) supabaseUpdates.eligibleForRehire = updates.eligibleForRehire;
 
             if (Object.keys(supabaseUpdates).length > 0) {
-                const { error } = await supabase.from('employees').update(supabaseUpdates).eq('id', empId);
+                const { error } = await supabase.from('Employees').update(supabaseUpdates).eq('id', empId);
                 if (error) console.error('Supabase update error:', error.message);
             }
         } catch (err) { console.error('Failed to sync update to Supabase:', err); }
@@ -5200,7 +5266,7 @@ export const AppDataProvider: React.FC<{ children: ReactNode }> = ({ children })
         
         // Insert to Supabase
         try {
-            const { data, error } = await supabase.from('employees').upsert({
+            const { data, error } = await supabase.from('Employees').upsert({
                 id: newEmployee.id,
                 name: newEmployee.name,
                 email: newEmployee.email || `${newEmployee.id.toLowerCase()}@techdance.hr`,
@@ -5253,7 +5319,7 @@ export const AppDataProvider: React.FC<{ children: ReactNode }> = ({ children })
         
         // Delete from Supabase
         try {
-            await supabase.from('employees').delete().eq('id', empId);
+            await supabase.from('Employees').delete().eq('id', empId);
         } catch (err) { console.error('Failed to delete employee from Supabase:', err); }
         
         addAuditLog({ adminId, actionType: 'Employee Deleted', module: 'Employees', detail: `Deleted employee: ${emp.name} (${empId})` });
@@ -5288,7 +5354,7 @@ export const AppDataProvider: React.FC<{ children: ReactNode }> = ({ children })
             return e;
         }));
         // Sync to Supabase
-        supabase.from('employees').update({ leaveBalances: newBalances }).eq('id', empId)
+        supabase.from('Employees').update({ leaveBalances: newBalances }).eq('id', empId)
             .then(({ error }) => { if (error) console.error('Supabase leave balance sync error:', error.message); })
             .catch(err => console.error('Failed to sync leave balance to Supabase:', err));
         addAuditLog({ adminId, actionType: 'Leave Balance Adjusted', module: 'Leave', detail: `${type} balance for ${empId} adjusted by ${amount}. Reason: ${reason}` });
@@ -5750,7 +5816,7 @@ export const AppDataProvider: React.FC<{ children: ReactNode }> = ({ children })
                         reEnrollMap[emp.id].includes(ec.courseId) ? { ...ec, status: 'In Progress' as const } : ec
                     );
                     // Sync re-enrollment to Supabase
-                    supabase.from('employees').update({ enrolledCourses: updatedCourses }).eq('id', emp.id).then(({ error }) => {
+                    supabase.from('Employees').update({ enrolledCourses: updatedCourses }).eq('id', emp.id).then(({ error }) => {
                         if (error) console.error('Supabase re-enrollment sync error:', error.message);
                     });
                     return { ...emp, enrolledCourses: updatedCourses };
@@ -5853,7 +5919,7 @@ const PayrollBridge: React.FC<{
         projectPayments, setProjectPayments,
         calculatePayroll, finalizePayroll, disbursePayroll,
         activePayrollGroupId, setActivePayrollGroupId,
-        createPayrollGroup, updatePayrollGroupStatus,
+        createPayrollGroup, updatePayrollGroupStatus, deletePayrollGroup,
         isPayrollLocked, payrunId,
         submitOT, approveOT, rejectOT, bulkApproveOT,
         submitExpense, handleExpenseApproval,
@@ -5894,7 +5960,7 @@ const PayrollBridge: React.FC<{
         // Payroll actions
         calculatePayroll, finalizePayroll, disbursePayroll,
         activePayrollGroupId, setActivePayrollGroupId,
-        createPayrollGroup, updatePayrollGroupStatus,
+        createPayrollGroup, updatePayrollGroupStatus, deletePayrollGroup,
         isPayrollLocked, payrunId,
         submitOT, approveOT, rejectOT, bulkApproveOT,
         submitExpense, handleExpenseApproval,

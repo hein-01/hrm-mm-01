@@ -1,0 +1,34 @@
+{
+  "title": "Social Security & Tax",
+  "subtitle": "Generate compliance reports, audit employee SSB numbers, and simulate government PIT filings",
+  "tabs": {
+    "ssb": "SSB (Social Security)",
+    "pit": "PIT (Income Tax)",
+    "calculator": "Tax Calculator"
+  },
+  "kpis": {
+    "aggregate_gross": "Aggregate Gross",
+    "employee_ssb": "Employee (2%)",
+    "employer_ssb": "Employer (3%)",
+    "total_liability": "Total Filing Liability",
+    "taxable_revenue": "Taxable Revenue",
+    "exemption_reliefs": "Exemption Reliefs",
+    "monthly_pit": "Monthly PIT"
+  },
+  "actions": {
+    "generate_csv": "Generate & Download CSV",
+    "tax_patch": "Tax Patch",
+    "clear_filter": "Clear Filter"
+  },
+  "table": {
+    "employee": "Employee",
+    "ssb_id": "SSB ID",
+    "nrc_township": "NRC / Township",
+    "total_income": "Total Income",
+    "taxable_basis": "Taxable Basis",
+    "ssb_capped": "SSB Capped",
+    "attendance_deduct": "Attendance Deduct",
+    "net_tax": "Net Tax",
+    "audit": "Audit"
+  }
+}

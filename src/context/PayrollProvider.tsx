@@ -47,6 +47,7 @@ interface PayrollContextType {
     setActivePayrollGroupId: React.Dispatch<React.SetStateAction<string | null>>;
     createPayrollGroup: (group: { name: string; period: string; type: Types.PayrollGroup['type']; payrollCycle: string; proRatingLogic: string; cutoffDate?: string; paymentDate?: string }) => void;
     updatePayrollGroupStatus: (groupId: string, status: Types.PayrollGroup['status']) => void;
+    deletePayrollGroup: (groupId: string) => Promise<{ success: boolean; message: string }>;
     isPayrollLocked: boolean;
     payrunId: string | null;
 }
@@ -690,6 +691,26 @@ export const PayrollProvider: React.FC<PayrollProviderProps> = ({
         setPayrollGroups(prev => prev.map(g => g.id === groupId ? { ...g, status } : g));
     };
 
+    const deletePayrollGroup = async (groupId: string) => {
+        // Deleting from supabase will trigger CASCADE on payroll_records
+        const { error } = await supabase.from('payroll_groups').delete().eq('id', groupId);
+        if (error) {
+            console.error('Failed to delete payroll group from Supabase:', error);
+            return { success: false, message: error.message };
+        }
+        setPayrollGroups(prev => prev.filter(g => g.id !== groupId));
+        if (activePayrollGroupId === groupId) {
+            setActivePayrollGroupId(null);
+        }
+        addAuditLog({
+            adminId: 'EMP-001',
+            actionType: 'Payroll Group Deleted',
+            module: 'Payroll',
+            detail: `Deleted payroll group ${groupId} and all associated records.`
+        });
+        return { success: true, message: 'Payroll group deleted successfully.' };
+    };
+
     const calculatePayroll = (workingDaysInMonthOverride?: number, employeeIds?: string[]) => {
         if (isPayrollLocked) return;
 
@@ -1242,7 +1263,7 @@ STATUS: Finalized & Locked
         projectPayments, setProjectPayments, handleProjectPaymentAction,
         calculatePayroll, finalizePayroll, disbursePayroll,
         activePayrollGroupId, setActivePayrollGroupId,
-        createPayrollGroup, updatePayrollGroupStatus,
+        createPayrollGroup, updatePayrollGroupStatus, deletePayrollGroup,
         isPayrollLocked, payrunId,
         otRequests, setOTRequests, submitOT, approveOT, rejectOT, bulkApproveOT,
         expenses, setExpenses, submitExpense, handleExpenseApproval

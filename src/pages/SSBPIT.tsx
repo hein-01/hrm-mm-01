@@ -6,7 +6,7 @@ import Header from '../components/Header';
 import { useAppData } from '../context/AppDataContext';
 import { useSystemCalendar } from '../context/SystemCalendarContext';
 import { useUserAccess } from '../context/UserAccessProvider';
-import { exportSSBForm15CSV, exportPITReportCSV } from '../utils/taxExport';
+import { exportSSBForm13CSV, exportPITReportCSV } from '../utils/taxExport';
 
 // ─── Toast ────────────────────────────────────────────────────────────────────
 interface Toast { id: string; message: string; type: 'success' | 'error' | 'warning'; }
@@ -147,7 +147,7 @@ export default function SSBPIT() {
 
     // ─── CSV Exports (shared utility — same function used by PayrollRun Step 10) ──
     const dateSuffix = new Date().toISOString().slice(0, 7);
-    const exportSSBForm15 = useCallback(() => exportSSBForm15CSV(payrollRecords, employees, dateSuffix), [payrollRecords, employees, dateSuffix]);
+    const exportSSBForm13 = useCallback(() => exportSSBForm13CSV(payrollRecords, employees, dateSuffix), [payrollRecords, employees, dateSuffix]);
     const exportPITReport = useCallback(() => exportPITReportCSV(payrollRecords, employees, dateSuffix), [payrollRecords, employees, dateSuffix]);
 
     // ─── Tax Patch (Manual Override) ─────────────────────────────────────────────
@@ -209,7 +209,7 @@ export default function SSBPIT() {
             return;
         }
         // Trigger real file download
-        if (activeTab === 'SSB') exportSSBForm15();
+        if (activeTab === 'SSB') exportSSBForm13();
         else exportPITReport();
 
         // Archive bridge — auto-save to Forms Library
@@ -249,7 +249,7 @@ export default function SSBPIT() {
             timestamp: getFormattedDate(new Date(), 'time'), isRead: false
         }, ...prev]);
         addToast(`${formName} downloaded successfully as CSV.`, 'success');
-    }, [hasAuditFailures, activeTab, missingSSBCount, payrollRecords, exportSSBForm15, exportPITReport, complianceSettings.companyTIN, getFormattedDate, setAlerts, totalGrossWages, totalEmployeeSSB, totalEmployerSSB, totalPIT, addDocumentToLibrary]);
+    }, [hasAuditFailures, activeTab, missingSSBCount, payrollRecords, exportSSBForm13, exportPITReport, complianceSettings.companyTIN, getFormattedDate, setAlerts, totalGrossWages, totalEmployeeSSB, totalEmployerSSB, totalPIT, addDocumentToLibrary]);
 
     return (
         <div className="flex h-screen w-full bg-[#F8FAFC] dark:bg-background-dark font-display text-slate-900 dark:text-white antialiased overflow-hidden">
@@ -259,24 +259,22 @@ export default function SSBPIT() {
                 <Header 
                     title="Social Security & Tax"
                     subtitle="Generate compliance reports, audit employee SSB numbers, and simulate government PIT filings"
-                >
-                    <div className="relative w-full max-w-[480px] ml-4 hidden lg:block text-left">
-                        <span className="material-symbols-outlined absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 text-xl">search</span>
-                        <input
-                            className="w-full border border-slate-200 dark:border-slate-800 rounded-lg py-2 pl-10 pr-4 text-sm focus:ring-2 focus:ring-[#4F46E5] focus:border-transparent text-slate-900 placeholder-slate-400 bg-white dark:bg-slate-900 transition-all shadow-sm"
-                            placeholder="Search by Employee Name or ID..."
-                            type="text"
-                            value={searchQuery}
-                            onChange={(e) => setSearchQuery(e.target.value)}
-                        />
-                    </div>
-                </Header>
+                />
 
                 <div className="flex-1 overflow-y-auto p-6 md:p-8">
-                    <div className="max-w-[1200px] mx-auto space-y-6">
+                    <div className="space-y-6">
 
                         <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
-                            <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">Compliance Reporting</p>
+                            <div className="relative w-full max-w-[400px]">
+                                <span className="material-symbols-outlined absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 text-[20px]">search</span>
+                                <input
+                                    className="w-full border border-slate-200 dark:border-slate-800 rounded-xl py-2.5 pl-10 pr-4 text-sm focus:ring-2 focus:ring-[#4F46E5] focus:border-transparent text-slate-900 dark:text-white placeholder-slate-400 bg-white dark:bg-slate-900 transition-all shadow-sm"
+                                    placeholder="Search by Employee Name or ID..."
+                                    type="text"
+                                    value={searchQuery}
+                                    onChange={(e) => setSearchQuery(e.target.value)}
+                                />
+                            </div>
                             <div className="flex items-center gap-3 shrink-0">
                                 <div className="relative">
                                     <span className="material-symbols-outlined absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 text-[18px] pointer-events-none">apartment</span>
@@ -435,7 +433,7 @@ export default function SSBPIT() {
                                     </div>
                                     <div>
                                         <div className="flex items-center gap-3">
-                                            <h3 className="text-lg font-bold text-slate-900 dark:text-white">{activeTab === 'SSB' ? 'Form 15 (Monthly SSB Contribution)' : 'Patakha-(W)-15 (Monthly PIT)'}</h3>
+                                            <h3 className="text-lg font-bold text-slate-900 dark:text-white">{activeTab === 'SSB' ? 'Form 13 (Monthly SSB Contribution)' : 'Patakha-(W)-15 (Monthly PIT)'}</h3>
                                             <span className="px-2.5 py-0.5 rounded-full bg-orange-100 dark:bg-orange-900/30 text-orange-700 dark:text-orange-400 text-xs font-bold uppercase tracking-wide">Pending Filing</span>
                                         </div>
                                         <p className="text-slate-500 dark:text-slate-400 text-sm mt-1">Export individual {activeTab} breakdowns for government portal submission.</p>
@@ -451,7 +449,7 @@ export default function SSBPIT() {
                                     </button>
                                     <div className="relative group">
                                         <button
-                                            onClick={() => handleGenerateReport(activeTab === 'SSB' ? 'Form 15' : 'Patakha-(W)-15')}
+                                            onClick={() => handleGenerateReport(activeTab === 'SSB' ? 'Form 13' : 'Patakha-(W)-15')}
                                             disabled={hasAuditFailures && activeTab === 'SSB'}
                                             className="flex items-center gap-2 text-white px-5 py-2.5 rounded-lg text-sm font-bold transition-all disabled:opacity-50 disabled:grayscale disabled:cursor-not-allowed shadow-md shadow-[#4F46E5]/20"
                                             style={{ backgroundColor: '#4F46E5' }}

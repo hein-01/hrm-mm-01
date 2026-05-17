@@ -399,7 +399,7 @@ export default function FormLibrary() {
             <form className="p-6 space-y-4 max-h-[60vh] overflow-y-auto" onSubmit={handleAddSubmit}>
               <div>
                 <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest block mb-1.5">Document Title <span className="text-red-500">*</span></label>
-                <input type="text" value={formState.title} onChange={e => setFormState(s => ({ ...s, title: e.target.value }))} className="w-full p-3 bg-slate-50 border border-slate-200 rounded-xl text-sm font-bold placeholder:italic outline-none focus:ring-4 focus:ring-indigo-500/10 transition-all" placeholder="e.g., SSB Form 15 — October 2023" />
+                <input type="text" value={formState.title} onChange={e => setFormState(s => ({ ...s, title: e.target.value }))} className="w-full p-3 bg-slate-50 border border-slate-200 rounded-xl text-sm font-bold placeholder:italic outline-none focus:ring-4 focus:ring-indigo-500/10 transition-all" placeholder="e.g., SSB Form 13 — October 2023" />
               </div>
               <div className="grid grid-cols-2 gap-4">
                 <div>
@@ -432,7 +432,7 @@ export default function FormLibrary() {
                 </div>
                 <div>
                   <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest block mb-1.5">File Name</label>
-                  <input type="text" value={formState.fileName} onChange={e => setFormState(s => ({ ...s, fileName: e.target.value }))} className="w-full p-3 bg-slate-50 border border-slate-200 rounded-xl text-sm font-bold outline-none focus:ring-4 focus:ring-indigo-500/10 transition-all" placeholder="e.g., SSB_Form15_Oct2023.txt" />
+                  <input type="text" value={formState.fileName} onChange={e => setFormState(s => ({ ...s, fileName: e.target.value }))} className="w-full p-3 bg-slate-50 border border-slate-200 rounded-xl text-sm font-bold outline-none focus:ring-4 focus:ring-indigo-500/10 transition-all" placeholder="e.g., SSB_Form13_Oct2023.txt" />
                 </div>
               </div>
               <div>

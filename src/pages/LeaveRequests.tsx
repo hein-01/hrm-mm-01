@@ -30,6 +30,7 @@ export default function LeaveRequests() {
     const [relieverSearch, setRelieverSearch] = useState('');
     const [relieverDropdownOpen, setRelieverDropdownOpen] = useState(false);
     const [certFileName, setCertFileName] = useState<string | null>(null);
+    const [isShaking, setIsShaking] = useState(false);
 
     // Form State
     const [newRequest, setNewRequest] = useState({
@@ -213,18 +214,26 @@ export default function LeaveRequests() {
 
         if (!emp || !reliever) {
             setErrorMsg('Invalid Employee or Reliever ID. Please use EMP-XXX format.');
+            setIsShaking(true);
+            setTimeout(() => setIsShaking(false), 500);
             return;
         }
         if (newRequest.empId === newRequest.relieverId) {
             setErrorMsg('Reliever cannot be the same person as the applicant.');
+            setIsShaking(true);
+            setTimeout(() => setIsShaking(false), 500);
             return;
         }
         if (!newRequest.startDate || !newRequest.endDate) {
             setErrorMsg('Both start and end dates are required.');
+            setIsShaking(true);
+            setTimeout(() => setIsShaking(false), 500);
             return;
         }
         if (newRequest.endDate < newRequest.startDate) {
             setErrorMsg('End date cannot be before start date.');
+            setIsShaking(true);
+            setTimeout(() => setIsShaking(false), 500);
             return;
         }
         const threeMonthsAgo = new Date();
@@ -232,11 +241,15 @@ export default function LeaveRequests() {
         const startDateObj = parseGregorianDate(newRequest.startDate);
         if (startDateObj < threeMonthsAgo) {
             setErrorMsg('Leave cannot be backdated more than 3 months.');
+            setIsShaking(true);
+            setTimeout(() => setIsShaking(false), 500);
             return;
         }
         const diffDays = countWorkingDays(newRequest.startDate, newRequest.endDate, holidays);
         if (diffDays === 0) {
             setErrorMsg('Selected date range contains no working days (all weekends or public holidays).');
+            setIsShaking(true);
+            setTimeout(() => setIsShaking(false), 500);
             return;
         }
 
@@ -246,6 +259,8 @@ export default function LeaveRequests() {
             const currentBalance = emp.leaveBalances?.[newRequest.type] ?? 0;
             if (currentBalance < diffDays) {
                 setErrorMsg(`Insufficient Balance: You have ${currentBalance} day(s) of ${newRequest.type} leave, but requested ${diffDays} day(s).`);
+                setIsShaking(true);
+                setTimeout(() => setIsShaking(false), 500);
                 return;
             }
         }
@@ -331,7 +346,7 @@ export default function LeaveRequests() {
                 </Header>
 
                 <div className="flex-1 overflow-y-auto px-8 pb-6 bg-[#F8FAFC] dark:bg-[#101622]">
-                    <div className="max-w-[1600px] mx-auto flex flex-col md:flex-row md:items-center justify-between gap-4 mb-6 mt-8">
+                    <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-6 mt-8">
                         <div className="flex items-center gap-2 overflow-x-auto">
                             {renderFilterBtn('All Requests', 'All')}
                             {renderFilterBtn('Pending', 'Pending')}
@@ -383,7 +398,7 @@ export default function LeaveRequests() {
                         </div>
                     </div>
                     {errorMsg && (
-                        <div className="max-w-[1600px] mx-auto bg-red-50 border border-red-200 rounded-xl p-4 flex items-center gap-3 mb-6 animate-shake">
+                        <div className="bg-red-50 border border-red-200 rounded-xl p-4 flex items-center gap-3 mb-6 animate-shake">
                             <span className="material-symbols-outlined text-red-600">error</span>
                             <p className="text-sm text-red-800 font-bold">{errorMsg}</p>
                         </div>
@@ -396,7 +411,7 @@ export default function LeaveRequests() {
                         const daysUntil = Math.ceil((new Date(next.date).getTime() - new Date(todayISO).getTime()) / 86400000);
                         const when = daysUntil === 0 ? 'Today!' : daysUntil === 1 ? 'Tomorrow!' : `in ${daysUntil} days`;
                         return (
-                            <div className="max-w-[1600px] mx-auto bg-amber-50 border border-amber-200 rounded-xl p-4 flex items-center gap-3 mb-6">
+                            <div className="bg-amber-50 border border-amber-200 rounded-xl p-4 flex items-center gap-3 mb-6">
                                 <span className="material-symbols-outlined text-amber-600">warning</span>
                                 <p className="text-sm text-amber-800 font-medium">
                                     Upcoming Public Holiday: <strong>{next.name}</strong> ({next.date}) — {when}.
@@ -407,7 +422,7 @@ export default function LeaveRequests() {
                         );
                     })()}
 
-                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 max-w-[1600px] mx-auto mb-6 text-left">
+                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-6 text-left">
                         <div className="bg-white dark:bg-slate-900 p-5 rounded-xl border border-slate-200 dark:border-slate-800 shadow-sm flex items-start justify-between border-l-4 border-l-amber-500">
                             <div>
                                 <p className="text-slate-500 dark:text-slate-400 text-xs font-bold uppercase tracking-wider">Pending Approvals</p>
@@ -460,7 +475,7 @@ export default function LeaveRequests() {
                         </div>
                     </div>
 
-                    <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl overflow-hidden shadow-sm max-w-[1600px] mx-auto">
+                    <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl overflow-hidden shadow-sm">
                         <div className="overflow-x-auto custom-scrollbar">
                             <table className="w-full text-left border-collapse" style={{ minWidth: '1500px' }}>
                                 <thead>
@@ -633,7 +648,7 @@ export default function LeaveRequests() {
 
             {isModalOpen && (
                 <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm animate-fade-in px-4">
-                    <div className="bg-white w-full max-w-md rounded-2xl shadow-2xl overflow-hidden border border-slate-200">
+                    <div className={`bg-white w-full max-w-md rounded-2xl shadow-2xl overflow-hidden border border-slate-200 transition-transform duration-300 ${isShaking ? 'animate-shake' : ''}`}>
                         <div className="p-6 border-b border-slate-100 flex justify-between items-center">
                             <h3 className="font-bold text-slate-900">New Leave Request</h3>
                             <button onClick={() => setIsModalOpen(false)} className="text-slate-400 hover:text-slate-600 transition-colors">
@@ -676,7 +691,7 @@ export default function LeaveRequests() {
                                                         onChange={e => { setRelieverSearch(e.target.value); setRelieverDropdownOpen(true); }}
                                                         onFocus={() => setRelieverDropdownOpen(true)}
                                                         onBlur={() => setTimeout(() => setRelieverDropdownOpen(false), 150)}
-                                                        className="w-full text-sm p-2 pr-8 border border-slate-200 rounded text-slate-900"
+                                                        className={`w-full text-sm p-2 pr-8 border rounded text-slate-900 transition-colors ${(!newRequest.relieverId && errorMsg) ? 'border-red-500 bg-red-50/30' : 'border-slate-200 focus:border-indigo-500'}`}
                                                         placeholder="Search by name or ID..."
                                                     />
                                                     {selectedReliever && !relieverDropdownOpen && (

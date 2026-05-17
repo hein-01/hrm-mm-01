@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import Sidebar from '../components/Sidebar';
 import Header from '../components/Header';
 import { useAppData } from '../context/AppDataContext';
-import { exportSSBForm15CSV, exportPITReportCSV, downloadCSV } from '../utils/taxExport';
+import { exportSSBForm13CSV, exportPITReportCSV, downloadCSV } from '../utils/taxExport';
 
 export default function PayrollRun() {
     const navigate = useNavigate();
@@ -16,6 +16,7 @@ export default function PayrollRun() {
         disbursePayroll,
         createPayrollGroup,
         updatePayrollGroupStatus,
+        deletePayrollGroup,
         payrollGroups,
         activePayrollGroupId,
         setActivePayrollGroupId,
@@ -47,7 +48,7 @@ export default function PayrollRun() {
     // ─── CSV Exports (shared utility — same function used by SSBPIT page) ───────
     const exportSuffix = (activeGroup?.period ?? 'Payroll').replace(' ', '_');
     const handleExportPITForm = () => exportPITReportCSV(payrollRecords, employees, exportSuffix);
-    const handleExportSSBReturn = () => exportSSBForm15CSV(payrollRecords, employees, exportSuffix);
+    const handleExportSSBReturn = () => exportSSBForm13CSV(payrollRecords, employees, exportSuffix);
 
     /* Legacy mass CSV export removed in favor of granular Bank Disbursements module outputs */
 
@@ -232,11 +233,25 @@ export default function PayrollRun() {
                                                 >
                                                     <div className="flex justify-between items-start mb-4">
                                                         <span className="text-[10px] font-black uppercase tracking-widest text-[#4F46E5] bg-indigo-50 dark:bg-indigo-900/30 px-2 py-0.5 rounded-full">{group.type}</span>
-                                                        <span className={`px-2 py-0.5 rounded-full text-[9px] font-black uppercase tracking-widest ${
-                                                            group.status === 'Draft' ? 'bg-amber-50 text-amber-600' : 'bg-emerald-50 text-emerald-600'
-                                                        }`}>
-                                                            {group.status}
-                                                        </span>
+                                                        <div className="flex items-center gap-1.5">
+                                                            <span className={`px-2 py-0.5 rounded-full text-[9px] font-black uppercase tracking-widest ${
+                                                                group.status === 'Draft' ? 'bg-amber-50 text-amber-600' : 'bg-emerald-50 text-emerald-600'
+                                                            }`}>
+                                                                {group.status}
+                                                            </span>
+                                                            <button
+                                                                onClick={(e) => {
+                                                                    e.stopPropagation();
+                                                                    if (window.confirm(`Are you sure you want to delete the payroll group "${group.name}"?\nThis will permanently delete all associated payroll records and cannot be undone.`)) {
+                                                                        deletePayrollGroup(group.id);
+                                                                    }
+                                                                }}
+                                                                className="text-slate-400 hover:text-rose-500 transition-colors p-1 rounded-lg hover:bg-rose-50 dark:hover:bg-rose-950/20 flex items-center justify-center"
+                                                                title="Delete Payroll Group"
+                                                            >
+                                                                <span className="material-symbols-outlined text-[15px]">delete</span>
+                                                            </button>
+                                                        </div>
                                                     </div>
                                                     <h4 className="font-bold text-slate-900 dark:text-white mb-1 group-hover:text-[#4F46E5] transition-colors">{group.name}</h4>
                                                     <p className="text-xs text-slate-500 dark:text-slate-400 font-medium">{group.period} • {group.payrollCycle}</p>

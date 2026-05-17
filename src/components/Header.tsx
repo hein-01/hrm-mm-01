@@ -7,7 +7,7 @@ type HeaderProps = {
     onSearch?: (query: string) => void;
     placeholder?: string;
     title?: string;
-    subtitle?: string;
+    subtitle?: string | React.ReactNode;
     children?: React.ReactNode;
 };
 

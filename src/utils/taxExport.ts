@@ -16,8 +16,8 @@ export function downloadCSV(filename: string, headers: string[], rows: string[][
     URL.revokeObjectURL(url);
 }
 
-// ─── SSB Form 15 (Monthly SSB Contribution) ─────────────────────────────────
-export function buildSSBForm15(records: PayrollRecord[], employees: Employee[]) {
+// ─── SSB Form 13 (Monthly SSB Contribution) ─────────────────────────────────
+export function buildSSBForm13(records: PayrollRecord[], employees: Employee[]) {
     const headers = [
         'Employee Name', 'Employee ID', 'NRC Number', 'SSB ID', 'TIN',
         'Gross Salary (MMK)', 'Employee SSB 2% (MMK)', 'Employer SSB 3% (MMK)', 'Total 5% (MMK)'
@@ -50,9 +50,9 @@ export function buildPITReport(records: PayrollRecord[], employees: Employee[]) 
 }
 
 // ─── Export helpers (convenience wrappers) ───────────────────────────────────
-export function exportSSBForm15CSV(records: PayrollRecord[], employees: Employee[], suffix: string) {
-    const { headers, rows } = buildSSBForm15(records, employees);
-    downloadCSV(`SSB_Form15_${suffix}.csv`, headers, rows);
+export function exportSSBForm13CSV(records: PayrollRecord[], employees: Employee[], suffix: string) {
+    const { headers, rows } = buildSSBForm13(records, employees);
+    downloadCSV(`SSB_Form13_${suffix}.csv`, headers, rows);
 }
 
 export function exportPITReportCSV(records: PayrollRecord[], employees: Employee[], suffix: string) {

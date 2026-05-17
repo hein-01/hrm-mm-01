@@ -461,7 +461,7 @@ export default function EmployeesDirectory() {
                 />
 
                 <div className="flex-1 overflow-y-auto px-6 pb-6 bg-[#F8FAFC]">
-                    <div className="max-w-[1600px] mx-auto space-y-6 mt-6">
+                    <div className="space-y-6 mt-6">
 
                         {/* Page Header */}
                         <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">

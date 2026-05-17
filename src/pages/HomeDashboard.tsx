@@ -41,9 +41,9 @@ export default function HomeDashboard() {
         attendanceLogs, shiftAssignments, holidays, shifts, securityAuditLogs, subscriptionTier, gpsLogs, addDocumentToLibrary
     } = useAppData();
     const { getFormattedDate, parseGregorianDate, getCurrentDateISO } = useSystemCalendar();
-    const { isAdmin } = useUserAccess();
+    const { isAdmin, currentUser: authUser } = useUserAccess();
 
-    const currentAdminId = 'EMP-001';
+    const currentAdminId = authUser?.id || 'EMP-001';
 
     // RBAC: Derive access scope from the current user's employee record
     const currentUser = employees.find(e => e.id === currentAdminId) ?? null;
@@ -91,6 +91,11 @@ export default function HomeDashboard() {
     // Conflict Triage State
     const [triageItem, setTriageItem] = useState<any | null>(null);
     const [isTriageModalOpen, setIsTriageModalOpen] = useState(false);
+
+    // Rejection Comment State
+    const [rejectionModal, setRejectionModal] = useState<{ isOpen: boolean, type: string, id: string, title: string } | null>(null);
+    const [rejectionReason, setRejectionReason] = useState('');
+    const [isRejecting, setIsRejecting] = useState(false);
     // ── GOVERNANCE GUARD: Denied Route Notification ──────────────────────────
     const location = useLocation();
     useEffect(() => {
@@ -137,7 +142,7 @@ export default function HomeDashboard() {
             const emp = employees.find(e => e.id === r.empId);
             items.push({
                 ...r,
-                name: emp?.name || 'Unknown',
+                name: r.name || emp?.name || 'Unknown',
                 inboxType: 'Leave',
                 inboxTitle: 'Leave Approval',
                 inboxSubtitle: `${r.type} Leave • ${r.startDate} to ${r.endDate}`,
@@ -556,8 +561,30 @@ export default function HomeDashboard() {
     };
 
     const handleAction = (type: string, id: string, action: 'Approve' | 'Reject') => {
+        if (action === 'Reject') {
+            const item = pendingInboxItems.find(i => i.id === id);
+            setRejectionModal({ isOpen: true, type, id, title: item?.inboxTitle || 'Request' });
+            setRejectionReason('');
+            return;
+        }
+
         const res = handleInboxAction(type, id, action, currentAdminId);
         if (!res.success) {
+            alert(res.message);
+        }
+    };
+
+    const handleConfirmRejection = () => {
+        if (!rejectionModal || !rejectionReason.trim()) return;
+        setIsRejecting(true);
+        
+        const res = handleInboxAction(rejectionModal.type, rejectionModal.id, 'Reject', currentAdminId, rejectionReason);
+        setIsRejecting(false);
+        
+        if (res.success) {
+            setRejectionModal(null);
+            setRejectionReason('');
+        } else {
             alert(res.message);
         }
     };
@@ -632,16 +659,19 @@ export default function HomeDashboard() {
 
             <main className="flex-1 flex flex-col h-full overflow-hidden relative ml-[280px]">
                 <Header
-                    title="Good Morning, Htet Aung"
-                    subtitle="Visualize workforce trends, monitor real-time metrics, and leverage AI to optimize your HR strategy"
-                >
-                    <div className="hidden md:flex items-center gap-2 bg-emerald-50 dark:bg-emerald-900/20 text-emerald-700 dark:text-emerald-400 px-4 py-1.5 rounded-full border border-emerald-200 dark:border-emerald-800 shadow-sm mt-1">
-                        <span className="size-2 bg-emerald-500 rounded-full animate-pulse"></span>
-                        <span className="text-[10px] font-bold tracking-wide uppercase">● System Live | Last Sync: {lastUpdated}</span>
-                    </div>
-                </Header>
+                    title={`Good Day, ${authUser?.name || currentUser?.name || 'Hein Htet'}`}
+                    subtitle={
+                        <div className="flex items-center gap-3">
+                            <span>Visualize workforce trends, monitor real-time metrics, and leverage AI to optimize your HR strategy</span>
+                            <div className="hidden md:flex items-center gap-2 bg-emerald-50 dark:bg-emerald-900/20 text-emerald-700 dark:text-emerald-400 px-3 py-0.5 rounded-full border border-emerald-200 dark:border-emerald-800 shadow-sm">
+                                <span className="size-1.5 bg-emerald-500 rounded-full animate-pulse"></span>
+                                <span className="text-[9px] font-bold tracking-wide uppercase leading-none mt-0.5">System Live | {lastUpdated}</span>
+                            </div>
+                        </div>
+                    }
+                />
                 <div className="flex-1 overflow-y-auto p-6 md:pt-8 md:pb-10 px-8 bg-[#F8FAFC]">
-                    <div className="max-w-7xl mx-auto space-y-8">
+                    <div className="space-y-8">
                             
                             {todayHoliday && (
                                 <div className="bg-gradient-to-r from-blue-500 to-indigo-600 rounded-xl p-4 text-white shadow-lg flex items-center justify-between group overflow-hidden relative">
@@ -1652,6 +1682,81 @@ export default function HomeDashboard() {
                                 className="px-6 py-2 rounded-xl text-sm font-bold text-white bg-indigo-600 hover:bg-indigo-700 shadow-lg shadow-indigo-500/20 transition-all"
                             >
                                 Reconcile Leaves
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {/* ─── Rejection Comment Modal ────────────────────────────────────────── */}
+            {rejectionModal?.isOpen && (
+                <div className="fixed inset-0 z-[250] flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm animate-in fade-in duration-200">
+                    <div className="bg-white dark:bg-slate-900 w-full max-w-md rounded-2xl shadow-2xl border border-slate-200 dark:border-slate-800 overflow-hidden scale-in-center">
+                        <div className="p-6 border-b border-slate-100 dark:border-slate-800 flex items-center justify-between bg-slate-50/50 dark:bg-slate-800/50">
+                            <div className="flex items-center gap-3">
+                                <div className="size-10 rounded-xl bg-rose-50 dark:bg-rose-900/30 flex items-center justify-center">
+                                    <span className="material-symbols-outlined text-rose-600">block</span>
+                                </div>
+                                <div>
+                                    <h3 className="text-base font-bold text-slate-900 dark:text-white">Reject {rejectionModal.title}</h3>
+                                    <p className="text-[10px] text-slate-400 font-bold uppercase tracking-widest">Mandatory Rejection Comment</p>
+                                </div>
+                            </div>
+                            <button 
+                                onClick={() => setRejectionModal(null)}
+                                className="size-8 flex items-center justify-center rounded-full hover:bg-slate-200 dark:hover:bg-slate-800 text-slate-400 transition-colors"
+                            >
+                                <span className="material-symbols-outlined text-[20px]">close</span>
+                            </button>
+                        </div>
+                        
+                        <div className="p-6 space-y-4">
+                            <div className="bg-rose-50 dark:bg-rose-900/20 border border-rose-100 dark:border-rose-900/30 rounded-xl p-3 flex gap-3">
+                                <span className="material-symbols-outlined text-rose-600 text-[18px] shrink-0">info</span>
+                                <p className="text-[11px] text-rose-800 dark:text-rose-300 font-medium leading-relaxed">
+                                    Please provide a clear reason for rejecting this request. This comment will be visible to the employee in their notification center.
+                                </p>
+                            </div>
+                            
+                            <div>
+                                <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest block mb-1.5 ml-1">Rejection Reason</label>
+                                <textarea 
+                                    autoFocus
+                                    className="w-full min-h-[120px] bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl p-4 text-sm text-slate-900 dark:text-white focus:ring-2 focus:ring-rose-500/20 focus:border-rose-500 outline-none transition-all placeholder:text-slate-400 resize-none"
+                                    placeholder="e.g. Insufficient staffing coverage for this period, please reschedule."
+                                    value={rejectionReason}
+                                    onChange={(e) => setRejectionReason(e.target.value)}
+                                />
+                            </div>
+                        </div>
+                        
+                        <div className="p-6 bg-slate-50 dark:bg-slate-800/50 border-t border-slate-100 dark:border-slate-800 flex gap-3">
+                            <button 
+                                onClick={() => setRejectionModal(null)}
+                                className="flex-1 py-3 rounded-xl text-xs font-bold text-slate-600 dark:text-slate-400 hover:bg-slate-200 dark:hover:bg-slate-700 transition-colors"
+                            >
+                                Cancel
+                            </button>
+                            <button 
+                                disabled={!rejectionReason.trim() || isRejecting}
+                                onClick={handleConfirmRejection}
+                                className={`flex-[1.5] py-3 rounded-xl text-xs font-bold text-white shadow-lg transition-all flex items-center justify-center gap-2 ${
+                                    !rejectionReason.trim() || isRejecting 
+                                        ? 'bg-slate-300 dark:bg-slate-700 cursor-not-allowed shadow-none' 
+                                        : 'bg-rose-600 hover:bg-rose-700 shadow-rose-500/20 active:scale-[0.98]'
+                                }`}
+                            >
+                                {isRejecting ? (
+                                    <>
+                                        <span className="size-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                                        Processing...
+                                    </>
+                                ) : (
+                                    <>
+                                        <span className="material-symbols-outlined text-[18px]">check_circle</span>
+                                        Confirm Rejection
+                                    </>
+                                )}
                             </button>
                         </div>
                     </div>

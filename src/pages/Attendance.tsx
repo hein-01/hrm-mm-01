@@ -454,7 +454,7 @@ export default function Attendance() {
                 />
 
                 <div className="flex-1 overflow-y-auto px-8 pb-6 bg-[#F8FAFC]">
-                    <div className="max-w-[1600px] mx-auto space-y-6 mt-8">
+                    <div className="space-y-6 mt-8">
                         <div className="flex flex-col xl:flex-row xl:items-center justify-between gap-6 bg-white dark:bg-[#182130] p-4 xl:pr-[330px] rounded-xl border border-slate-200 dark:border-slate-800 shadow-sm relative min-h-[160px] z-10">
                             {/* Mobile Simulator Overlay Widget */}
                             <div className="absolute right-0 top-0 bottom-0 w-80 bg-slate-50 dark:bg-slate-900/50 border-l border-slate-200 dark:border-slate-800 rounded-r-xl p-4 pb-5 hidden xl:flex flex-col justify-center gap-3">
