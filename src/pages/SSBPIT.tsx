@@ -3,6 +3,7 @@ import { TableVirtuoso } from 'react-virtuoso';
 import { useDebounce } from '../hooks/useDebounce';
 import Sidebar from '../components/Sidebar';
 import Header from '../components/Header';
+import DropdownMenu from '../components/DropdownMenu';
 import { useAppData } from '../context/AppDataContext';
 import { useSystemCalendar } from '../context/SystemCalendarContext';
 import { useUserAccess } from '../context/UserAccessProvider';
@@ -276,19 +277,17 @@ export default function SSBPIT() {
                                 />
                             </div>
                             <div className="flex items-center gap-3 shrink-0">
-                                <div className="relative">
-                                    <span className="material-symbols-outlined absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 text-[18px] pointer-events-none">apartment</span>
-                                    <select
-                                        value={selectedDept}
-                                        onChange={e => setSelectedDept(e.target.value)}
-                                        className="appearance-none pl-9 pr-8 py-2 rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-200 text-sm font-medium hover:bg-slate-50 dark:hover:bg-slate-700 transition-all shadow-sm cursor-pointer focus:ring-2 focus:ring-[#4F46E5] focus:border-transparent"
-                                    >
-                                        {departments.map(d => (
-                                            <option key={d} value={d}>{d === 'All' ? 'All Departments' : d}</option>
-                                        ))}
-                                    </select>
-                                    <span className="material-symbols-outlined absolute right-2 top-1/2 -translate-y-1/2 text-slate-400 text-[18px] pointer-events-none">expand_more</span>
-                                </div>
+                                <DropdownMenu
+                                    value={selectedDept}
+                                    onChange={setSelectedDept}
+                                    className="w-[200px]"
+                                    triggerClassName="w-full justify-between h-[38px] text-slate-700 dark:text-slate-200 font-bold"
+                                    options={departments.map(d => ({
+                                        value: d,
+                                        label: d === 'All' ? 'All Departments' : d,
+                                        subLabel: d === 'All' ? 'Filter by all departments' : `Division: ${d}`
+                                    }))}
+                                />
                                 <button className="flex items-center justify-center gap-2 px-4 py-2 rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-200 font-medium hover:bg-slate-50 dark:hover:bg-slate-700 transition-all shadow-sm">
                                     <span className="material-symbols-outlined text-[20px]">calendar_month</span>
                                     <span className="text-sm">October 2023 - Myanmar</span>
@@ -609,8 +608,8 @@ export default function SSBPIT() {
             {/* ─── Tax Patch Modal ────────────────────────────────────────────────── */}
             {patchModalOpen && (
                 <div className="fixed inset-0 z-[200] flex items-center justify-center bg-slate-900/60 backdrop-blur-md px-4" onClick={() => setPatchModalOpen(false)}>
-                    <div className="bg-white dark:bg-slate-900 w-full max-w-md rounded-2xl shadow-2xl overflow-hidden border border-slate-200 dark:border-slate-800 animate-scale-in" onClick={e => e.stopPropagation()}>
-                        <div className="p-6 border-b border-slate-100 dark:border-slate-800 flex items-center gap-3 bg-amber-50 dark:bg-amber-900/20">
+                    <div className="bg-white dark:bg-slate-900 w-full max-w-md rounded-2xl shadow-2xl overflow-visible border border-slate-200 dark:border-slate-800 animate-scale-in" onClick={e => e.stopPropagation()}>
+                        <div className="p-6 border-b border-slate-100 dark:border-slate-800 flex items-center gap-3 bg-amber-50 dark:bg-amber-900/20 rounded-t-2xl">
                             <span className="material-symbols-outlined text-amber-600 text-2xl">edit_note</span>
                             <div>
                                 <h3 className="text-lg font-black text-slate-900 dark:text-white">Tax Patch — Manual Override</h3>
@@ -620,20 +619,34 @@ export default function SSBPIT() {
                         <div className="p-6 space-y-4">
                             <div>
                                 <label className="text-xs font-bold text-slate-700 dark:text-slate-300 block mb-1.5">Employee <span className="text-red-500">*</span></label>
-                                <select value={patchEmpId} onChange={e => setPatchEmpId(e.target.value)} className="w-full text-sm p-2.5 border border-slate-300 dark:border-slate-700 rounded-lg bg-white dark:bg-slate-800 text-slate-900 dark:text-white">
-                                    <option value="">— Select Employee —</option>
-                                    {payrollRecords.filter(r => r.status !== 'Error').map(r => (
-                                        <option key={r.empId} value={r.empId}>{r.name} ({r.empId})</option>
-                                    ))}
-                                </select>
+                                <DropdownMenu
+                                    value={patchEmpId}
+                                    onChange={setPatchEmpId}
+                                    className="w-full"
+                                    triggerClassName="w-full justify-between h-[42px] text-slate-700 dark:text-slate-200 font-bold"
+                                    options={[
+                                        { value: '', label: '— Select Employee —' },
+                                        ...payrollRecords.filter(r => r.status !== 'Error').map(r => ({
+                                            value: r.empId,
+                                            label: `${r.name} (${r.empId})`,
+                                            subLabel: `Dept: ${employees.find(e => e.id === r.empId)?.dept || 'N/A'}`
+                                        }))
+                                    ]}
+                                />
                             </div>
                             <div className="grid grid-cols-2 gap-4">
                                 <div>
                                     <label className="text-xs font-bold text-slate-700 dark:text-slate-300 block mb-1.5">Field <span className="text-red-500">*</span></label>
-                                    <select value={patchField} onChange={e => setPatchField(e.target.value as 'ssb' | 'pit')} className="w-full text-sm p-2.5 border border-slate-300 dark:border-slate-700 rounded-lg bg-white dark:bg-slate-800 text-slate-900 dark:text-white">
-                                        <option value="ssb">SSB (Employee)</option>
-                                        <option value="pit">PIT (Income Tax)</option>
-                                    </select>
+                                    <DropdownMenu
+                                        value={patchField}
+                                        onChange={val => setPatchField(val as 'ssb' | 'pit')}
+                                        className="w-full"
+                                        triggerClassName="w-full justify-between h-[42px] text-slate-700 dark:text-slate-200 font-bold"
+                                        options={[
+                                            { value: 'ssb', label: 'SSB (Employee)', subLabel: 'Social Security Board' },
+                                            { value: 'pit', label: 'PIT (Income Tax)', subLabel: 'Personal Income Tax' }
+                                        ]}
+                                    />
                                 </div>
                                 <div>
                                     <label className="text-xs font-bold text-slate-700 dark:text-slate-300 block mb-1.5">New Amount (MMK) <span className="text-red-500">*</span></label>
@@ -649,7 +662,7 @@ export default function SSBPIT() {
                                 <p className="text-[10px] text-red-700 dark:text-red-400 font-bold">This action creates an immutable entry in the Security Audit Log. Manual tax overrides are flagged as HIGH PRIORITY and visible to all Super-Admins.</p>
                             </div>
                         </div>
-                        <div className="p-5 border-t border-slate-100 dark:border-slate-800 bg-slate-50 dark:bg-slate-800/50 flex justify-end gap-3">
+                        <div className="p-5 border-t border-slate-100 dark:border-slate-800 bg-slate-50 dark:bg-slate-800/50 flex justify-end gap-3 rounded-b-2xl">
                             <button onClick={() => setPatchModalOpen(false)} className="px-5 py-2.5 rounded-lg text-sm font-bold text-slate-500 hover:bg-slate-200 dark:hover:bg-slate-700 transition-colors">Cancel</button>
                             <button onClick={handleTaxPatch} disabled={!patchEmpId || !patchAmount || !patchReason.trim()} className="px-6 py-2.5 rounded-lg text-sm font-bold text-white bg-amber-500 hover:bg-amber-600 shadow-lg shadow-amber-200 dark:shadow-none transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2">
                                 <span className="material-symbols-outlined text-[18px]">gavel</span>

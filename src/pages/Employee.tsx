@@ -2,6 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { useParams, useSearchParams, Link, useNavigate } from 'react-router-dom';
 import Sidebar from '../components/Sidebar';
 import Header from '../components/Header';
+import DropdownMenu from '../components/DropdownMenu';
 import { useAppData, JobActivityChange, AttendanceLog } from '../context/AppDataContext';
 import { useSystemCalendar } from '../context/SystemCalendarContext';
 import { useUserAccess } from '../context/UserAccessProvider';
@@ -1646,11 +1647,11 @@ export default function Employee() {
             {
                 activeModal && (
                     <div className="fixed inset-0 z-[1200] flex items-center justify-center bg-black/40 backdrop-blur-sm animate-fade-in px-4">
-                        <div className="bg-white dark:bg-slate-900 w-full max-w-md rounded-2xl shadow-2xl overflow-hidden border border-slate-200 dark:border-slate-700 relative">
+                        <div className="bg-white dark:bg-slate-900 w-full max-w-md rounded-2xl shadow-2xl overflow-visible border border-slate-200 dark:border-slate-700 relative">
                             {activeModal === 'deactivate' && (
                                 <>
                                     {terminationError && (
-                                        <div className="absolute inset-0 bg-white/95 dark:bg-slate-900/95 backdrop-blur-sm z-10 flex flex-col items-center justify-center p-6 text-center animate-in fade-in zoom-in duration-300">
+                                        <div className="absolute inset-0 bg-white/95 dark:bg-slate-900/95 backdrop-blur-sm z-10 flex flex-col items-center justify-center p-6 text-center rounded-2xl animate-in fade-in zoom-in duration-300">
                                             <div className="size-16 rounded-full bg-red-50 dark:bg-red-900/30 flex items-center justify-center mb-4 border-2 border-red-100 dark:border-red-900/30">
                                                 <span className="material-symbols-outlined text-red-600 dark:text-red-400 text-3xl">lock_person</span>
                                             </div>
@@ -1676,16 +1677,18 @@ export default function Employee() {
                                         </div>
                                         <div>
                                             <label className="text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider block mb-1.5">Separation Reason <span className="text-red-500">*</span></label>
-                                            <select
+                                            <DropdownMenu
                                                 value={separationReason}
-                                                onChange={e => setSeparationReason(e.target.value as any)}
-                                                className="w-full text-sm p-2.5 border border-slate-300 dark:border-slate-700 rounded-lg focus:ring-[#4F46E5] focus:border-[#4F46E5] bg-white dark:bg-slate-800"
-                                            >
-                                                <option value="Resignation">Resignation</option>
-                                                <option value="Termination">Termination</option>
-                                                <option value="Left/Absconded">Left / Absconded</option>
-                                                <option value="Retirement">Retirement</option>
-                                            </select>
+                                                onChange={val => setSeparationReason(val as any)}
+                                                className="w-full"
+                                                triggerClassName="w-full justify-between h-[42px] text-slate-700 dark:text-slate-200"
+                                                options={[
+                                                    { value: 'Resignation', label: 'Resignation', subLabel: 'RE-HIRE ELIGIBLE · SYSTEM OFFBOARDING' },
+                                                    { value: 'Termination', label: 'Termination', subLabel: 'IMMEDIATE REASSIGNMENT · SYSTEM SEPARATION' },
+                                                    { value: 'Left/Absconded', label: 'Left / Absconded', subLabel: 'HIGH PRIORITY RECOVERY · SYSTEM DEACTIVATION' },
+                                                    { value: 'Retirement', label: 'Retirement', subLabel: 'ELIGIBLE FOR PENSION · VOLUNTARY RETIREMENT' },
+                                                ]}
+                                            />
                                         </div>
                                         <div className="p-3 rounded-lg border text-xs font-semibold flex items-center gap-2 bg-slate-50 dark:bg-slate-800/50 border-slate-200 dark:border-slate-700">
                                             <span className="material-symbols-outlined text-[16px] text-slate-500">badge</span>
@@ -1703,8 +1706,8 @@ export default function Employee() {
                                             </div>
                                         )}
                                     </div>
-                                    <div className="flex bg-slate-50 dark:bg-slate-800/50 text-sm font-semibold border-t border-slate-100 dark:border-slate-800">
-                                        <button onClick={() => { setSeparationReason('Termination'); closeModal(); }} className="flex-1 py-5 hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-600 dark:text-slate-400 border-r border-slate-100 dark:border-slate-800 transition-colors">
+                                    <div className="flex bg-slate-50 dark:bg-slate-800/50 text-sm font-semibold border-t border-slate-100 dark:border-slate-800 rounded-b-2xl">
+                                        <button onClick={() => { setSeparationReason('Termination'); closeModal(); }} className="flex-1 py-5 hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-600 dark:text-slate-400 border-r border-slate-100 dark:border-slate-800 rounded-bl-2xl transition-colors">
                                             Cancel
                                         </button>
                                         <button 
@@ -1713,7 +1716,7 @@ export default function Employee() {
                                                 if (res.success) { setSeparationReason('Termination'); closeModal(); }
                                                 else setTerminationError(res.message);
                                             }}
-                                            className="flex-1 py-5 hover:bg-red-50 dark:hover:bg-red-900/20 text-red-600 dark:text-red-400 transition-colors flex items-center justify-center gap-2"
+                                            className="flex-1 py-5 hover:bg-red-50 dark:hover:bg-red-900/20 text-red-600 dark:text-red-400 rounded-br-2xl transition-colors flex items-center justify-center gap-2"
                                         >
                                             <span className="material-symbols-outlined text-[18px]">person_off</span>
                                             Confirm Separation
@@ -1724,7 +1727,7 @@ export default function Employee() {
                             
                             {activeModal === 'adjust_balance' && (
                                 <>
-                                    <div className="p-6 border-b border-slate-100 dark:border-slate-800 flex justify-between items-center">
+                                    <div className="p-6 border-b border-slate-100 dark:border-slate-800 flex justify-between items-center rounded-t-2xl">
                                         <h3 className="font-bold text-slate-900 dark:text-white">Adjust Leave Balance</h3>
                                         <button onClick={closeModal} className="text-slate-400 hover:text-slate-600 transition-colors">
                                             <span className="material-symbols-outlined">close</span>
@@ -1734,15 +1737,23 @@ export default function Employee() {
                                         <div className="grid grid-cols-2 gap-4">
                                             <div className="space-y-1.5">
                                                 <label className="text-xs font-bold text-slate-400 uppercase tracking-wider">Leave Type</label>
-                                                <select 
+                                                <DropdownMenu
                                                     value={adjustmentType}
-                                                    onChange={(e) => setAdjustmentType(e.target.value)}
-                                                    className="w-full text-sm p-3 border border-slate-200 rounded-lg bg-slate-50 dark:bg-slate-800 dark:border-slate-700"
-                                                >
-                                                    {[...Object.keys(employee.leaveBalances || {}), 'Annual', 'Casual', 'Medical', 'Earned'].filter((v, i, a) => a.indexOf(v) === i).map(type => (
-                                                        <option key={type} value={type}>{type}</option>
-                                                    ))}
-                                                </select>
+                                                    onChange={val => setAdjustmentType(val)}
+                                                    className="w-full"
+                                                    triggerClassName="w-full justify-between h-[46px] text-slate-700 dark:text-slate-200"
+                                                    options={[...Object.keys(employee.leaveBalances || {}), 'Annual', 'Casual', 'Medical', 'Earned']
+                                                        .filter((v, i, a) => a.indexOf(v) === i)
+                                                        .map(type => {
+                                                            let subLabel = 'General Leave Allocation';
+                                                            if (type === 'Annual') subLabel = 'Standard Vacation Allocation';
+                                                            else if (type === 'Casual') subLabel = 'Short-term Emergency Allocation';
+                                                            else if (type === 'Medical') subLabel = 'Certified Medical Absences';
+                                                            else if (type === 'Earned') subLabel = 'Compensatory / Earned Accruals';
+                                                            return { value: type, label: type, subLabel };
+                                                        })
+                                                    }
+                                                />
                                             </div>
                                             <div className="space-y-1.5">
                                                 <label className="text-xs font-bold text-slate-400 uppercase tracking-wider">Amount (+/-)</label>
@@ -1766,7 +1777,7 @@ export default function Employee() {
                                             />
                                         </div>
                                     </div>
-                                    <div className="p-4 border-t border-slate-100 dark:border-slate-800 bg-slate-50 dark:bg-slate-800/30 flex justify-end gap-3">
+                                    <div className="p-4 border-t border-slate-100 dark:border-slate-800 bg-slate-50 dark:bg-slate-800/30 flex justify-end gap-3 rounded-b-2xl">
                                         <button onClick={closeModal} className="px-5 py-2 rounded-lg text-sm font-semibold text-slate-600 dark:text-slate-400 hover:bg-slate-200 dark:hover:bg-slate-700 transition-colors">
                                             Cancel
                                         </button>
