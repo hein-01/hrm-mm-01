@@ -9,7 +9,7 @@ import { useNotifications } from '../context/NotificationProvider';
 import { useApprovals } from '../context/ApprovalContext';
 
 export default function LeaveRequests() {
-    const { leaveRequests, approveLeave, rejectLeave, addLeaveRequest, employees, holidays, policies, isAdmin } = useAppData();
+    const { leaveRequests, approveLeave, rejectLeave, addLeaveRequest, employees, holidays, policies, isAdmin, systemSettings } = useAppData();
     const { createApprovalRequest } = useApprovals();
     const ADMIN_ID = 'ADM-001';
     const isCurrentUserAdmin = isAdmin(ADMIN_ID);
@@ -357,10 +357,11 @@ export default function LeaveRequests() {
                                 value={deptFilter}
                                 onChange={setDeptFilter}
                                 options={[
-                                    { value: 'All', label: 'Department: All' },
-                                    ...Array.from(new Set(employees.map(e => e.dept))).sort().map(dept => ({
-                                        value: dept,
-                                        label: dept,
+                                    { value: 'All', label: 'All Departments' },
+                                    ...(systemSettings.departments || []).sort((a, b) => a.order - b.order).map(d => ({
+                                        value: d.name,
+                                        label: d.name,
+                                        subLabel: `Code: ${d.code}`,
                                     }))
                                 ]}
                             />
