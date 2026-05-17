@@ -320,10 +320,31 @@ export default function HomeDashboard() {
             });
         });
 
+        // 11. Pending Payroll Disbursement (Treasury Release Action)
+        if (lastPayrollStatus === 'Approved') {
+            const activeGroup = (payrollGroups as any[])?.find((g: any) => g.status === 'Approved');
+            const period = activeGroup?.period ?? 'Current Month';
+            items.push({
+                id: `DISB-${activeGroup?.id ?? 'PAYROLL-DISB'}`,
+                inboxType: 'Expense', // Mapped to Expense/Financial category to show up under Financial filters
+                inboxTitle: 'Pending Payroll Disbursement',
+                inboxSubtitle: `${activeGroup?.name || 'HQ Monthly Team'} • ${period} • ${lastPayrollTotal.toLocaleString()} MMK`,
+                inboxIcon: 'account_balance',
+                inboxIconColor: 'text-[#4F46E5] bg-indigo-50 dark:bg-indigo-900/40',
+                inboxBarColor: 'bg-[#4F46E5]',
+                priority: 'High',
+                category: 'Financial',
+                actionRoute: '/bank-disbursements',
+                actionLabel: 'Disburse Payout',
+                isDisbursementTask: true
+            });
+        }
+
         return items
             // RBAC: Dept managers only see their own team's pending items
             .filter(item => {
                 if (!scopedDept) return true;
+                if (item.isDisbursementTask) return false; // Department managers cannot see disbursement tasks
                 const emp = employees.find(e => e.id === (item.empId || ''));
                 return emp?.dept === scopedDept;
             })
@@ -1045,61 +1066,73 @@ export default function HomeDashboard() {
                                                 </div>
                                             </div>
                                             <div className="flex items-center gap-1 justify-end shrink-0 ml-4">
-                                                {/* View icon: navigates to the relevant module */}
-                                                {item.inboxType === 'JobActivity' ? (
+                                                {item.isDisbursementTask ? (
                                                     <Link
-                                                        to={`/employees/${item.empId}?modal=${item.type === 'Resignation' ? 'resign' : 'salary_review'}&requestId=${item.id}`}
-                                                        className="p-2 rounded-lg text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 dark:hover:bg-indigo-900/30 transition-colors border border-transparent hover:border-indigo-100 h-10 w-10 flex items-center justify-center"
-                                                        title="Review and Approve in Profile"
+                                                        to="/bank-disbursements"
+                                                        className="bg-[#4F46E5] hover:opacity-90 text-white px-4 h-10 rounded-lg shadow-md text-xs font-bold transition-all flex items-center gap-1.5 hover:scale-105"
                                                     >
-                                                        <span className="material-symbols-outlined text-[20px]">open_in_new</span>
+                                                        <span className="material-symbols-outlined text-[18px]">account_balance</span>
+                                                        Disburse Payout
                                                     </Link>
-                                                ) : INBOX_TYPE_ROUTES[item.inboxType] ? (
-                                                    <Link
-                                                        to={INBOX_TYPE_ROUTES[item.inboxType]}
-                                                        className="p-2 rounded-lg text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 dark:hover:bg-indigo-900/30 transition-colors border border-transparent hover:border-indigo-100 h-10 w-10 flex items-center justify-center"
-                                                        title={`View in ${INBOX_TYPE_LABELS[item.inboxType]}`}
-                                                    >
-                                                        <span className="material-symbols-outlined text-[20px]">open_in_new</span>
-                                                    </Link>
-                                                ) : null}
-                                                {item.inboxType === 'LocationSnapshot' ? (
-                                                    <button className="text-indigo-600 hover:bg-indigo-50 px-4 h-10 rounded-lg border border-indigo-100 text-xs font-bold transition-colors whitespace-nowrap">Review Map</button>
-                                                ) : item.isConflict ? (
-                                                    <button 
-                                                        onClick={(e) => {
-                                                            e.preventDefault();
-                                                            setTriageItem(item);
-                                                            setIsTriageModalOpen(true);
-                                                        }}
-                                                        className="bg-amber-500 hover:bg-amber-600 text-white px-4 h-10 rounded-lg shadow-sm text-xs font-bold transition-colors whitespace-nowrap flex items-center gap-1.5"
-                                                    >
-                                                        <span className="material-symbols-outlined text-[18px]">difference</span>
-                                                        Resolve Conflict
-                                                    </button>
                                                 ) : (
-                                                    <div className="flex items-center gap-1">
-                                                        <button
-                                                            onClick={(e) => {
-                                                                e.preventDefault();
-                                                                handleAction(item.inboxType, item.id, 'Reject');
-                                                            }}
-                                                            className="text-slate-400 hover:text-red-500 hover:bg-red-50 h-10 w-10 flex items-center justify-center rounded-lg transition-colors border border-transparent hover:border-red-100"
-                                                            title="Reject"
-                                                        >
-                                                            <span className="material-symbols-outlined text-[20px]">close</span>
-                                                        </button>
-                                                        <button
-                                                            onClick={(e) => {
-                                                                e.preventDefault();
-                                                                handleAction(item.inboxType, item.id, 'Approve');
-                                                            }}
-                                                            className="bg-emerald-500 hover:bg-emerald-600 text-white h-10 w-10 flex items-center justify-center rounded-lg shadow-sm transition-colors"
-                                                            title="Approve"
-                                                        >
-                                                            <span className="material-symbols-outlined text-[20px]">check</span>
-                                                        </button>
-                                                    </div>
+                                                    <>
+                                                        {/* View icon: navigates to the relevant module */}
+                                                        {item.inboxType === 'JobActivity' ? (
+                                                            <Link
+                                                                to={`/employees/${item.empId}?modal=${item.type === 'Resignation' ? 'resign' : 'salary_review'}&requestId=${item.id}`}
+                                                                className="p-2 rounded-lg text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 dark:hover:bg-indigo-900/30 transition-colors border border-transparent hover:border-indigo-100 h-10 w-10 flex items-center justify-center"
+                                                                title="Review and Approve in Profile"
+                                                            >
+                                                                <span className="material-symbols-outlined text-[20px]">open_in_new</span>
+                                                            </Link>
+                                                        ) : INBOX_TYPE_ROUTES[item.inboxType] ? (
+                                                            <Link
+                                                                to={INBOX_TYPE_ROUTES[item.inboxType]}
+                                                                className="p-2 rounded-lg text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 dark:hover:bg-indigo-900/30 transition-colors border border-transparent hover:border-indigo-100 h-10 w-10 flex items-center justify-center"
+                                                                title={`View in ${INBOX_TYPE_LABELS[item.inboxType]}`}
+                                                            >
+                                                                <span className="material-symbols-outlined text-[20px]">open_in_new</span>
+                                                            </Link>
+                                                        ) : null}
+                                                        {item.inboxType === 'LocationSnapshot' ? (
+                                                            <button className="text-indigo-600 hover:bg-indigo-50 px-4 h-10 rounded-lg border border-indigo-100 text-xs font-bold transition-colors whitespace-nowrap">Review Map</button>
+                                                        ) : item.isConflict ? (
+                                                            <button 
+                                                                onClick={(e) => {
+                                                                    e.preventDefault();
+                                                                    setTriageItem(item);
+                                                                    setIsTriageModalOpen(true);
+                                                                }}
+                                                                className="bg-amber-500 hover:bg-amber-600 text-white px-4 h-10 rounded-lg shadow-sm text-xs font-bold transition-colors whitespace-nowrap flex items-center gap-1.5"
+                                                            >
+                                                                <span className="material-symbols-outlined text-[18px]">difference</span>
+                                                                Resolve Conflict
+                                                            </button>
+                                                        ) : (
+                                                            <div className="flex items-center gap-1">
+                                                                <button
+                                                                    onClick={(e) => {
+                                                                        e.preventDefault();
+                                                                        handleAction(item.inboxType, item.id, 'Reject');
+                                                                    }}
+                                                                    className="text-slate-400 hover:text-red-500 hover:bg-red-50 h-10 w-10 flex items-center justify-center rounded-lg transition-colors border border-transparent hover:border-red-100"
+                                                                    title="Reject"
+                                                                >
+                                                                    <span className="material-symbols-outlined text-[20px]">close</span>
+                                                                </button>
+                                                                <button
+                                                                    onClick={(e) => {
+                                                                        e.preventDefault();
+                                                                        handleAction(item.inboxType, item.id, 'Approve');
+                                                                    }}
+                                                                    className="bg-emerald-500 hover:bg-emerald-600 text-white h-10 w-10 flex items-center justify-center rounded-lg shadow-sm transition-colors"
+                                                                    title="Approve"
+                                                                >
+                                                                    <span className="material-symbols-outlined text-[20px]">check</span>
+                                                                </button>
+                                                            </div>
+                                                        )}
+                                                    </>
                                                 )}
                                             </div>
                                         </div>
