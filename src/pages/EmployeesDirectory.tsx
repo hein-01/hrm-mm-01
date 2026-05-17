@@ -1066,8 +1066,8 @@ export default function EmployeesDirectory() {
                 {/* 1. Add Employee Flow with Sync Validation */}
                 {activeModal === 'add' && (
                     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm animate-fade-in px-4">
-                        <div className="bg-white w-full max-w-lg rounded-2xl shadow-2xl overflow-hidden border border-slate-200 flex flex-col max-h-[90vh]">
-                            <div className="p-5 border-b border-slate-100 flex justify-between items-center bg-slate-50 shrink-0">
+                        <div className="bg-white w-full max-w-lg rounded-2xl shadow-2xl overflow-visible border border-slate-200 flex flex-col max-h-[90vh]">
+                            <div className="p-5 border-b border-slate-100 flex justify-between items-center bg-slate-50 shrink-0 rounded-t-2xl">
                                 <h3 className="font-bold text-slate-900 text-lg flex items-center gap-2">
                                     <span className="material-symbols-outlined text-[#4F46E5]">person_add</span> Register Personnel
                                 </h3>
@@ -1088,40 +1088,55 @@ export default function EmployeesDirectory() {
                                     <div className="grid grid-cols-2 gap-4">
                                         <div>
                                             <label className="text-xs font-bold text-slate-700 block mb-1.5">Department <span className="text-red-500">*</span></label>
-                                            <select 
-                                                value={newEmpDept} onChange={e => setNewEmpDept(e.target.value)}
-                                                className="w-full text-sm p-2.5 border border-slate-300 rounded-lg focus:ring-[#4F46E5] focus:border-[#4F46E5]"
-                                            >
-                                                <option value="">-- Select Department --</option>
-                                                {systemSettings.departments.map(d => (
-                                                    <option key={d.id} value={d.name}>{d.name}</option>
-                                                ))}
-                                            </select>
+                                            <DropdownMenu
+                                                value={newEmpDept}
+                                                onChange={val => setNewEmpDept(val)}
+                                                className="w-full"
+                                                triggerClassName="w-full justify-between h-[42px] text-slate-700 dark:text-slate-200"
+                                                options={[
+                                                    { value: '', label: '-- Select Department --' },
+                                                    ...systemSettings.departments.map(d => ({
+                                                        value: d.name,
+                                                        label: d.name,
+                                                        subLabel: `ID: ${d.id}`
+                                                    }))
+                                                ]}
+                                            />
                                         </div>
                                         <div>
                                             <label className="text-xs font-bold text-slate-700 block mb-1.5">Job Role / Position <span className="text-red-500">*</span></label>
-                                            <select 
-                                                value={newEmpRole} onChange={e => setNewEmpRole(e.target.value)}
-                                                className="w-full text-sm p-2.5 border border-slate-300 rounded-lg focus:ring-[#4F46E5] focus:border-[#4F46E5]"
-                                            >
-                                                <option value="">-- Select Position --</option>
-                                                {systemSettings.positions.filter(p => !newEmpDept || p.deptId === systemSettings.departments.find(d => d.name === newEmpDept)?.id).map(p => (
-                                                    <option key={p.id} value={p.name}>{p.name}</option>
-                                                ))}
-                                            </select>
+                                            <DropdownMenu
+                                                value={newEmpRole}
+                                                onChange={val => setNewEmpRole(val)}
+                                                className="w-full"
+                                                triggerClassName="w-full justify-between h-[42px] text-slate-700 dark:text-slate-200"
+                                                options={[
+                                                    { value: '', label: '-- Select Position --' },
+                                                    ...systemSettings.positions.filter(p => !newEmpDept || p.deptId === systemSettings.departments.find(d => d.name === newEmpDept)?.id).map(p => ({
+                                                        value: p.name,
+                                                        label: p.name,
+                                                        subLabel: `Level: ${p.level || 'Standard'}`
+                                                    }))
+                                                ]}
+                                            />
                                         </div>
                                     </div>
                                     <div>
                                         <label className="text-xs font-bold text-slate-700 block mb-1.5">Office Location</label>
-                                        <select 
-                                            value={newEmpLocation} onChange={e => setNewEmpLocation(e.target.value)}
-                                            className="w-full text-sm p-2.5 border border-slate-300 rounded-lg focus:ring-[#4F46E5] focus:border-[#4F46E5]"
-                                        >
-                                            <option value="">-- No Assigned Location --</option>
-                                            {systemSettings.officeLocations.map(l => (
-                                                <option key={l.id} value={l.name}>{l.name}</option>
-                                            ))}
-                                        </select>
+                                        <DropdownMenu
+                                            value={newEmpLocation}
+                                            onChange={val => setNewEmpLocation(val)}
+                                            className="w-full"
+                                            triggerClassName="w-full justify-between h-[42px] text-slate-700 dark:text-slate-200"
+                                            options={[
+                                                { value: '', label: '-- No Assigned Location --' },
+                                                ...systemSettings.officeLocations.map(l => ({
+                                                    value: l.name,
+                                                    label: l.name,
+                                                    subLabel: `Zone: ${l.timezone || 'MMT'}`
+                                                }))
+                                            ]}
+                                        />
                                     </div>
                                 </div>
                                 <div className="space-y-4">
@@ -1150,11 +1165,17 @@ export default function EmployeesDirectory() {
                                         </div>
                                         <div>
                                             <label className="text-xs font-bold text-slate-700 block mb-1.5">Parents Count</label>
-                                            <select value={newEmpParentsCount} onChange={e => setNewEmpParentsCount(Number(e.target.value))} className="w-full text-sm p-2.5 border border-slate-300 rounded-lg focus:ring-[#4F46E5] focus:border-[#4F46E5]">
-                                                <option value={0}>0</option>
-                                                <option value={1}>1</option>
-                                                <option value={2}>2</option>
-                                            </select>
+                                            <DropdownMenu
+                                                value={String(newEmpParentsCount)}
+                                                onChange={val => setNewEmpParentsCount(Number(val))}
+                                                className="w-full"
+                                                triggerClassName="w-full justify-between h-[42px] text-slate-700 dark:text-slate-200"
+                                                options={[
+                                                    { value: '0', label: '0 Parents', subLabel: 'NO TAX RELIEF' },
+                                                    { value: '1', label: '1 Parent', subLabel: 'SINGLE DEPENDENT RELIEF' },
+                                                    { value: '2', label: '2 Parents', subLabel: 'DOUBLE DEPENDENT RELIEF' },
+                                                ]}
+                                            />
                                         </div>
                                     </div>
                                     <div className="grid grid-cols-2 gap-4">
@@ -1196,15 +1217,21 @@ export default function EmployeesDirectory() {
                                         </div>
                                         <div>
                                             <label className="text-xs font-bold text-slate-700 block mb-1.5">Relationship</label>
-                                            <select value={newEmpEmergencyRelation} onChange={e => setNewEmpEmergencyRelation(e.target.value)} className="w-full text-sm p-2.5 border border-slate-300 rounded-lg focus:ring-[#4F46E5] focus:border-[#4F46E5]">
-                                                <option value="">-- Select --</option>
-                                                <option value="Spouse">Spouse</option>
-                                                <option value="Parent">Parent</option>
-                                                <option value="Sibling">Sibling</option>
-                                                <option value="Child">Child</option>
-                                                <option value="Friend">Friend</option>
-                                                <option value="Other">Other</option>
-                                            </select>
+                                            <DropdownMenu
+                                                value={newEmpEmergencyRelation}
+                                                onChange={val => setNewEmpEmergencyRelation(val)}
+                                                className="w-full"
+                                                triggerClassName="w-full justify-between h-[42px] text-slate-700 dark:text-slate-200"
+                                                options={[
+                                                    { value: '', label: '-- Select --' },
+                                                    { value: 'Spouse', label: 'Spouse', subLabel: 'IMMEDIATE FAMILY' },
+                                                    { value: 'Parent', label: 'Parent', subLabel: 'IMMEDIATE FAMILY' },
+                                                    { value: 'Sibling', label: 'Sibling', subLabel: 'IMMEDIATE FAMILY' },
+                                                    { value: 'Child', label: 'Child', subLabel: 'IMMEDIATE FAMILY' },
+                                                    { value: 'Friend', label: 'Friend', subLabel: 'PERSONAL CONTACT' },
+                                                    { value: 'Other', label: 'Other', subLabel: 'SECONDARY CONTACT' },
+                                                ]}
+                                            />
                                         </div>
                                     </div>
                                     <div>
@@ -1216,12 +1243,20 @@ export default function EmployeesDirectory() {
                                     <p className="text-[10px] font-bold uppercase tracking-widest text-[#4F46E5] border-b pb-2">Financial Onboarding <span className="text-red-500">*</span></p>
                                     <div>
                                         <label className="text-xs font-bold text-slate-700 block mb-1.5">Bank Name <span className="text-red-500">*</span></label>
-                                        <select value={newEmpBankName} onChange={e => setNewEmpBankName(e.target.value)} className="w-full text-sm p-2.5 border border-slate-300 rounded-lg focus:ring-[#4F46E5] focus:border-[#4F46E5]">
-                                            <option value="">-- Select Bank / Wallet --</option>
-                                            {systemSettings.paymentProviders.map(p => (
-                                                <option key={p.id} value={p.name}>{p.name} ({p.type})</option>
-                                            ))}
-                                        </select>
+                                        <DropdownMenu
+                                            value={newEmpBankName}
+                                            onChange={val => setNewEmpBankName(val)}
+                                            className="w-full"
+                                            triggerClassName="w-full justify-between h-[42px] text-slate-700 dark:text-slate-200"
+                                            options={[
+                                                { value: '', label: '-- Select Bank / Wallet --' },
+                                                ...systemSettings.paymentProviders.map(p => ({
+                                                    value: p.name,
+                                                    label: p.name,
+                                                    subLabel: p.type.toUpperCase()
+                                                }))
+                                            ]}
+                                        />
                                     </div>
                                     <div>
                                         <label className="text-xs font-bold text-slate-700 block mb-1.5">Account Number <span className="text-red-500">*</span></label>
@@ -1244,7 +1279,7 @@ export default function EmployeesDirectory() {
                                     {authError && <p className="text-xs text-red-600 font-bold mt-2 flex items-center gap-1"><span className="material-symbols-outlined text-[14px]">error</span> {authError}</p>}
                                 </div>
                             </div>
-                            <div className="p-5 border-t border-slate-100 bg-slate-50 flex justify-end gap-3 shrink-0">
+                            <div className="p-5 border-t border-slate-100 bg-slate-50 flex justify-end gap-3 shrink-0 rounded-b-2xl">
                                 <button onClick={closeModals} className="px-5 py-2.5 rounded-lg text-sm font-semibold text-slate-600 hover:bg-slate-200 transition-colors">
                                     Discard Registration
                                 </button>
