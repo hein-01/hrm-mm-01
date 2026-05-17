@@ -3302,8 +3302,8 @@ export const AppDataProvider: React.FC<{ children: ReactNode }> = ({ children })
                 // Update Leave Request status
                 const { error: leaveErr } = await supabase.from('leave_requests').update({
                     status: 'Approved',
-                    approvedBy: adminId,
-                    approvedAt: new Date().toISOString(),
+                    approved_by: adminId,
+                    approved_at: new Date().toISOString(),
                     updatedAt: new Date().toISOString()
                 }).eq('id', reqId);
                 
@@ -3376,20 +3376,21 @@ export const AppDataProvider: React.FC<{ children: ReactNode }> = ({ children })
             try {
                 const { error } = await supabase.from('leave_requests').insert({
                     id: newReq.id,
-                    empId: newReq.empId,
+                    emp_id: newReq.empId,
                     name: newReq.name,
                     dept: newReq.dept,
                     type: newReq.type,
-                    startDate: newReq.startDate,
-                    endDate: newReq.endDate,
+                    start_date: newReq.startDate,
+                    end_date: newReq.endDate,
                     days: newReq.totalDays,
                     reason: newReq.reason,
                     status: 'Pending',
-                    relieverid: newReq.relieverId,
-                    relievername: newReq.relieverName,
+                    reliever_id: newReq.relieverId,
+                    reliever_name: newReq.relieverName,
                     priority: newReq.priority,
                     category: newReq.category,
-                    createdAt: new Date().toISOString()
+                    created_at: new Date().toISOString(),
+                    updatedAt: new Date().toISOString()
                 });
                 if (error) console.error('Supabase insert leave_requests failed:', error.message);
             } catch (err) {
@@ -3416,9 +3417,9 @@ export const AppDataProvider: React.FC<{ children: ReactNode }> = ({ children })
             try {
                 const { error } = await supabase.from('leave_requests').update({
                     status: 'Rejected',
-                    rejectedby: adminId,
-                    rejectedat: new Date().toISOString(),
-                    rejectionreason: reason || null,
+                    rejected_by: adminId,
+                    rejected_at: new Date().toISOString(),
+                    rejection_reason: reason || null,
                     updatedAt: new Date().toISOString()
                 }).eq('id', reqId);
                 if (error) console.error('Supabase update leave_requests (reject) failed:', error.message);
