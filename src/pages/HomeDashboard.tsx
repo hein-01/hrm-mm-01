@@ -38,7 +38,8 @@ export default function HomeDashboard() {
         locationSnapshots, jobActivityChanges, recruitmentActions,
         attendanceRequests, expenses, systemSettings, handleInboxAction, resolveOTConflict, lastPayrollStatus, lastPayrollTotal,
         alerts, setAlerts, addAuditLog, auditLogs, announcements, createAnnouncement,
-        attendanceLogs, shiftAssignments, holidays, shifts, securityAuditLogs, subscriptionTier, gpsLogs, addDocumentToLibrary
+        attendanceLogs, shiftAssignments, holidays, shifts, securityAuditLogs, subscriptionTier, gpsLogs, addDocumentToLibrary,
+        payrollGroups
     } = useAppData();
     const { getFormattedDate, parseGregorianDate, getCurrentDateISO } = useSystemCalendar();
     const { isAdmin, currentUser: authUser } = useUserAccess();
@@ -358,7 +359,7 @@ export default function HomeDashboard() {
                 const dateB = parseGregorianDate(b.submittedDate || b.date || b.timestamp || '2000-01-01').getTime();
                 return scoreRef || (dateB - dateA);
             });
-    }, [leaveRequests, otRequests, loans, adjustments, projectPayments, locationSnapshots, jobActivityChanges, recruitmentActions, attendanceRequests, expenses, systemSettings, employees, inboxFilter, inboxSearch, highValueOnly, parseGregorianDate, scopedDept]);
+    }, [leaveRequests, otRequests, loans, adjustments, projectPayments, locationSnapshots, jobActivityChanges, recruitmentActions, attendanceRequests, expenses, systemSettings, employees, inboxFilter, inboxSearch, highValueOnly, parseGregorianDate, scopedDept, lastPayrollStatus, lastPayrollTotal, payrollGroups]);
 
     // Phase 9: Absence Analytics Aggregation Engine (Shift-Aware)
     const MOCK_TODAY = getCurrentDateISO();
