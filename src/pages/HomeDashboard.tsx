@@ -58,6 +58,18 @@ export default function HomeDashboard() {
         return `${String(n.getHours()).padStart(2, '0')}:${String(n.getMinutes()).padStart(2, '0')}`;
     });
     const [lastUpdated, setLastUpdated] = useState(() => new Date().toLocaleTimeString());
+    const [isLoadingInbox, setIsLoadingInbox] = useState(true);
+
+    useEffect(() => {
+        // Once the core database objects are loaded, show a premium shimmer placeholder transition
+        // to render the entire inbox collection all at once rather than progressively.
+        if (employees.length > 0) {
+            const timer = setTimeout(() => {
+                setIsLoadingInbox(false);
+            }, 750);
+            return () => clearTimeout(timer);
+        }
+    }, [employees]);
     useEffect(() => {
         const tick = setInterval(() => {
             const n = new Date();
@@ -995,14 +1007,22 @@ export default function HomeDashboard() {
                                             <span className="text-[11px] text-slate-400">{pendingInboxItems.filter(i => i.inboxType === inboxFilter).length} result{pendingInboxItems.filter(i => i.inboxType === inboxFilter).length !== 1 ? 's' : ''}</span>
                                         </div>
                                     )}
-                                    {pendingInboxItems.length === 0 && (
-                                        <div className="text-center py-12 text-sm text-slate-500 flex flex-col items-center gap-2 border-2 border-dashed border-slate-200 dark:border-slate-800 rounded-xl">
-                                            <span className="material-symbols-outlined text-[48px] text-emerald-400 mb-2">check_circle</span>
-                                            <p className="text-base font-bold text-slate-700 dark:text-slate-300">Compliance Clear</p>
-                                            <p className="text-xs text-slate-400">Total operational alignment achieved. No pending requests.</p>
+                                    {isLoadingInbox ? (
+                                        <div className="space-y-3">
+                                            <InboxCardSkeleton />
+                                            <InboxCardSkeleton />
+                                            <InboxCardSkeleton />
                                         </div>
-                                    )}
-                                    {pendingInboxItems.map(item => (
+                                    ) : (
+                                        <>
+                                            {pendingInboxItems.length === 0 && (
+                                                <div className="text-center py-12 text-sm text-slate-500 flex flex-col items-center gap-2 border-2 border-dashed border-slate-200 dark:border-slate-800 rounded-xl">
+                                                    <span className="material-symbols-outlined text-[48px] text-emerald-400 mb-2">check_circle</span>
+                                                    <p className="text-base font-bold text-slate-700 dark:text-slate-300">Compliance Clear</p>
+                                                    <p className="text-xs text-slate-400">Total operational alignment achieved. No pending requests.</p>
+                                                </div>
+                                            )}
+                                            {pendingInboxItems.map(item => (
                                         <div key={item.id} className={`flex items-center p-4 rounded-lg border hover:border-indigo-300 transition-colors relative overflow-hidden bg-white dark:bg-slate-800/50 border-slate-200 dark:border-slate-700 min-h-[92px] ${item.category === 'Financial' ? 'border-l-4 border-l-red-500' :
                                                 item.category === 'Attendance' ? 'border-l-4 border-l-blue-500' :
                                                     'border-l-4 border-l-emerald-500'
@@ -1138,6 +1158,8 @@ export default function HomeDashboard() {
                                             </div>
                                         </div>
                                     ))}
+                                        </>
+                                    )}
                                 </div>
                             </div>
                             <div className="flex flex-col gap-6 h-full">
@@ -1796,6 +1818,26 @@ export default function HomeDashboard() {
                     </div>
                 </div>
             )}
+        </div>
+    );
+}
+
+// Shimmer loading skeleton matching the centralized inbox list items
+function InboxCardSkeleton() {
+    return (
+        <div className="flex items-center p-4 rounded-lg border border-slate-200 dark:border-slate-700/60 bg-white dark:bg-slate-800/30 animate-pulse min-h-[92px]">
+            <div className="size-12 rounded-2xl mr-4 bg-slate-200 dark:bg-slate-700 shrink-0" />
+            <div className="flex-1 space-y-2">
+                <div className="flex items-center gap-2">
+                    <div className="h-4 bg-slate-200 dark:bg-slate-700 rounded w-1/3" />
+                    <div className="h-3 bg-slate-100 dark:bg-slate-800 rounded w-12" />
+                </div>
+                <div className="h-3 bg-slate-100 dark:bg-slate-800/60 rounded w-2/3" />
+            </div>
+            <div className="flex gap-2 ml-4">
+                <div className="size-8 rounded-lg bg-slate-100 dark:bg-slate-800/40" />
+                <div className="size-8 rounded-lg bg-slate-100 dark:bg-slate-800/40" />
+            </div>
         </div>
     );
 }
