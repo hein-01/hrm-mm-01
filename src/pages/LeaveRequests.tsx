@@ -325,6 +325,36 @@ export default function LeaveRequests() {
         );
     };
 
+    // Dynamic KPI Calculations
+    const approvedThisMonthCount = leaveRequests.filter(r => {
+        if (r.status !== 'Approved') return false;
+        if (!r.startDate) return false;
+        const dateParts = r.startDate.split('-');
+        if (dateParts.length < 2) return false;
+        const startYear = parseInt(dateParts[0], 10);
+        const startMonth = parseInt(dateParts[1], 10) - 1;
+        const now = new Date();
+        return startYear === now.getFullYear() && startMonth === now.getMonth();
+    }).length;
+
+    const localToday = new Date();
+    const yyyy = localToday.getFullYear();
+    const mm = String(localToday.getMonth() + 1).padStart(2, '0');
+    const dd = String(localToday.getDate()).padStart(2, '0');
+    const localTodayStr = `${yyyy}-${mm}-${dd}`;
+
+    const staffOnLeaveTodayCount = Array.from(new Set(
+        leaveRequests
+            .filter(r => r.status === 'Approved' && r.startDate && r.endDate && r.startDate <= localTodayStr && r.endDate >= localTodayStr)
+            .map(r => r.empId)
+    )).length;
+
+    const restrictedHolidaysThisYearCount = holidays.filter(h => {
+        if (!h.isRestricted || !h.date) return false;
+        const year = parseInt(h.date.split('-')[0], 10);
+        return year === new Date().getFullYear();
+    }).length;
+
     return (
         <div className="flex h-screen overflow-hidden bg-[#F8FAFC] dark:bg-background-dark font-display text-slate-900 dark:text-slate-100">
             <Sidebar activeTab="Leave Requests" />
@@ -442,7 +472,7 @@ export default function LeaveRequests() {
                             <div>
                                 <p className="text-slate-500 dark:text-slate-400 text-xs font-bold uppercase tracking-wider">Approved This Month</p>
                                 <h3 className="text-3xl font-black text-slate-900 dark:text-white mt-1">
-                                    {leaveRequests.filter(r => r.status === 'Approved').length}
+                                    {approvedThisMonthCount}
                                 </h3>
                                 <p className="text-emerald-600 dark:text-emerald-400 text-xs font-medium mt-2">Processed successfully</p>
                             </div>
@@ -454,9 +484,9 @@ export default function LeaveRequests() {
                             <div>
                                 <p className="text-slate-500 dark:text-slate-400 text-xs font-bold uppercase tracking-wider">Staff On Leave Today</p>
                                 <h3 className="text-3xl font-black text-slate-900 dark:text-white mt-1">
-                                    {employees.filter(e => e.status === 'On Leave').length}
+                                    {staffOnLeaveTodayCount}
                                 </h3>
-                                <p className="text-indigo-600 dark:text-indigo-400 text-xs font-medium mt-2">Active absences</p>
+                                <p className="text-indigo-600 dark:text-indigo-400 text-xs font-medium mt-2">Active absences today</p>
                             </div>
                             <div className="bg-indigo-100 dark:bg-indigo-900/30 text-indigo-600 dark:text-indigo-400 p-2 rounded-lg">
                                 <span className="material-symbols-outlined">flight_takeoff</span>
@@ -466,9 +496,9 @@ export default function LeaveRequests() {
                             <div>
                                 <p className="text-slate-500 dark:text-slate-400 text-xs font-bold uppercase tracking-wider">Restricted Dates</p>
                                 <h3 className="text-3xl font-black text-slate-900 dark:text-white mt-1">
-                                    {holidays.filter(h => h.isRestricted).length}
+                                    {restrictedHolidaysThisYearCount}
                                 </h3>
-                                <p className="text-red-600 dark:text-red-400 text-xs font-medium mt-2">Override required</p>
+                                <p className="text-red-600 dark:text-red-400 text-xs font-medium mt-2">Active this calendar year</p>
                             </div>
                             <div className="bg-red-100 dark:bg-red-900/30 text-red-600 dark:text-red-400 p-2 rounded-lg">
                                 <span className="material-symbols-outlined">block</span>
