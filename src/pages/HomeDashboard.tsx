@@ -1004,13 +1004,13 @@ export default function HomeDashboard() {
                                                 placeholder="Search name..."
                                                 value={inboxSearch}
                                                 onChange={(e) => setInboxSearch(e.target.value)}
-                                                className="pl-9 pr-3 py-1.5 rounded-lg border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-800 text-xs focus:ring-2 focus:ring-primary/20 outline-none w-40 transition-all focus:w-56 shadow-sm"
+                                                className="pl-9 pr-3 h-8 rounded-lg border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-800 text-xs focus:ring-2 focus:ring-primary/20 outline-none w-40 transition-all focus:w-56 shadow-sm"
                                             />
                                         </div>
 
                                         <button
                                             onClick={() => setHighValueOnly(!highValueOnly)}
-                                            className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg border text-xs font-semibold transition-all shadow-sm ${highValueOnly
+                                            className={`flex items-center justify-center gap-1.5 px-3 h-8 rounded-lg border text-xs font-semibold transition-all shadow-sm ${highValueOnly
                                                     ? 'bg-red-50 text-red-600 border-red-200 dark:bg-red-900/30 dark:border-red-900/50'
                                                     : 'bg-white dark:bg-slate-800 text-slate-500 border-slate-200 dark:border-slate-800 hover:bg-slate-50'
                                                 }`}
@@ -1019,12 +1019,15 @@ export default function HomeDashboard() {
                                             High Value
                                         </button>
 
-                                        <span className="text-xs font-semibold text-slate-400 bg-slate-50 dark:bg-slate-800 px-2 py-1 rounded border border-slate-200 dark:border-slate-700">{pendingInboxItems.length} Pending</span>
+                                        <span className="flex items-center justify-center text-xs font-semibold text-slate-400 bg-slate-50 dark:bg-slate-800 px-3 h-8 rounded-lg border border-slate-200 dark:border-slate-800 shadow-sm whitespace-nowrap">
+                                            {pendingInboxItems.length} Pending
+                                        </span>
+
                                         {/* Filter Button + Dropdown */}
                                         <div className="relative">
                                             <button
                                                 onClick={() => setShowFilterDropdown(v => !v)}
-                                                className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg border text-xs font-semibold transition-colors shadow-sm ${inboxFilter !== 'All'
+                                                className={`flex items-center justify-center gap-1.5 px-3 h-8 rounded-lg border text-xs font-semibold transition-colors shadow-sm ${inboxFilter !== 'All'
                                                         ? 'bg-indigo-50 text-indigo-600 border-indigo-200 dark:bg-indigo-900/30 dark:border-indigo-700'
                                                         : 'bg-white dark:bg-slate-800 text-slate-500 border-slate-200 dark:border-slate-800 hover:bg-slate-50'
                                                     }`}
