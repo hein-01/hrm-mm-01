@@ -4,6 +4,7 @@ import Header from '../components/Header';
 import { useApprovals } from '../context/ApprovalContext';
 import { useUserAccess } from '../context/UserAccessProvider';
 import { useAppData } from '../context/AppDataContext';
+import DropdownMenu from '../components/DropdownMenu';
 
 export default function Approvals() {
     const { currentUser } = useUserAccess();
@@ -177,18 +178,20 @@ export default function Approvals() {
                     {/* Actions */}
                     <div className="flex items-center justify-between mb-4">
                         <div className="flex items-center gap-3">
-                            <select 
+                            <DropdownMenu
                                 value={filterType}
-                                onChange={e => setFilterType(e.target.value)}
-                                className="px-4 py-2.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-sm focus:ring-2 focus:ring-indigo-300 outline-none"
-                            >
-                                <option value="All">All Types</option>
-                                <option value="Leave">Leave</option>
-                                <option value="OT">OT</option>
-                                <option value="Expense">Expense</option>
-                                <option value="Swap">Shift Swap</option>
-                                <option value="Loan">Loan</option>
-                            </select>
+                                onChange={setFilterType}
+                                className="w-[180px] h-9"
+                                triggerClassName="w-full justify-between h-9 font-bold text-sm text-slate-700 dark:text-slate-200"
+                                options={[
+                                    { value: 'All', label: 'All Types', subLabel: 'ALL REQUESTS' },
+                                    { value: 'Leave', label: 'Leave', subLabel: 'ABSENCES' },
+                                    { value: 'OT', label: 'OT', subLabel: 'OVERTIME' },
+                                    { value: 'Expense', label: 'Expense', subLabel: 'CLAIMS' },
+                                    { value: 'Swap', label: 'Shift Swap', subLabel: 'SWAPS' },
+                                    { value: 'Loan', label: 'Loan', subLabel: 'ADVANCES' },
+                                ]}
+                            />
                             {filterType !== 'All' && (
                                 <button onClick={() => setFilterType('All')} className="text-sm text-indigo-600 hover:underline">
                                     Clear filter
