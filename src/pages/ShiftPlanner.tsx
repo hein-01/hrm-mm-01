@@ -332,18 +332,22 @@ export default function ShiftPlanner() {
                 <Header 
                     title="Shift Planner"
                     subtitle="Coordinate workforce schedules, manage department rotations, and track coverage across teams"
-                >
-                    <div className="flex items-center gap-3 ml-4 hidden lg:flex">
-                        <div className="relative w-full max-w-[300px]">
-                            <span className="material-symbols-outlined absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 text-xl">search</span>
+                />
+
+                <div className="flex-1 overflow-auto p-8 pt-8">
+                    {/* Search & Filters */}
+                    <div className="flex items-center gap-3 mb-6 bg-white dark:bg-slate-900 p-4 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-sm w-fit">
+                        <div className="relative w-[280px]">
+                            <span className="material-symbols-outlined absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 text-lg">search</span>
                             <input
-                                className="w-full border border-slate-200 dark:border-slate-700 rounded-lg py-2 pl-10 pr-4 text-sm focus:ring-2 focus:ring-[#4F46E5] focus:border-transparent text-slate-900 placeholder-slate-400 bg-white dark:bg-slate-900 transition-all shadow-sm"
+                                className="w-full border border-slate-200 dark:border-slate-700 rounded-lg py-1.5 pl-9 pr-4 text-xs focus:ring-2 focus:ring-[#4F46E5] focus:border-transparent text-slate-900 dark:text-slate-100 placeholder-slate-400 bg-slate-50 dark:bg-slate-800 transition-all"
                                 placeholder="Search employees or ID..."
                                 type="text"
                                 value={searchQuery}
                                 onChange={(e) => setSearchQuery(e.target.value)}
                             />
                         </div>
+                        <div className="h-6 w-px bg-slate-200 dark:bg-slate-700 mx-1"></div>
                         <DropdownMenu
                             value={selectedDept}
                             onChange={setSelectedDept}
@@ -356,9 +360,7 @@ export default function ShiftPlanner() {
                             ]}
                         />
                     </div>
-                </Header>
 
-                <div className="flex-1 overflow-auto p-8 pt-8">
                     {/* Top Actions & Date */}
                     <div className="flex flex-wrap items-center justify-between gap-6 mb-8">
                         <div className="flex items-center gap-3 flex-wrap">
