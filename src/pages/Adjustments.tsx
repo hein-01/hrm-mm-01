@@ -466,7 +466,7 @@ export default function Adjustments() {
             {/* ── Manual Adjustment Modal ───────────────────────────────────── */}
             {isAddModalOpen && (
                 <div className="fixed inset-0 z-[100] flex items-center justify-center bg-slate-900/60 backdrop-blur-sm px-4 animate-fade-in">
-                    <div className="bg-white dark:bg-slate-900 w-full max-w-lg rounded-2xl shadow-2xl border border-slate-200 dark:border-slate-800 overflow-hidden">
+                    <div className="bg-white dark:bg-slate-900 w-full max-w-lg rounded-2xl shadow-2xl border border-slate-200 dark:border-slate-800 overflow-visible">
                         <div className="px-6 py-5 border-b border-slate-100 dark:border-slate-800 flex items-center justify-between">
                             <div>
                                 <h3 className="text-lg font-black text-slate-900 dark:text-white">New Manual Adjustment</h3>
@@ -480,13 +480,20 @@ export default function Adjustments() {
                             {/* Employee */}
                             <div>
                                 <label className="text-xs font-bold text-slate-500 uppercase tracking-wider block mb-1.5">Employee *</label>
-                                <select value={form.empId} onChange={e => handleFormChange('empId', e.target.value)}
-                                    className="w-full px-3 py-2.5 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-sm text-slate-900 dark:text-white focus:ring-2 focus:ring-primary/30 focus:border-primary outline-none">
-                                    <option value="">Select Active Employee…</option>
-                                    {activeEmployees.map(e => (
-                                        <option key={e.id} value={e.id}>{e.name} ({e.id}) — {e.dept}</option>
-                                    ))}
-                                </select>
+                                <DropdownMenu
+                                    value={form.empId}
+                                    onChange={val => handleFormChange('empId', val)}
+                                    className="w-full"
+                                    triggerClassName="w-full justify-between h-[42px] text-slate-700 dark:text-slate-200"
+                                    options={[
+                                        { value: '', label: 'Select Active Employee…' },
+                                        ...activeEmployees.map(e => ({
+                                            value: e.id,
+                                            label: `${e.name} (${e.id})`,
+                                            subLabel: `Dept: ${e.dept}`
+                                        }))
+                                    ]}
+                                />
                                 {selectedEmp && (
                                     <p className="text-[10px] text-slate-400 mt-1">Base Salary: <span className="font-bold text-slate-600 dark:text-slate-300">{(selectedEmp.baseSalary || 0).toLocaleString()} MMK</span></p>
                                 )}
@@ -496,20 +503,21 @@ export default function Adjustments() {
                             <div className="grid grid-cols-2 gap-4">
                                 <div>
                                     <label className="text-xs font-bold text-slate-500 uppercase tracking-wider block mb-1.5">Type *</label>
-                                    <select value={form.type} onChange={e => handleFormChange('type', e.target.value)}
-                                        className="w-full px-3 py-2.5 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-sm text-slate-900 dark:text-white focus:ring-2 focus:ring-primary/30 focus:border-primary outline-none">
-                                        <optgroup label="Additions">
-                                            <option>Performance Bonus</option>
-                                            <option>Overtime Pay</option>
-                                            <option>Project Allowance</option>
-                                            <option>Reimbursement</option>
-                                        </optgroup>
-                                        <optgroup label="Deductions">
-                                            <option>Late Fine</option>
-                                            <option>Asset Loss</option>
-                                            <option>Unpaid Leave Deduction</option>
-                                        </optgroup>
-                                    </select>
+                                    <DropdownMenu
+                                        value={form.type}
+                                        onChange={val => handleFormChange('type', val)}
+                                        className="w-full"
+                                        triggerClassName="w-full justify-between h-[42px] text-slate-700 dark:text-slate-200"
+                                        options={[
+                                            { value: 'Performance Bonus', label: 'Performance Bonus', subLabel: 'ADDITION · PIT & SSB TAXABLE' },
+                                            { value: 'Overtime Pay', label: 'Overtime Pay', subLabel: 'ADDITION · PIT & SSB TAXABLE' },
+                                            { value: 'Project Allowance', label: 'Project Allowance', subLabel: 'ADDITION · PIT TAXABLE' },
+                                            { value: 'Reimbursement', label: 'Reimbursement', subLabel: 'ADDITION · NON-TAXABLE' },
+                                            { value: 'Late Fine', label: 'Late Fine', subLabel: 'DEDUCTION · ATTENDANCE BASIS' },
+                                            { value: 'Asset Loss', label: 'Asset Loss', subLabel: 'DEDUCTION · ASSET RECOVERY' },
+                                            { value: 'Unpaid Leave Deduction', label: 'Unpaid Leave Deduction', subLabel: 'DEDUCTION · UNPAID ABSENCES' },
+                                        ]}
+                                    />
                                 </div>
                                 <div>
                                     <label className="text-xs font-bold text-slate-500 uppercase tracking-wider block mb-1.5">Category</label>
@@ -529,13 +537,20 @@ export default function Adjustments() {
                             <div>
                                 <label className="text-xs font-bold text-slate-500 uppercase tracking-wider block mb-1.5">Pay Period <span className="text-red-500">*</span></label>
                                 {payrollGroups.length > 0 ? (
-                                    <select value={form.effectiveMonth} onChange={e => handleFormChange('effectiveMonth', e.target.value)}
-                                        className="w-full px-3 py-2.5 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-sm text-slate-900 dark:text-white focus:ring-2 focus:ring-primary/30 focus:border-primary outline-none">
-                                        <option value="">Select Pay Period…</option>
-                                        {payrollGroups.map(g => (
-                                            <option key={g.id} value={g.period}>{g.period} — {g.name}</option>
-                                        ))}
-                                    </select>
+                                    <DropdownMenu
+                                        value={form.effectiveMonth}
+                                        onChange={val => handleFormChange('effectiveMonth', val)}
+                                        className="w-full"
+                                        triggerClassName="w-full justify-between h-[42px] text-slate-700 dark:text-slate-200"
+                                        options={[
+                                            { value: '', label: 'Select Pay Period…' },
+                                            ...payrollGroups.map(g => ({
+                                                value: g.period,
+                                                label: g.period,
+                                                subLabel: g.name
+                                            }))
+                                        ]}
+                                    />
                                 ) : (
                                     <input type="text" placeholder="e.g. Oct 2023"
                                         value={form.effectiveMonth}
@@ -613,13 +628,20 @@ export default function Adjustments() {
                             {form.type === 'Asset Loss' && (
                                 <div>
                                     <label className="text-xs font-bold text-slate-500 uppercase tracking-wider block mb-1.5">Asset Link (auto-populated) *</label>
-                                    <select value={form.assetId} onChange={e => handleFormChange('assetId', e.target.value)}
-                                        className="w-full px-3 py-2.5 rounded-lg border border-amber-200 bg-amber-50 dark:bg-amber-900/10 text-sm text-slate-900 dark:text-white focus:ring-2 focus:ring-amber-300 focus:border-amber-400 outline-none">
-                                        <option value="">Select Asset assigned to employee…</option>
-                                        {assignedAssets.map(a => (
-                                            <option key={a.id} value={a.id}>{a.id} — {a.model} ({a.value?.toLocaleString()} MMK)</option>
-                                        ))}
-                                    </select>
+                                    <DropdownMenu
+                                        value={form.assetId}
+                                        onChange={val => handleFormChange('assetId', val)}
+                                        className="w-full"
+                                        triggerClassName="w-full justify-between h-[42px] text-slate-700 dark:text-slate-200 border-amber-200 bg-amber-50 dark:bg-amber-900/10"
+                                        options={[
+                                            { value: '', label: 'Select Asset assigned to employee…' },
+                                            ...assignedAssets.map(a => ({
+                                                value: a.id,
+                                                label: `${a.id} — ${a.model}`,
+                                                subLabel: `Est. Value: ${a.value?.toLocaleString() || 0} MMK`
+                                            }))
+                                        ]}
+                                    />
                                 </div>
                             )}
 
@@ -636,7 +658,7 @@ export default function Adjustments() {
                                 />
                             </div>
                         </div>
-                        <div className="px-6 py-4 bg-slate-50 dark:bg-slate-800/50 border-t border-slate-100 dark:border-slate-800 flex gap-3">
+                        <div className="px-6 py-4 bg-slate-50 dark:bg-slate-800/50 border-t border-slate-100 dark:border-slate-800 flex gap-3 rounded-b-2xl">
                             <button onClick={() => setIsAddModalOpen(false)}
                                 className="flex-1 px-4 py-2.5 rounded-xl text-sm font-bold text-slate-600 bg-white border border-slate-200 hover:bg-slate-100 transition-all">
                                 Cancel
