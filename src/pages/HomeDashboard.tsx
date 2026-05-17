@@ -158,7 +158,7 @@ export default function HomeDashboard() {
                 name: r.name || emp?.name || 'Unknown',
                 inboxType: 'Leave',
                 inboxTitle: 'Leave Approval',
-                inboxSubtitle: `${r.type} Leave • ${r.startDate} to ${r.endDate}`,
+                inboxSubtitle: `${r.name || emp?.name || 'Unknown'} (${r.empId}) • ${r.type} Leave • ${r.startDate} to ${r.endDate}`,
                 inboxIcon: 'beach_access',
                 inboxIconColor: 'text-emerald-600 bg-emerald-100 dark:bg-emerald-900/40',
                 inboxBarColor: 'bg-emerald-500',
