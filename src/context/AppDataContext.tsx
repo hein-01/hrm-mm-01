@@ -859,6 +859,7 @@ export const AppDataProvider: React.FC<{ children: ReactNode }> = ({ children })
         companyLogo: null,
         expenseModuleEnabled: false,
         recruitmentModuleEnabled: false,
+        fieldForceModuleEnabled: false,
         expenseCategories: [
             { id: 'CAT-01', name: 'Client Entertainment', description: 'Meals and events with clients', monthlyLimit: 500000 },
             { id: 'CAT-02', name: 'Travel & Transport', description: 'Flights, taxis, and fuel', monthlyLimit: 300000 },

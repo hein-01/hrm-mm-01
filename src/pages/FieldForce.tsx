@@ -42,7 +42,31 @@ function createAgentIcon(agent: FieldAgent, isSelected: boolean) {
 }
 
 export default function FieldForce() {
-    const { fieldAgents, setFieldAgents, logFieldAgentLocation, optimizeFieldRoutes, checkIn } = useAppData();
+    const { fieldAgents, setFieldAgents, logFieldAgentLocation, optimizeFieldRoutes, checkIn, systemSettings } = useAppData();
+    
+    if (!systemSettings.fieldForceModuleEnabled) {
+        return (
+            <div className="flex h-screen w-full font-display text-slate-900 dark:text-white antialiased overflow-hidden bg-background-light dark:bg-background-dark">
+                <Sidebar activeTab="Field Force (GPS)" />
+                <main className="flex-1 flex flex-col h-full overflow-hidden relative ml-[280px] bg-slate-100 dark:bg-slate-900">
+                    <Header title="Field Force Tracking" subtitle="Service Disabled" />
+                    <div className="flex-1 flex justify-center items-center">
+                        <div className="text-center bg-white dark:bg-[#182130] p-10 rounded-3xl border border-slate-200 dark:border-slate-800 shadow-xl max-w-md">
+                            <span className="material-symbols-outlined text-7xl text-[#4F46E5] mb-4 block animate-pulse">distance</span>
+                            <h2 className="text-2xl font-black text-slate-900 dark:text-white uppercase tracking-tight">Field Force Tracking is Deactivated</h2>
+                            <p className="text-slate-500 dark:text-slate-400 text-sm mt-3 leading-relaxed">
+                                Real-time GPS mapping, fake location verification, and breadcrumbs audit segments have been deactivated for your company account.
+                            </p>
+                            <p className="text-indigo-600 dark:text-indigo-400 font-bold text-xs mt-4 uppercase tracking-wider">
+                                Please enable this module in the Governance Settings panel.
+                            </p>
+                        </div>
+                    </div>
+                </main>
+            </div>
+        );
+    }
+
     const [searchQuery, setSearchQuery] = useState('');
     const [activeTab, setActiveTab] = useState<'Online' | 'Offline'>('Online');
     const [currentTime, setCurrentTime] = useState(new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }));

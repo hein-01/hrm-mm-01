@@ -865,6 +865,30 @@ export default function Setting() {
                                             </div>
                                         </div>
                                     </section>
+
+                                    <section>
+                                        <div className="flex items-center gap-3 mb-6">
+                                            <div className="size-10 rounded-xl bg-indigo-50 dark:bg-indigo-900/20 flex items-center justify-center text-[#4F46E5]">
+                                                <span className="material-symbols-outlined">distance</span>
+                                            </div>
+                                            <div className="flex-1">
+                                                <h3 className="text-xl font-bold text-slate-900 dark:text-white flex items-center gap-2">
+                                                    Field Force & GPS Tracking
+                                                    {localSystem.fieldForceModuleEnabled && <span className="px-2 py-0.5 bg-emerald-100 text-emerald-700 text-[10px] font-black uppercase tracking-widest rounded">Active</span>}
+                                                </h3>
+                                                <p className="text-xs text-slate-500 font-medium">Real-time GPS mapping, breadcrumbs route playback, fake GPS protection, and geofenced attendance rules</p>
+                                            </div>
+                                            <div className="flex items-center gap-3">
+                                                <span className="text-sm font-bold text-slate-700 dark:text-slate-300">Module Switch</span>
+                                                <button 
+                                                    onClick={() => setLocalSystem(prev => ({ ...prev, fieldForceModuleEnabled: !prev.fieldForceModuleEnabled }))}
+                                                    className={`w-14 h-7 rounded-full transition-colors relative flex items-center ${localSystem.fieldForceModuleEnabled ? 'bg-[#4F46E5]' : 'bg-slate-200 dark:bg-slate-700'}`}
+                                                >
+                                                    <span className={`absolute left-1 size-5 bg-white rounded-full shadow-sm transition-transform ${localSystem.fieldForceModuleEnabled ? 'translate-x-7' : 'translate-x-0'}`}></span>
+                                                </button>
+                                            </div>
+                                        </div>
+                                    </section>
                                 </div>
                             )}
 

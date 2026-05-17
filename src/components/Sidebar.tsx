@@ -146,7 +146,9 @@ export default function Sidebar({ activeTab }: SidebarProps) {
                 <div className="px-4 mt-6">
                     <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest px-2 mb-3">Time & Attendance</p>
                     <NavLink to="/attendance" tabName="Attendance" icon="schedule" label="Attendance" activeTab={activeTab} activeRef={activeRef} />
-                    <NavLink to="/field-force" tabName="Field Force (GPS)" icon="distance" label="Field Force (GPS)" activeTab={activeTab} activeRef={activeRef} />
+                    {systemSettings.fieldForceModuleEnabled && (
+                        <NavLink to="/field-force" tabName="Field Force (GPS)" icon="distance" label="Field Force (GPS)" activeTab={activeTab} activeRef={activeRef} />
+                    )}
                     <NavLink to="/leave-requests" tabName="Leave Requests" icon="event_busy" label="Leave Requests" activeTab={activeTab} activeRef={activeRef} />
                     <NavLink to="/team-calendar" tabName="Team Calendar" icon="calendar_month" label="Team Calendar" activeTab={activeTab} activeRef={activeRef} />
                     <NavLink to="/shift-planner" tabName="Shift Planner" icon="calendar_view_week" label="Shift Planner" activeTab={activeTab} activeRef={activeRef} />

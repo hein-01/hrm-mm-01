@@ -763,6 +763,7 @@ export type SystemSettings = {
     companyLogo?: string | null;
     expenseModuleEnabled: boolean;
     recruitmentModuleEnabled: boolean;
+    fieldForceModuleEnabled: boolean;
     expenseCategories: ExpenseCategory[];
     autoAttendancePolicyEnabled: boolean;
     autoHolidayWorkEnabled: boolean;
