@@ -3,6 +3,7 @@ import { TableVirtuoso } from 'react-virtuoso';
 import { jsPDF } from 'jspdf';
 import Layout from '../layouts/Layout';
 import Header from '../components/Header';
+import DropdownMenu from '../components/DropdownMenu';
 import { useAppData } from '../context/AppDataContext';
 import { useUserAccess } from '../context/UserAccessProvider';
 import { DisciplinaryAction } from '../types/hrms.types';
@@ -637,8 +638,8 @@ export default function DisciplinaryActions() {
       {/* Issue Warning Modal */}
       {showAddModal && (
         <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/60 backdrop-blur-md animate-fade-in px-4">
-          <div className="bg-white rounded-3xl shadow-2xl w-full max-w-2xl border border-slate-200 overflow-hidden animate-in zoom-in duration-300 max-h-[90vh] overflow-y-auto">
-             <div className="p-8 border-b border-slate-100 bg-rose-50/20 flex items-center justify-between relative overflow-hidden sticky top-0 z-10">
+          <div className="bg-white rounded-3xl shadow-2xl w-full max-w-2xl border border-slate-200 overflow-visible animate-in zoom-in duration-300 max-h-[90vh] overflow-y-auto">
+             <div className="p-8 border-b border-slate-100 bg-rose-50/20 flex items-center justify-between relative overflow-hidden sticky top-0 z-10 rounded-t-3xl">
                <div className="absolute right-0 top-0 p-8 opacity-5 text-rose-500 pointer-events-none">
                  <span className="material-symbols-outlined text-[120px]">report_problem</span>
                </div>
@@ -671,45 +672,53 @@ export default function DisciplinaryActions() {
               <div className="grid grid-cols-2 gap-6">
                 <div>
                    <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest block mb-2">Subject Employee *</label>
-                  <select
+                  <DropdownMenu
                     value={formState.empId}
-                    onChange={e => setFormState({ ...formState, empId: e.target.value })}
-                    className="w-full p-4 bg-slate-50 border border-slate-200 rounded-2xl text-sm font-bold outline-none focus:ring-4 focus:ring-rose-500/10 transition-all"
-                  >
-                    <option value="">Select Employee...</option>
-                    {employees.map(emp => (
-                      <option key={emp.id} value={emp.id}>{emp.name} ({emp.id})</option>
-                    ))}
-                  </select>
+                    onChange={val => setFormState({ ...formState, empId: val })}
+                    className="w-full"
+                    triggerClassName="w-full justify-between h-[46px] text-slate-700 dark:text-slate-200 font-bold"
+                    options={[
+                      { value: '', label: 'Select Employee...' },
+                      ...employees.map(emp => ({
+                        value: emp.id,
+                        label: `${emp.name} (${emp.id})`,
+                        subLabel: `Dept: ${emp.dept} · Role: ${emp.role || 'Personnel'}`
+                      }))
+                    ]}
+                  />
                 </div>
                 <div>
                    <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest block mb-2">Severity Level *</label>
-                  <select
+                  <DropdownMenu
                     value={formState.type}
-                    onChange={e => setFormState({ ...formState, type: e.target.value as DisciplinaryAction['type'] })}
-                    className="w-full p-4 bg-slate-50 border border-slate-200 rounded-2xl text-sm font-bold outline-none focus:ring-4 focus:ring-rose-500/10 transition-all text-rose-600"
-                  >
-                    <option>Verbal Warning</option>
-                    <option>Written Warning</option>
-                    <option>Final Warning</option>
-                    <option>Suspension</option>
-                  </select>
+                    onChange={val => setFormState({ ...formState, type: val as DisciplinaryAction['type'] })}
+                    className="w-full"
+                    triggerClassName="w-full justify-between h-[46px] text-rose-600 dark:text-rose-400 font-bold"
+                    options={[
+                      { value: 'Verbal Warning', label: 'Verbal Warning', subLabel: 'INFORMAL RECORD · REMEDIAL COACHING' },
+                      { value: 'Written Warning', label: 'Written Warning', subLabel: 'FORMAL ACTION · FILED IN COMPLIANCE DOSSIER' },
+                      { value: 'Final Warning', label: 'Final Warning', subLabel: 'CRITICAL COMPLIANCE RECORD · PIP INITIATION' },
+                      { value: 'Suspension', label: 'Suspension', subLabel: 'MANDATORY LEAVE · PENDING INVESTIGATION' }
+                    ]}
+                  />
                 </div>
               </div>
 
               <div>
                 <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest block mb-2">Incident Category *</label>
-                <select
+                <DropdownMenu
                   value={formState.category}
-                  onChange={e => setFormState({ ...formState, category: e.target.value as DisciplinaryAction['category'] })}
-                  className="w-full p-4 bg-slate-50 border border-slate-200 rounded-2xl text-sm font-bold outline-none focus:ring-4 focus:ring-rose-500/10 transition-all"
-                >
-                  <option value="Misconduct">Misconduct</option>
-                  <option value="Performance">Performance</option>
-                  <option value="Attendance">Attendance</option>
-                  <option value="Safety Violation">Safety Violation</option>
-                  <option value="Policy Breach">Policy Breach</option>
-                </select>
+                  onChange={val => setFormState({ ...formState, category: val as DisciplinaryAction['category'] })}
+                  className="w-full"
+                  triggerClassName="w-full justify-between h-[46px] text-slate-700 dark:text-slate-200 font-bold"
+                  options={[
+                    { value: 'Misconduct', label: 'Misconduct', subLabel: 'UNPROFESSIONAL OR OFFENSIVE CONDUCT' },
+                    { value: 'Performance', label: 'Performance', subLabel: 'SUB-STANDARD PERFORMANCE OR PIP BREACH' },
+                    { value: 'Attendance', label: 'Attendance', subLabel: 'EXCESSIVE ABSENCE OR UNEXCUSED LEAVE' },
+                    { value: 'Safety Violation', label: 'Safety Violation', subLabel: 'COMPLIANCE AND SAFETY PROTOCOL BREACH' },
+                    { value: 'Policy Breach', label: 'Policy Breach', subLabel: 'COMPANY POLICIES OR NDA INFRINGEMENT' }
+                  ]}
+                />
               </div>
 
               <div>
