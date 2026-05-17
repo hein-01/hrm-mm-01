@@ -250,15 +250,28 @@ export const AppDataProvider: React.FC<{ children: ReactNode }> = ({ children })
                 avatar: emp.avatar || emp.profileImage || emp.profileimage || emp.Avatar || null,
                 initials: (emp.name || emp.Name)?.split(' ').map((n: string) => n[0]).join('').toUpperCase() || resolvedId.slice(-2).toUpperCase() || 'EM',
                 colorClass: emp.colorClass || 'bg-blue-100 text-blue-600',
-                nrcNumber: emp.nrcNumber || emp.nrcnumber || emp.nrc || '',
-                ssbNumber: emp.ssbNumber || emp.ssbnumber || emp.ssb || '',
-                taxId: emp.taxId || emp.taxid || '',
-                joinDate: emp.joinDate || emp.joindate || emp.createdat || '',
-                baseSalary: emp.baseSalary || emp.basesalary || 0,
+                nrcNumber: emp.nrcNumber || emp.nrc_number || emp.nrcnumber || emp.nrc || '',
+                ssbNumber: emp.ssbNumber || emp.ssb_number || emp.ssbnumber || emp.ssb || '',
+                taxId: emp.taxId || emp.tax_id || emp.taxid || '',
+                joinDate: emp.joinDate || emp.join_date || emp.joindate || emp.createdat || '',
+                baseSalary: emp.base_salary !== undefined ? emp.base_salary : (emp.baseSalary || emp.basesalary || 0),
                 documents: emp.documents || [],
-                enrolledCourses: emp.enrolledCourses || [],
-                leaveBalances: emp.leaveBalances || { Casual: 6, Medical: 30, Earned: 0 },
-                reliefs: emp.reliefs || { spouse: emp.has_spouse || false, parentsCount: emp.parentscount || 0, childrenCount: emp.childrencount || 0 }
+                enrolledCourses: emp.enrolled_courses || emp.enrolledCourses || [],
+                leaveBalances: emp.leave_balances || emp.leaveBalances || { Casual: 6, Medical: 30, Earned: 0 },
+                reliefs: emp.reliefs || { spouse: emp.has_spouse !== undefined ? emp.has_spouse : (emp.spouse || false), parentsCount: emp.parents_count || emp.parentscount || 0, childrenCount: emp.children_count || emp.childrencount || 0 },
+                bankName: emp.bank_name || emp.bankName || '',
+                accountNumber: emp.account_number || emp.accountNumber || '',
+                officeLocation: emp.office_location || emp.officeLocation || '',
+                officeCoords: emp.office_coords || emp.officeCoords || null,
+                shiftId: emp.shift_id || emp.shiftId || '',
+                policyId: emp.policy_id || emp.policyId || '',
+                recruitmentSource: emp.recruitment_source || emp.recruitmentSource || '',
+                hasCriticalRiskFlag: emp.has_critical_risk_flag !== undefined ? emp.has_critical_risk_flag : (emp.hasCriticalRiskFlag || false),
+                autoAttendanceEnabled: emp.auto_attendance_enabled !== undefined ? emp.auto_attendance_enabled : (emp.autoAttendanceEnabled || false),
+                reportingManagerId: emp.reporting_manager_id || emp.reportingManagerId || '',
+                separationReason: emp.separation_reason || emp.separationReason || '',
+                separationDate: emp.separation_date || emp.separationDate || '',
+                eligibleForRehire: emp.eligible_for_rehire !== undefined ? emp.eligible_for_rehire : (emp.eligibleForRehire || null)
             };
         };
 
@@ -277,18 +290,11 @@ export const AppDataProvider: React.FC<{ children: ReactNode }> = ({ children })
         const fetchEmployees = async () => {
             setLoadingEmployees(true);
             try {
-                console.log('Fetching employees from Supabase table: Employees...');
-                const { data, error } = await supabase.from('Employees').select('*');
+                console.log('Fetching employees from Supabase table: employees...');
+                const { data, error } = await supabase.from('employees').select('*');
                 
                 if (error) {
-                    console.error('Supabase Employees fetch error:', error.message, error.details);
-                    // Try lowercase fallback if capitalized fails
-                    const { data: dataLow, error: errorLow } = await supabase.from('employees').select('*');
-                    if (!errorLow && dataLow) {
-                        console.log('Fallback to lowercase "employees" successful.');
-                        setEmployees(dataLow.map(mapEmp));
-                        return;
-                    }
+                    console.error('Supabase employees fetch error:', error.message, error.details);
                     setEmployees(DEFAULT_EMPLOYEES);
                     return;
                 }
@@ -297,7 +303,7 @@ export const AppDataProvider: React.FC<{ children: ReactNode }> = ({ children })
                     console.log(`Successfully loaded ${data.length} employees from Supabase.`);
                     setEmployees(data.map(mapEmp));
                 } else {
-                    console.warn('Supabase returned 0 employees for table "Employees". Checking RLS or empty table.');
+                    console.warn('Supabase returned 0 employees for table "employees". Checking RLS or empty table.');
                     setEmployees(DEFAULT_EMPLOYEES);
                 }
             } catch (err) {
@@ -315,7 +321,7 @@ export const AppDataProvider: React.FC<{ children: ReactNode }> = ({ children })
         fetchAssets();
 
         const channel = supabase.channel('employees-changes')
-            .on('postgres_changes', { event: '*', schema: 'public', table: 'Employees' }, (payload) => {
+            .on('postgres_changes', { event: '*', schema: 'public', table: 'employees' }, (payload) => {
                 if (payload.eventType === 'INSERT' || payload.eventType === 'UPDATE') {
                     const rec = mapEmp(payload.new);
                     setEmployees(prev => {
@@ -1227,7 +1233,7 @@ export const AppDataProvider: React.FC<{ children: ReactNode }> = ({ children })
             const shouldRequireAction = currentContractStatus === 'Expired';
             if (employee.contractActionRequired === shouldRequireAction) return employee;
             // Sync contractActionRequired to Supabase
-            supabase.from('Employees').update({ contractActionRequired: shouldRequireAction }).eq('id', employee.id).then(({ error }) => {
+            supabase.from('employees').update({ contract_action_required: shouldRequireAction }).eq('id', employee.id).then(({ error }) => {
                 if (error) console.error('Supabase contract action required sync error:', error.message);
             });
             return { ...employee, contractActionRequired: shouldRequireAction };
@@ -2004,7 +2010,7 @@ export const AppDataProvider: React.FC<{ children: ReactNode }> = ({ children })
             emp.id === empId ? { ...emp, hasCriticalRiskFlag: true, criticalRiskCategory: category } : emp
         ));
         // Sync risk flag to Supabase
-        supabase.from('Employees').update({ hasCriticalRiskFlag: true, criticalRiskCategory: category }).eq('id', empId).then(({ error }) => {
+        supabase.from('employees').update({ has_critical_risk_flag: true }).eq('id', empId).then(({ error }) => {
             if (error) console.error('Supabase risk flag sync error:', error.message);
         });
     };
@@ -2043,7 +2049,7 @@ export const AppDataProvider: React.FC<{ children: ReactNode }> = ({ children })
         });
 
         // Sync auto attendance toggle to Supabase
-        supabase.from('Employees').update({ autoAttendanceEnabled: newState }).eq('id', empId).then(({ error }) => {
+        supabase.from('employees').update({ auto_attendance_enabled: newState }).eq('id', empId).then(({ error }) => {
             if (error) console.error('Supabase auto attendance sync error:', error.message);
         });
 
@@ -2170,7 +2176,7 @@ export const AppDataProvider: React.FC<{ children: ReactNode }> = ({ children })
         
         // Insert to Supabase
         try {
-            await supabase.from('Employees').insert({
+            await supabase.from('employees').insert({
                 id: newEmployee.id,
                 name: newEmployee.name,
                 email: `${newEmployee.id.toLowerCase()}@techdance.hr`,
@@ -2178,8 +2184,8 @@ export const AppDataProvider: React.FC<{ children: ReactNode }> = ({ children })
                 dept: newEmployee.dept,
                 role: newEmployee.role,
                 status: newEmployee.status,
-                joinDate: newEmployee.joinDate,
-                baseSalary: newEmployee.baseSalary,
+                join_date: newEmployee.joinDate,
+                base_salary: newEmployee.baseSalary,
             });
         } catch (err) { console.error('Failed to sync to Supabase:', err); }
         
@@ -2356,7 +2362,7 @@ export const AppDataProvider: React.FC<{ children: ReactNode }> = ({ children })
                         status: 'In Progress'
                     }];
                     // Sync enrolledCourses to Supabase
-                    supabase.from('Employees').update({ enrolledCourses: updatedEnrolledCourses }).eq('id', emp.id).then(({ error }) => {
+                    supabase.from('employees').update({ enrolled_courses: updatedEnrolledCourses }).eq('id', emp.id).then(({ error }) => {
                         if (error) console.error('Supabase course assignment sync error:', error.message);
                     });
                     return {
@@ -2474,8 +2480,8 @@ export const AppDataProvider: React.FC<{ children: ReactNode }> = ({ children })
             const currentSkills = updatedEmp.skills || [];
             const courseSkills = course.skillTags || [];
             const mergedSkills = Array.from(new Set([...currentSkills, ...courseSkills]));
-            supabase.from('Employees').update({
-                enrolledCourses: updatedCoursesList,
+            supabase.from('employees').update({
+                enrolled_courses: updatedCoursesList,
                 skills: mergedSkills,
             }).eq('id', empId).then(({ error }) => {
                 if (error) console.error('Supabase course completion sync error:', error.message);
@@ -2751,7 +2757,7 @@ export const AppDataProvider: React.FC<{ children: ReactNode }> = ({ children })
             }));
 
             // Sync shift assignment to Supabase
-            supabase.from('Employees').update({ employmentHistory: employees.find(e => e.id === empId)?.employmentHistory || [] }).eq('id', empId).then(({ error }) => {
+            supabase.from('employees').update({ employment_history: employees.find(e => e.id === empId)?.employmentHistory || [] }).eq('id', empId).then(({ error }) => {
                 if (error) console.error('Supabase shift assignment sync error:', error.message);
             });
         }
@@ -3302,9 +3308,9 @@ export const AppDataProvider: React.FC<{ children: ReactNode }> = ({ children })
 
                 // Update Employee balance and status
                 if (emp) {
-                    const { error: empErr } = await supabase.from('Employees').update({
+                    const { error: empErr } = await supabase.from('employees').update({
                         status: 'On Leave',
-                        leaveBalances: { ...emp.leaveBalances, [req.type]: newBalance }
+                        leave_balances: { ...emp.leaveBalances, [req.type]: newBalance }
                     }).eq('id', req.empId);
                     
                     if (empErr) console.error('Supabase employee balance update error:', empErr.message);
@@ -3551,11 +3557,11 @@ export const AppDataProvider: React.FC<{ children: ReactNode }> = ({ children })
 
         // 4.5 Sync termination to Supabase
         try {
-            const { error } = await supabase.from('Employees').update({
+            const { error } = await supabase.from('employees').update({
                 status: newStatus,
-                separationReason,
-                separationDate,
-                eligibleForRehire,
+                separation_reason: separationReason,
+                separation_date: separationDate,
+                eligible_for_rehire: eligibleForRehire,
             }).eq('id', empId);
             if (error) console.error('Supabase termination sync error:', error.message);
         } catch (err) { console.error('Failed to sync termination to Supabase:', err); }
@@ -4144,9 +4150,24 @@ export const AppDataProvider: React.FC<{ children: ReactNode }> = ({ children })
             } else if (Object.keys(updates).length > 0) {
                 setEmployees(prev => prev.map(e => e.id === req.empId ? { ...e, ...updates } : e));
                 // Sync approved profile changes to Supabase
-                supabase.from('Employees').update(updates).eq('id', req.empId)
-                    .then(({ error }) => { if (error) console.error('Supabase profile change sync error:', error.message); })
-                    .catch(err => console.error('Failed to sync profile change to Supabase:', err));
+                const dbUpdates: Record<string, any> = {};
+                if (updates.name !== undefined) dbUpdates.name = updates.name;
+                if (updates.email !== undefined) dbUpdates.email = updates.email;
+                if (updates.phone !== undefined) dbUpdates.phone = updates.phone;
+                if (updates.mobile !== undefined) dbUpdates.mobile = updates.mobile;
+                if (updates.nrcNumber !== undefined) dbUpdates.nrc_number = updates.nrcNumber;
+                if (updates.ssbNumber !== undefined) dbUpdates.ssb_number = updates.ssbNumber;
+                if (updates.taxId !== undefined) dbUpdates.tax_id = updates.taxId;
+                if (updates.bankName !== undefined) dbUpdates.bank_name = updates.bankName;
+                if (updates.accountNumber !== undefined) dbUpdates.account_number = updates.accountNumber;
+                if (updates.township !== undefined) dbUpdates.township = updates.township;
+                if (updates.avatar !== undefined) dbUpdates.avatar = updates.avatar;
+
+                if (Object.keys(dbUpdates).length > 0) {
+                    supabase.from('employees').update(dbUpdates).eq('id', req.empId)
+                        .then(({ error }) => { if (error) console.error('Supabase profile change sync error:', error.message); })
+                        .catch(err => console.error('Failed to sync profile change to Supabase:', err));
+                }
             }
 
             const reqUpdates = { status: 'Approved', reviewedBy: reviewerId, reviewedAt: now };
@@ -4353,9 +4374,9 @@ export const AppDataProvider: React.FC<{ children: ReactNode }> = ({ children })
             return { ...e, currentContractId: cid, contractActionRequired: newContract.status === 'Expired', documents: docs };
         }));
         // Sync contract fields to Supabase
-        supabase.from('Employees').update({
-            currentContractId: cid,
-            contractActionRequired: newContract.status === 'Expired',
+        supabase.from('employees').update({
+            current_contract_id: cid,
+            contract_action_required: newContract.status === 'Expired',
         }).eq('id', contract.empId).then(({ error }) => {
             if (error) console.error('Supabase labor contract employee sync error:', error.message);
         });
@@ -4670,7 +4691,7 @@ export const AppDataProvider: React.FC<{ children: ReactNode }> = ({ children })
                         addAuditLog({ adminId, actionType: 'Resignation Sync', module: 'Inbox', detail: `Resignation approved. Queued for final settlement processing in Payroll.` });
 
                         // Sync resignation to Supabase
-                        supabase.from('Employees').update({
+                        supabase.from('employees').update({
                             status: 'Terminated',
                         }).eq('id', item.empId).then(({ error }) => {
                             if (error) console.error('Supabase resignation sync error:', error.message);
@@ -4759,11 +4780,11 @@ export const AppDataProvider: React.FC<{ children: ReactNode }> = ({ children })
                         const resolvedNewDept = item.newDept || emp.dept;
                         const resolvedNewShift = item.newShiftId || emp.shiftId;
                         const updatedSalary = item.newSalary || emp.baseSalary;
-                        supabase.from('Employees').update({
+                        supabase.from('employees').update({
                             role: resolvedNewRole,
                             dept: resolvedNewDept,
-                            shiftId: resolvedNewShift,
-                            baseSalary: updatedSalary,
+                            shift_id: resolvedNewShift,
+                            base_salary: updatedSalary,
                         }).eq('id', item.empId).then(({ error }) => {
                             if (error) console.error('Supabase promotion sync error:', error.message);
                         });
@@ -4854,12 +4875,12 @@ export const AppDataProvider: React.FC<{ children: ReactNode }> = ({ children })
                             return mgr?.status === 'Active' ? item.newManager : emp.reportingManagerId;
                         })();
                         const tNewSalary = item.newSalary || emp.baseSalary;
-                        supabase.from('Employees').update({
+                        supabase.from('employees').update({
                             dept: tNewDept,
-                            shiftId: tNewShift,
-                            reportingManagerId: tNewManager,
-                            officeLocation: item.newLocation || emp.officeLocation,
-                            baseSalary: tNewSalary,
+                            shift_id: tNewShift,
+                            reporting_manager_id: tNewManager,
+                            office_location: item.newLocation || emp.officeLocation,
+                            base_salary: tNewSalary,
                         }).eq('id', item.empId).then(({ error }) => {
                             if (error) console.error('Supabase transfer sync error:', error.message);
                         });
@@ -4886,8 +4907,8 @@ export const AppDataProvider: React.FC<{ children: ReactNode }> = ({ children })
                         }));
 
                         // Sync salary adjustment to Supabase
-                        supabase.from('Employees').update({
-                            baseSalary: item.newSalary
+                        supabase.from('employees').update({
+                            base_salary: item.newSalary
                         }).eq('id', item.empId).then(({ error }) => {
                             if (error) console.error('Supabase salary adjustment sync error:', error.message);
                         });
@@ -5199,34 +5220,34 @@ export const AppDataProvider: React.FC<{ children: ReactNode }> = ({ children })
             if (updates.dept !== undefined) supabaseUpdates.dept = updates.dept;
             if (updates.role !== undefined) supabaseUpdates.role = updates.role;
             if (updates.status !== undefined) supabaseUpdates.status = updates.status;
-            if (updates.baseSalary !== undefined) supabaseUpdates.baseSalary = updates.baseSalary;
-            if (updates.joinDate !== undefined) supabaseUpdates.joinDate = updates.joinDate;
-            if (updates.profileImage !== undefined) supabaseUpdates.profileImage = updates.profileImage;
+            if (updates.baseSalary !== undefined) supabaseUpdates.base_salary = updates.baseSalary;
+            if (updates.joinDate !== undefined) supabaseUpdates.join_date = updates.joinDate;
+            if (updates.profileImage !== undefined) supabaseUpdates.profile_image = updates.profileImage;
             if (updates.avatar !== undefined) supabaseUpdates.avatar = updates.avatar;
             if (updates.mobile !== undefined) supabaseUpdates.mobile = updates.mobile;
             if (updates.township !== undefined) supabaseUpdates.township = updates.township;
-            if (updates.nrcNumber !== undefined) supabaseUpdates.nrcNumber = updates.nrcNumber;
-            if (updates.ssbNumber !== undefined) supabaseUpdates.ssbNumber = updates.ssbNumber;
-            if (updates.taxId !== undefined) supabaseUpdates.taxId = updates.taxId;
-            if (updates.bankName !== undefined) supabaseUpdates.bankName = updates.bankName;
-            if (updates.accountNumber !== undefined) supabaseUpdates.accountNumber = updates.accountNumber;
+            if (updates.nrcNumber !== undefined) supabaseUpdates.nrc_number = updates.nrcNumber;
+            if (updates.ssbNumber !== undefined) supabaseUpdates.ssb_number = updates.ssbNumber;
+            if (updates.taxId !== undefined) supabaseUpdates.tax_id = updates.taxId;
+            if (updates.bankName !== undefined) supabaseUpdates.bank_name = updates.bankName;
+            if (updates.accountNumber !== undefined) supabaseUpdates.account_number = updates.accountNumber;
 
-            if (updates.shiftId !== undefined) supabaseUpdates.shiftId = updates.shiftId;
-            if (updates.policyId !== undefined) supabaseUpdates.policyId = updates.policyId;
-            if (updates.recruitmentSource !== undefined) supabaseUpdates.recruitmentSource = updates.recruitmentSource;
-            if (updates.hasCriticalRiskFlag !== undefined) supabaseUpdates.hasCriticalRiskFlag = updates.hasCriticalRiskFlag;
-            if (updates.autoAttendanceEnabled !== undefined) supabaseUpdates.autoAttendanceEnabled = updates.autoAttendanceEnabled;
-            if (updates.leaveBalances !== undefined) supabaseUpdates.leaveBalances = updates.leaveBalances;
+            if (updates.shiftId !== undefined) supabaseUpdates.shift_id = updates.shiftId;
+            if (updates.policyId !== undefined) supabaseUpdates.policy_id = updates.policyId;
+            if (updates.recruitmentSource !== undefined) supabaseUpdates.recruitment_source = updates.recruitmentSource;
+            if (updates.hasCriticalRiskFlag !== undefined) supabaseUpdates.has_critical_risk_flag = updates.hasCriticalRiskFlag;
+            if (updates.autoAttendanceEnabled !== undefined) supabaseUpdates.auto_attendance_enabled = updates.autoAttendanceEnabled;
+            if (updates.leaveBalances !== undefined) supabaseUpdates.leave_balances = updates.leaveBalances;
             if (updates.reliefs !== undefined) supabaseUpdates.reliefs = updates.reliefs;
-            if (updates.officeLocation !== undefined) supabaseUpdates.officeLocation = updates.officeLocation;
-            if (updates.officeCoords !== undefined) supabaseUpdates.officeCoords = updates.officeCoords;
-            if (updates.reportingManagerId !== undefined) supabaseUpdates.reportingManagerId = updates.reportingManagerId;
-            if (updates.separationReason !== undefined) supabaseUpdates.separationReason = updates.separationReason;
-            if (updates.separationDate !== undefined) supabaseUpdates.separationDate = updates.separationDate;
-            if (updates.eligibleForRehire !== undefined) supabaseUpdates.eligibleForRehire = updates.eligibleForRehire;
+            if (updates.officeLocation !== undefined) supabaseUpdates.office_location = updates.officeLocation;
+            if (updates.officeCoords !== undefined) supabaseUpdates.office_coords = updates.officeCoords;
+            if (updates.reportingManagerId !== undefined) supabaseUpdates.reporting_manager_id = updates.reportingManagerId;
+            if (updates.separationReason !== undefined) supabaseUpdates.separation_reason = updates.separationReason;
+            if (updates.separationDate !== undefined) supabaseUpdates.separation_date = updates.separationDate;
+            if (updates.eligibleForRehire !== undefined) supabaseUpdates.eligible_for_rehire = updates.eligibleForRehire;
 
             if (Object.keys(supabaseUpdates).length > 0) {
-                const { error } = await supabase.from('Employees').update(supabaseUpdates).eq('id', empId);
+                const { error } = await supabase.from('employees').update(supabaseUpdates).eq('id', empId);
                 if (error) console.error('Supabase update error:', error.message);
             }
         } catch (err) { console.error('Failed to sync update to Supabase:', err); }
@@ -5266,7 +5287,7 @@ export const AppDataProvider: React.FC<{ children: ReactNode }> = ({ children })
         
         // Insert to Supabase
         try {
-            const { data, error } = await supabase.from('Employees').upsert({
+            const { data, error } = await supabase.from('employees').upsert({
                 id: newEmployee.id,
                 name: newEmployee.name,
                 email: newEmployee.email || `${newEmployee.id.toLowerCase()}@techdance.hr`,
@@ -5274,24 +5295,24 @@ export const AppDataProvider: React.FC<{ children: ReactNode }> = ({ children })
                 dept: newEmployee.dept,
                 role: newEmployee.role,
                 status: newEmployee.status,
-                joinDate: newEmployee.joinDate,
-                baseSalary: newEmployee.baseSalary,
+                join_date: newEmployee.joinDate,
+                base_salary: newEmployee.baseSalary,
                 mobile: newEmployee.mobile || '',
                 township: newEmployee.township || '',
-                nrcNumber: newEmployee.nrcNumber || '',
-                ssbNumber: newEmployee.ssbNumber || '',
-                taxId: newEmployee.taxId || '',
-                bankName: newEmployee.bankName || '',
-                accountNumber: newEmployee.accountNumber || '',
+                nrc_number: newEmployee.nrcNumber || '',
+                ssb_number: newEmployee.ssbNumber || '',
+                tax_id: newEmployee.taxId || '',
+                bank_name: newEmployee.bankName || '',
+                account_number: newEmployee.accountNumber || '',
 
-                shiftId: newEmployee.shiftId || '',
-                policyId: newEmployee.policyId || '',
-                recruitmentSource: newEmployee.recruitmentSource || '',
-                hasCriticalRiskFlag: newEmployee.hasCriticalRiskFlag || false,
-                autoAttendanceEnabled: newEmployee.autoAttendanceEnabled || false,
-                leaveBalances: newEmployee.leaveBalances || {},
+                shift_id: newEmployee.shiftId || '',
+                policy_id: newEmployee.policyId || '',
+                recruitment_source: newEmployee.recruitmentSource || '',
+                has_critical_risk_flag: newEmployee.hasCriticalRiskFlag || false,
+                auto_attendance_enabled: newEmployee.autoAttendanceEnabled || false,
+                leave_balances: newEmployee.leaveBalances || {},
                 reliefs: newEmployee.reliefs || { spouse: false, parentsCount: 0 },
-                officeLocation: newEmployee.officeLocation || '',
+                office_location: newEmployee.officeLocation || '',
             }, { onConflict: 'id' }).select();
             
             if (error) {
@@ -5319,7 +5340,7 @@ export const AppDataProvider: React.FC<{ children: ReactNode }> = ({ children })
         
         // Delete from Supabase
         try {
-            await supabase.from('Employees').delete().eq('id', empId);
+            await supabase.from('employees').delete().eq('id', empId);
         } catch (err) { console.error('Failed to delete employee from Supabase:', err); }
         
         addAuditLog({ adminId, actionType: 'Employee Deleted', module: 'Employees', detail: `Deleted employee: ${emp.name} (${empId})` });
@@ -5354,7 +5375,7 @@ export const AppDataProvider: React.FC<{ children: ReactNode }> = ({ children })
             return e;
         }));
         // Sync to Supabase
-        supabase.from('Employees').update({ leaveBalances: newBalances }).eq('id', empId)
+        supabase.from('employees').update({ leave_balances: newBalances }).eq('id', empId)
             .then(({ error }) => { if (error) console.error('Supabase leave balance sync error:', error.message); })
             .catch(err => console.error('Failed to sync leave balance to Supabase:', err));
         addAuditLog({ adminId, actionType: 'Leave Balance Adjusted', module: 'Leave', detail: `${type} balance for ${empId} adjusted by ${amount}. Reason: ${reason}` });
@@ -5816,7 +5837,7 @@ export const AppDataProvider: React.FC<{ children: ReactNode }> = ({ children })
                         reEnrollMap[emp.id].includes(ec.courseId) ? { ...ec, status: 'In Progress' as const } : ec
                     );
                     // Sync re-enrollment to Supabase
-                    supabase.from('Employees').update({ enrolledCourses: updatedCourses }).eq('id', emp.id).then(({ error }) => {
+                    supabase.from('employees').update({ enrolled_courses: updatedCourses }).eq('id', emp.id).then(({ error }) => {
                         if (error) console.error('Supabase re-enrollment sync error:', error.message);
                     });
                     return { ...emp, enrolledCourses: updatedCourses };
