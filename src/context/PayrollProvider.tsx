@@ -136,11 +136,19 @@ export const PayrollProvider: React.FC<PayrollProviderProps> = ({
 
     // Sync lock state and payrun ID to Supabase
     useEffect(() => {
+        if (!activePayrollGroupId) return;
+        const currentGroup = payrollGroups.find(g => g.id === activePayrollGroupId);
+        // CRITICAL BUG FIX: Do NOT passively overwrite a group that is already Approved or Disbursed back to Draft/Processing!
+        if (currentGroup?.status === 'Approved' || currentGroup?.status === 'Disbursed') return;
+
+        const targetStatus = isPayrollLocked ? 'Processing' : 'Draft';
+        if (currentGroup?.status === targetStatus) return; // Status is already in sync
+
         supabase.from('payroll_groups')
-            .update({ status: isPayrollLocked ? 'Processing' : 'Draft' })
+            .update({ status: targetStatus })
             .eq('id', activePayrollGroupId)
             .then(({ error }) => { if (error) console.error('Failed to sync payroll lock state:', error); });
-    }, [isPayrollLocked, activePayrollGroupId]);
+    }, [isPayrollLocked, activePayrollGroupId, payrollGroups]);
     useEffect(() => {
         // payrunId is set on finalize; we update the corresponding group record
         if (payrunId && activePayrollGroupId) {
@@ -283,6 +291,61 @@ export const PayrollProvider: React.FC<PayrollProviderProps> = ({
 
         return () => { supabase.removeChannel(channel); };
     }, []);
+ 
+    // Automatically re-hydrate finalized payroll status, totals, and active group ID from loaded DB state on page refresh
+    useEffect(() => {
+        if (payrollGroups.length > 0) {
+            // 1. Scan for any group that has been finalized (status === 'Approved') but not yet disbursed
+            const approvedGroup = payrollGroups.find(g => g.status === 'Approved');
+            if (approvedGroup) {
+                const groupRecords = payrollRecords.filter(r => r.groupId === approvedGroup.id);
+                const totalNet = groupRecords.reduce((sum, r) => sum + (r.netPay || 0), 0);
+                
+                setLastPayrollStatus('Approved');
+                setLastPayrollTotal(totalNet);
+                
+                // Hydrate active ID and lock state
+                if (!activePayrollGroupId) {
+                    setActivePayrollGroupId(approvedGroup.id);
+                }
+                if (!isPayrollLocked) {
+                    setIsPayrollLocked(true);
+                }
+                return;
+            }
+
+            // 2. Scan for any group that is currently under computation (status === 'Processing')
+            const processingGroup = payrollGroups.find(g => g.status === 'Processing');
+            if (processingGroup) {
+                setLastPayrollStatus('Processing');
+                if (!activePayrollGroupId) {
+                    setActivePayrollGroupId(processingGroup.id);
+                }
+                if (!isPayrollLocked) {
+                    setIsPayrollLocked(true);
+                }
+                return;
+            }
+
+            // 3. Fallback: on initial page load, auto-select the latest group in the directory
+            if (!activePayrollGroupId) {
+                const latestGroup = payrollGroups[0];
+                if (latestGroup) {
+                    setActivePayrollGroupId(latestGroup.id);
+                    if (latestGroup.status === 'Disbursed') {
+                        setLastPayrollStatus('Disbursed');
+                        const groupRecords = payrollRecords.filter(r => r.groupId === latestGroup.id);
+                        setLastPayrollTotal(groupRecords.reduce((sum, r) => sum + (r.netPay || 0), 0));
+                        setIsPayrollLocked(false);
+                    } else {
+                        setLastPayrollStatus('Draft');
+                        setLastPayrollTotal(0);
+                        setIsPayrollLocked(false);
+                    }
+                }
+            }
+        }
+    }, [payrollGroups, payrollRecords, activePayrollGroupId, isPayrollLocked]);
 
     // Returns null if employee has no valid baseSalary — hard blocks approval
     const calcOTPayout = (empId: string, otHours: number, otType: Types.OTRequest['otType']): number | null => {
